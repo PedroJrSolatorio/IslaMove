@@ -1,4 +1,5 @@
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import AdminHome from '../screens/AdminHome';
 import DriverHome from '../screens/DriverHome';
 import PassengerTabs from '../navigation/PassengerTabs';
 import BookRide from '../screens/BookRide';
@@ -14,6 +15,9 @@ const AppNavigator = () => {
       screenOptions={{
         headerShown: false, // This will hide the header for all screens in this navigator
       }}>
+      {userRole === 'admin' && (
+        <Stack.Screen name="AdminHome" component={AdminHome} />
+      )}
       {userRole === 'driver' && (
         <Stack.Screen name="DriverHome" component={DriverHome} />
       )}
