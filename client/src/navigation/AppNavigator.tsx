@@ -1,6 +1,7 @@
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import DriverHome from '../screens/DriverHome';
 import PassengerTabs from '../navigation/PassengerTabs';
+import BookRide from '../screens/BookRide';
 import {useAuth} from '../context/AuthContext';
 
 const Stack = createNativeStackNavigator();
@@ -19,6 +20,7 @@ const AppNavigator = () => {
       {userRole === 'passenger' && (
         <>
           <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
+          <Stack.Screen name="BookRide" component={BookRide} />
         </>
       )}
     </Stack.Navigator>
