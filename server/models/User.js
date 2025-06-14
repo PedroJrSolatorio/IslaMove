@@ -21,8 +21,8 @@ const locationSchema = new mongoose.Schema(
 const vehicleSchema = new mongoose.Schema(
   {
     make: { type: String, required: true },
-    model: { type: String, required: true },
-    year: { type: Number, required: true },
+    series: { type: String, required: true },
+    yearModel: { type: Number, required: true },
     color: { type: String, required: true },
     type: {
       type: String,
@@ -37,11 +37,44 @@ const vehicleSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema(
   {
-    fullName: { type: String, required: true },
+    lastName: { type: String, required: true },
+    firstName: { type: String, required: true },
+    middleInitial: { type: String, required: true },
+    birthdate: { type: Date, required: true },
+    age: { type: Number, required: true },
     username: { type: String, unique: true, required: true },
     email: { type: String, unique: true, required: true },
-    phone: { type: String, unique: true, required: true },
     password: { type: String, required: true },
+    phone: { type: String, unique: true, required: true },
+    homeAddress: {
+      street: { type: String, required: true },
+      city: { type: String, required: true },
+      state: { type: String, required: true },
+      zipCode: { type: String, required: true },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        index: "2dsphere",
+      },
+    },
+    passengerCategory: {
+      type: String,
+      enum: ["regular", "student", "senior"],
+      required: function () {
+        return this.userType === "passenger";
+      },
+    },
+    idDocument: {
+      type: {
+        type: String,
+        enum: ["school_id", "senior_id", "valid_id", "drivers_license"],
+        required: true,
+      },
+      imageUrl: { type: String, required: true },
+      uploadedAt: { type: Date, default: Date.now },
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    },
     role: {
       type: String,
       enum: ["passenger", "driver", "admin"],
@@ -83,6 +116,28 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationStatus: {
+      type: String,
+      enum: ["pending", "under_review", "approved", "rejected"],
+      default: "pending",
+    },
+    agreementsAccepted: [
+      {
+        documentType: {
+          type: String,
+          enum: ["terms_and_conditions", "privacy_policy"],
+          required: true,
+        },
+        version: { type: String, required: true },
+        acceptedAt: { type: Date, default: Date.now },
+        ipAddress: String,
+        userAgent: String,
+      },
+    ],
 
     // Driver-only fields
     licenseNumber: {
@@ -112,16 +167,6 @@ const userSchema = new mongoose.Schema(
           return this.role === "driver" || value === undefined;
         },
         message: "Only drivers can have vehicle information.",
-      },
-    },
-    isVerified: {
-      type: Boolean,
-      // default: false,
-      validate: {
-        validator: function (value) {
-          return this.role === "driver" || value === undefined;
-        },
-        message: "Only drivers need verification.",
       },
     },
     documents: {
