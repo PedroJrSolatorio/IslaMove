@@ -1,7 +1,6 @@
 import React, {useState, useContext, useEffect} from 'react';
 import {
   View,
-  ScrollView,
   ActivityIndicator,
   StyleSheet,
   Platform,
@@ -118,7 +117,7 @@ export default function AdminDashboard() {
         </Button>
       </View>
 
-      <ScrollView style={styles.content}>{renderTabContent()}</ScrollView>
+      <View style={styles.content}>{renderTabContent()}</View>
     </View>
   );
 }
@@ -144,6 +143,5 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 16,
   },
 });

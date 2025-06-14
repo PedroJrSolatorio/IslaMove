@@ -23,6 +23,7 @@ const AdminStats = () => {
     totalPassengers: 0,
     activeDrivers: 0,
     pendingDriverVerifications: 0,
+    pendingPassengerVerifications: 0,
     ridesCompleted: 0,
     ridesInProgress: 0,
     averageRating: 0,
@@ -145,7 +146,7 @@ const AdminStats = () => {
           <Card.Content>
             <Text style={styles.statLabel}>Active Rides</Text>
             <Title style={styles.statValue}>{stats.ridesInProgress}</Title>
-            <Text style={styles.statSubtext}>Currently in progress</Text>
+            <Text style={styles.statSubtext}>In progress</Text>
           </Card.Content>
         </Card>
       </View>
@@ -228,6 +229,10 @@ const AdminStats = () => {
             {
               label: 'Driver verifications pending',
               value: stats.pendingDriverVerifications,
+            },
+            {
+              label: 'Passenger verifications pending',
+              value: stats.pendingPassengerVerifications,
             },
             {
               label: 'Low-rated drivers (below 3.0)',

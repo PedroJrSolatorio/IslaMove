@@ -1,0 +1,453 @@
+import {StyleSheet} from 'react-native';
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f0f2f5',
+  },
+  header: {
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 16,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    fontSize: 16,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  tabButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3498db',
+    borderRadius: 20,
+    marginRight: 8,
+  },
+  activeTab: {
+    backgroundColor: '#3498db',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#3498db',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#fff',
+  },
+  listContainer: {
+    paddingBottom: 20,
+  },
+  noResultsCard: {
+    margin: 16,
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: '#888',
+  },
+  passengerCard: {
+    margin: 8,
+    marginHorizontal: 16,
+    padding: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  passengerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  passengerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  passengerAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  passengerAvatarPlaceholder: {
+    backgroundColor: '#3498db',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  passengerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  passengerEmail: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  categoryContainer: {
+    marginTop: 4,
+  },
+  categoryChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  categoryText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  statusContainer: {
+    alignItems: 'flex-end',
+  },
+  statusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 4,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  verificationChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  verificationText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 12,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    width: 100,
+    fontWeight: 'bold',
+    color: '#555',
+  },
+  warningBox: {
+    backgroundColor: '#ffecb3',
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  warningTitle: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+    color: '#d35400',
+  },
+  warningDate: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  addressAccordion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 4,
+    marginTop: 8,
+  },
+  addressTitle: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  addressList: {
+    backgroundColor: '#f5f5f5',
+    padding: 8,
+    borderRadius: 4,
+  },
+  addressItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginVertical: 4,
+    padding: 8,
+  },
+  addressTextContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  addressLabel: {
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  addressText: {
+    color: '#666',
+  },
+  cardActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 16,
+    justifyContent: 'flex-end',
+  },
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+    marginLeft: 8,
+    marginTop: 4,
+  },
+  profileButton: {
+    backgroundColor: '#3498db',
+  },
+  verifyButton: {
+    backgroundColor: '#9b59b6',
+  },
+  warningButton: {
+    backgroundColor: '#f39c12',
+  },
+  blockButton: {
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+    backgroundColor: 'transparent',
+  },
+  blockButtonText: {
+    color: '#e74c3c',
+    fontWeight: 'bold',
+  },
+  unblockButton: {
+    backgroundColor: '#27ae60',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  profileModalContainer: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  verificationModalContainer: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    minHeight: 100,
+    textAlignVertical: 'top',
+    fontSize: 16,
+  },
+  modalButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cancelButton: {
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  cancelButtonText: {
+    color: '#3498db',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  closeButton: {
+    backgroundColor: '#3498db',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Profile Modal Styles
+  profileHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
+  },
+  profileImagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#3498db',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  profileImageText: {
+    color: '#fff',
+    fontSize: 32,
+    fontWeight: 'bold',
+  },
+  profileName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  profileEmail: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  profileSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    paddingBottom: 4,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  profileLabel: {
+    width: 120,
+    fontWeight: 'bold',
+    color: '#555',
+  },
+  profileValue: {
+    flex: 1,
+    color: '#333',
+  },
+  warningItem: {
+    backgroundColor: '#ffecb3',
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  warningMessage: {
+    color: '#d35400',
+    fontWeight: '500',
+  },
+  // ID Verification Modal Styles
+  passengerNameInModal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  idTypeText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  idImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  verificationActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  verificationButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  approveButton: {
+    backgroundColor: '#27ae60',
+  },
+  rejectButton: {
+    backgroundColor: '#e74c3c',
+  },
+});
