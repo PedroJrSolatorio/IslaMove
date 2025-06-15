@@ -87,7 +87,7 @@ const PassengerHome = () => {
     <>
       <View style={GlobalStyles.header}>
         <Text style={GlobalStyles.headerTitle}>
-          Welcome back, {profileData.fullName.split(' ')[0] || 'Passenger'}!
+          Welcome back, {profileData.firstName.split(' ')[0] || 'Passenger'}!
         </Text>
         <View style={{height: 46}} />
       </View>
@@ -102,88 +102,6 @@ const PassengerHome = () => {
               mode="contained"
               onPress={() => navigation.navigate('BookRide' as never)}>
               Book Now
-            </Button>
-          </Card.Actions>
-        </Card>
-
-        <Card style={TabsStyles.recentRidesCard}>
-          <Card.Content>
-            <Title>Recent Rides</Title>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Downtown Mall
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 12, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$12.50</Text>
-            </View>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Airport Terminal B
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 10, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$34.75</Text>
-            </View>
-          </Card.Content>
-          <Card.Actions>
-            <Button onPress={() => navigation.navigate('RideHistory' as never)}>
-              View All
-            </Button>
-          </Card.Actions>
-        </Card>
-
-        <Card style={TabsStyles.recentRidesCard}>
-          <Card.Content>
-            <Title>Recent Rides</Title>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Downtown Mall
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 12, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$12.50</Text>
-            </View>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Airport Terminal B
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 10, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$34.75</Text>
-            </View>
-          </Card.Content>
-          <Card.Actions>
-            <Button onPress={() => navigation.navigate('RideHistory' as never)}>
-              View All
             </Button>
           </Card.Actions>
         </Card>

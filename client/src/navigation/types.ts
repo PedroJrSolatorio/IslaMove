@@ -3,7 +3,7 @@ export type RootStackParamList = {
   RegisterSelection: undefined;
   RegisterDriver: undefined;
   RegisterPassenger: undefined;
-  AdminHome: undefined;
+  // AdminHome: undefined; to be checked if i really need this
   DriverHome: undefined;
   PassengerHome: undefined;
   BookRide: undefined;

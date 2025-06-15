@@ -156,6 +156,7 @@ export const getAdminStats = async (req, res) => {
       totalPassengers,
       activeDrivers,
       pendingDriverVerifications,
+      pendingPassengerVerifications,
       ridesCompleted,
       ridesInProgress,
       averageRating,

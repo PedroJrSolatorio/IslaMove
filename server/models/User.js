@@ -40,22 +40,25 @@ const userSchema = new mongoose.Schema(
     lastName: { type: String, required: true },
     firstName: { type: String, required: true },
     middleInitial: { type: String, required: true },
-    birthdate: { type: Date, required: true },
-    age: { type: Number, required: true },
+    birthdate: { type: Date, required: true }, // Non-editable
+    age: { type: Number, required: true }, // Non-editable
     username: { type: String, unique: true, required: true },
     email: { type: String, unique: true, required: true },
     password: { type: String, required: true },
     phone: { type: String, unique: true, required: true },
+
+    // Only for drivers and passengers (not admin)
     homeAddress: {
-      street: { type: String, required: true },
-      city: { type: String, required: true },
-      state: { type: String, required: true },
-      zipCode: { type: String, required: true },
+      street: { type: String },
+      city: { type: String },
+      state: { type: String },
+      zipCode: { type: String },
       coordinates: {
         type: [Number], // [longitude, latitude]
         index: "2dsphere",
       },
     },
+
     passengerCategory: {
       type: String,
       enum: ["regular", "student", "senior"],
@@ -63,18 +66,20 @@ const userSchema = new mongoose.Schema(
         return this.userType === "passenger";
       },
     },
+
+    // Only for drivers and passengers (not admin)
     idDocument: {
       type: {
         type: String,
         enum: ["school_id", "senior_id", "valid_id", "drivers_license"],
-        required: true,
       },
-      imageUrl: { type: String, required: true },
+      imageUrl: { type: String },
       uploadedAt: { type: Date, default: Date.now },
       verified: { type: Boolean, default: false },
       verifiedAt: Date,
       verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
     },
+
     role: {
       type: String,
       enum: ["passenger", "driver", "admin"],
@@ -222,6 +227,21 @@ const userSchema = new mongoose.Schema(
 
 // Add geospatial index for driver location queries
 userSchema.index({ currentLocation: "2dsphere" });
+
+// Pre-save hook to validate role-specific fields
+userSchema.pre("save", function (next) {
+  // Validate that admin users don't have homeAddress or idDocument
+  if (this.role === "admin") {
+    if (this.homeAddress && Object.keys(this.homeAddress).length > 0) {
+      return next(new Error("Admin users cannot have home address"));
+    }
+    if (this.idDocument && Object.keys(this.idDocument).length > 0) {
+      return next(new Error("Admin users cannot have ID document"));
+    }
+  }
+
+  next();
+});
 
 const User = mongoose.model("User", userSchema);
 

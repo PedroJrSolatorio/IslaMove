@@ -123,90 +123,211 @@ export const updateProfile = async (req, res) => {
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(updateData.newPassword, salt);
 
-      // Save user with new password
-      await user.save();
+      // Update password using findByIdAndUpdate
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: { password: hashedPassword } },
+        { new: true, runValidators: true }
+      );
 
       // Return success response
       return res.json({
         message: "Password updated successfully",
         user: {
-          _id: user._id,
-          username: user.username,
-          fullName: user.fullName,
-          email: user.email,
+          _id: updatedUser._id,
+          username: updatedUser.username,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          email: updatedUser.email,
         },
       });
     }
 
-    // Handle normal profile update
-    // Basic validation for regular profile updates
-    if (
-      updateData.fullName !== undefined &&
-      updateData.username !== undefined &&
-      updateData.email !== undefined &&
-      updateData.phone !== undefined
-    ) {
-      // Check if username changed and if it's taken by another user
-      if (updateData.username !== user.username) {
-        const existingUsername = await User.findOne({
-          username: updateData.username,
-          _id: { $ne: userId }, // Exclude current user
-        });
+    // Prevent editing of non-editable fields
+    if (updateData.birthdate || updateData.age) {
+      return res.status(400).json({
+        error: "Birthdate and age cannot be modified",
+      });
+    }
 
-        if (existingUsername) {
-          return res.status(400).json({ error: "Username already taken" });
-        }
-      }
+    // Prevent role changes through this endpoint
+    if (updateData.role && updateData.role !== user.role) {
+      return res.status(400).json({
+        error: "Role cannot be changed through profile update",
+      });
+    }
 
-      // Check if email changed and if it's used by another user
-      if (updateData.email !== user.email) {
-        const existingEmail = await User.findOne({
-          email: updateData.email,
-          _id: { $ne: userId }, // Exclude current user
-        });
+    // Check if username changed and if it's taken by another user
+    if (updateData.username && updateData.username !== user.username) {
+      const existingUsername = await User.findOne({
+        username: updateData.username,
+        _id: { $ne: userId },
+      });
 
-        if (existingEmail) {
-          return res.status(400).json({ error: "Email already registered" });
-        }
-      }
-
-      // Update basic user fields
-      user.fullName = updateData.fullName;
-      user.username = updateData.username;
-      user.email = updateData.email;
-      user.phone = updateData.phone;
-
-      if (updateData.profileImage) {
-        user.profileImage = updateData.profileImage;
-      }
-
-      // Role-specific updates
-      if (user.role === "passenger" && updateData.savedAddresses) {
-        user.savedAddresses = updateData.savedAddresses;
-      }
-
-      if (user.role === "driver") {
-        // Only update driver-specific fields if provided
-        if (updateData.driverStatus) {
-          user.driverStatus = updateData.driverStatus;
-        }
-        if (updateData.vehicle) {
-          user.vehicle = updateData.vehicle;
-        }
-        // Additional driver fields can be added here
+      if (existingUsername) {
+        return res.status(400).json({ error: "Username already taken" });
       }
     }
 
-    // Save the updated user
-    const updatedUser = await user.save();
+    // Check if email changed and if it's used by another user
+    if (updateData.email && updateData.email !== user.email) {
+      const existingEmail = await User.findOne({
+        email: updateData.email,
+        _id: { $ne: userId },
+      });
+
+      if (existingEmail) {
+        return res.status(400).json({ error: "Email already registered" });
+      }
+    }
+
+    // Check if phone changed and if it's used by another user
+    if (updateData.phone && updateData.phone !== user.phone) {
+      const existingPhone = await User.findOne({
+        phone: updateData.phone,
+        _id: { $ne: userId },
+      });
+
+      if (existingPhone) {
+        return res
+          .status(400)
+          .json({ error: "Phone number already registered" });
+      }
+    }
+
+    // Build the update object based on user role and allowed fields
+    const updateObject = {};
+
+    // Update basic user fields (available to all roles)
+    const basicFields = [
+      "firstName",
+      "lastName",
+      "middleInitial",
+      "username",
+      "email",
+      "phone",
+      "profileImage",
+      "currentLocation",
+    ];
+    basicFields.forEach((field) => {
+      if (updateData[field] !== undefined) {
+        updateObject[field] = updateData[field];
+      }
+    });
+
+    // Role-specific field updates
+    if (user.role === "passenger") {
+      // Passenger-specific fields
+      if (updateData.savedAddresses !== undefined) {
+        updateObject.savedAddresses = updateData.savedAddresses;
+      }
+      if (updateData.passengerCategory !== undefined) {
+        updateObject.passengerCategory = updateData.passengerCategory;
+      }
+      // Fields available to both passenger and driver
+      if (updateData.homeAddress !== undefined) {
+        updateObject.homeAddress = updateData.homeAddress;
+      }
+      if (updateData.idDocument !== undefined) {
+        updateObject.idDocument = updateData.idDocument;
+      }
+    } else if (user.role === "driver") {
+      // Driver-specific fields
+      if (updateData.driverStatus !== undefined) {
+        updateObject.driverStatus = updateData.driverStatus;
+      }
+      if (updateData.vehicle !== undefined) {
+        updateObject.vehicle = updateData.vehicle;
+      }
+      if (updateData.licenseNumber !== undefined) {
+        updateObject.licenseNumber = updateData.licenseNumber;
+      }
+      if (updateData.documents !== undefined) {
+        updateObject.documents = updateData.documents;
+      }
+      // Fields available to both passenger and driver
+      if (updateData.homeAddress !== undefined) {
+        updateObject.homeAddress = updateData.homeAddress;
+      }
+      if (updateData.idDocument !== undefined) {
+        updateObject.idDocument = updateData.idDocument;
+      }
+    } else if (user.role === "admin") {
+      // Admin users cannot update homeAddress or idDocument
+      if (updateData.homeAddress || updateData.idDocument) {
+        return res.status(400).json({
+          error: "Admin users cannot have home address or ID document",
+        });
+      }
+    }
+
+    // Prevent unauthorized role-specific field updates
+    if (user.role !== "passenger") {
+      if (updateData.savedAddresses || updateData.passengerCategory) {
+        return res.status(400).json({
+          error:
+            "Only passengers can update saved addresses and passenger category",
+        });
+      }
+    }
+
+    if (user.role !== "driver") {
+      if (
+        updateData.driverStatus ||
+        updateData.vehicle ||
+        updateData.licenseNumber ||
+        updateData.documents
+      ) {
+        return res.status(400).json({
+          error: "Only drivers can update driver-specific fields",
+        });
+      }
+    }
+
+    // Check if there are any fields to update
+    if (Object.keys(updateObject).length === 0) {
+      return res.status(400).json({
+        error: "No valid fields to update",
+      });
+    }
+
+    // Use findByIdAndUpdate to update only the specified fields
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateObject },
+      {
+        new: true, // Return the updated document
+        runValidators: true, // Run validators only on updated fields
+        context: "query", // Ensures validators run in query context
+      }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found during update" });
+    }
 
     // Return the updated user data (excluding password)
     const userResponse = updatedUser.toObject();
     delete userResponse.password;
 
-    res.json(userResponse);
+    res.json({
+      message: "Profile updated successfully",
+      user: userResponse,
+    });
   } catch (error) {
     console.error("Error updating profile:", error);
+
+    // Handle validation errors
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map(
+        (err) => err.message
+      );
+      return res.status(400).json({
+        error: "Validation failed",
+        details: validationErrors,
+      });
+    }
+
     res.status(500).json({ error: "Failed to update profile" });
   }
 };

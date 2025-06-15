@@ -41,7 +41,7 @@ interface Location {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const ProfileScreen = () => {
+const PassengerProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {logout, userToken} = useAuth();
   const {profileData, loading, updateProfile, updatePassword, refreshProfile} =
@@ -917,4 +917,4 @@ const ProfileScreen = () => {
   );
 };
 
-export default ProfileScreen;
+export default PassengerProfileScreen;

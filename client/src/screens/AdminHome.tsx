@@ -22,7 +22,7 @@ import AdminStats from '../screens/admin/adminStats';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-export default function AdminDashboard() {
+export default function AdminHome() {
   const {userToken, userRole} = useContext(AuthContext);
   const navigation = useNavigation<NavigationProp>();
   const [activeTab, setActiveTab] = useState('stats');
