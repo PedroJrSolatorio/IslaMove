@@ -168,25 +168,22 @@ const ZoneFareCalculator = () => {
       const token = await AsyncStorage.getItem('userToken');
 
       // Fetch all zones
-      const zonesResponse = await axios.get(`${BACKEND_URL}/api/admin/zones`, {
+      const zonesResponse = await axios.get(`${BACKEND_URL}/api/zones`, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
       // Fetch barangay zones specifically
       const barangayResponse = await axios.get(
-        `${BACKEND_URL}/api/admin/zones/barangays`,
+        `${BACKEND_URL}/api/zones/barangays`,
         {
           headers: {Authorization: `Bearer ${token}`},
         },
       );
 
       // Fetch pricing rules
-      const pricingResponse = await axios.get(
-        `${BACKEND_URL}/api/admin/pricing`,
-        {
-          headers: {Authorization: `Bearer ${token}`},
-        },
-      );
+      const pricingResponse = await axios.get(`${BACKEND_URL}/api/pricing`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
 
       setZones(zonesResponse.data.zones || []);
       setBarangayZones(barangayResponse.data.zones || []);
@@ -296,7 +293,7 @@ const ZoneFareCalculator = () => {
         payload.priority = parseInt(zonePriority);
       }
 
-      await axios.post(`${BACKEND_URL}/api/admin/zones`, payload, {
+      await axios.post(`${BACKEND_URL}/api/zones`, payload, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
@@ -352,13 +349,9 @@ const ZoneFareCalculator = () => {
         payload.priority = parseInt(zonePriority);
       }
 
-      await axios.put(
-        `${BACKEND_URL}/api/admin/zones/${selectedZone._id}`,
-        payload,
-        {
-          headers: {Authorization: `Bearer ${token}`},
-        },
-      );
+      await axios.put(`${BACKEND_URL}/api/zones/${selectedZone._id}`, payload, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
 
       Alert.alert('Success', 'Zone updated successfully');
       setIsZoneModalVisible(false);
@@ -385,7 +378,7 @@ const ZoneFareCalculator = () => {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('userToken');
-              await axios.delete(`${BACKEND_URL}/api/admin/zones/${zone._id}`, {
+              await axios.delete(`${BACKEND_URL}/api/zones/${zone._id}`, {
                 headers: {Authorization: `Bearer ${token}`},
               });
 
@@ -436,7 +429,7 @@ const ZoneFareCalculator = () => {
         payload.priority = parseInt(pricingPriority);
       }
 
-      await axios.post(`${BACKEND_URL}/api/admin/pricing`, payload, {
+      await axios.post(`${BACKEND_URL}/api/pricing`, payload, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
@@ -524,12 +517,9 @@ const ZoneFareCalculator = () => {
           onPress: async () => {
             try {
               const token = await AsyncStorage.getItem('userToken');
-              await axios.delete(
-                `${BACKEND_URL}/api/admin/pricing/${pricing._id}`,
-                {
-                  headers: {Authorization: `Bearer ${token}`},
-                },
-              );
+              await axios.delete(`${BACKEND_URL}/api/pricing/${pricing._id}`, {
+                headers: {Authorization: `Bearer ${token}`},
+              });
 
               Alert.alert('Success', 'Pricing rule deleted successfully');
               fetchZonesAndPricing();
@@ -611,16 +601,13 @@ const ZoneFareCalculator = () => {
       setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
 
-      const response = await axios.get(
-        `${BACKEND_URL}/api/admin/zones/lookup`,
-        {
-          params: {
-            latitude: markerPosition.latitude,
-            longitude: markerPosition.longitude,
-          },
-          headers: {Authorization: `Bearer ${token}`},
+      const response = await axios.get(`${BACKEND_URL}/api/zones/lookup`, {
+        params: {
+          latitude: markerPosition.latitude,
+          longitude: markerPosition.longitude,
         },
-      );
+        headers: {Authorization: `Bearer ${token}`},
+      });
 
       if (response.data.success && response.data.data) {
         setFoundZone(response.data.data);

@@ -17,13 +17,13 @@ const router = express.Router();
 // This line means: all routes defined after this line will automatically use the adminAuth middleware.
 router.use(adminAuth);
 
-router.post("/zones", createZone);
-router.get("/zones", getAllZones);
-router.get("/zones/barangays", getBarangayZones);
-router.get("/zones/:id", getZoneById);
-router.get("/zones/:parentId/children", getChildZones);
-router.put("/zones/:id", updateZone);
-router.delete("/zones/:id", deleteZone);
-router.get("/zones/lookup", lookupZoneByCoordinates);
+router.post("/", createZone);
+router.get("/", getAllZones);
+router.get("/barangays", getBarangayZones);
+router.get("/:id", getZoneById);
+router.get("/:parentId/children", getChildZones);
+router.put("/:id", updateZone);
+router.delete("/:id", deleteZone);
+router.get("/lookup", lookupZoneByCoordinates);
 
 export default router;

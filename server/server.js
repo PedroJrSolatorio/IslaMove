@@ -81,6 +81,7 @@ connectDB();
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import rideRoutes from "./routes/rideRoutes.js";
+import pricingRoutes from "./routes/pricingRoutes.js";
 import zoneRoutes from "./routes/zoneRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import googleApiRoutes from "./routes/googleApiRoutes.js";
@@ -94,6 +95,7 @@ import placesRoutes from "./routes/placesRoutes.js";
 // Use routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/pricing", pricingRoutes);
 app.use("/api/zones", zoneRoutes);
 app.use("/api/rides", rideRoutes);
 app.use("/api/admin", adminRoutes);
