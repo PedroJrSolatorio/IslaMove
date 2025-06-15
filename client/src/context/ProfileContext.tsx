@@ -248,7 +248,7 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
       const userId = await AsyncStorage.getItem('userId');
 
       if (!userId) {
-        console.warn('User ID not found in AsyncStorage');
+        // console.warn('User ID not found in AsyncStorage'); //remove this in production
         setLoading(false);
         return;
       }

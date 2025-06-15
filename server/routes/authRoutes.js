@@ -33,9 +33,9 @@ if (!fs.existsSync(documentsDir)) {
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     // Determine appropriate folder based on fieldname
-    let uploadDir = profilesDir;
-    if (file.fieldname.startsWith("document_")) {
-      uploadDir = documentsDir;
+    let uploadDir = documentsDir; // Default to documents for most files
+    if (file.fieldname === "profileImage") {
+      uploadDir = profilesDir;
     }
     cb(null, uploadDir);
   },
@@ -45,61 +45,47 @@ const storage = multer.diskStorage({
   },
 });
 
-// Setup upload middleware
+// Setup upload middleware with all possible fields
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
 });
 
-// Helper function to configure multer upload based on request
-const configureUpload = (req, res, next) => {
-  const role = req.body.role;
-
-  if (!role) {
-    return next(multer().none()); // No files expected
-  }
-
-  // For both roles, expect at least a profile image
-  const fields = [{ name: "profileImage", maxCount: 1 }];
-
-  // For drivers, add document fields
-  if (role === "driver") {
-    fields.push(
-      { name: "document_License", maxCount: 1 },
-      { name: "document_Registration", maxCount: 1 },
-      { name: "document_MODA", maxCount: 1 },
-      { name: "document_Vehicle", maxCount: 1 }
-    );
-  }
-
-  return upload.fields(fields)(req, res, next);
-};
+// Define all possible upload fields
+const uploadFields = upload.fields([
+  { name: "profileImage", maxCount: 1 },
+  { name: "idDocumentImage", maxCount: 1 },
+  { name: "document_License", maxCount: 1 },
+  { name: "document_Registration", maxCount: 1 },
+  { name: "document_MODACertificate", maxCount: 1 },
+  { name: "document_VehiclePhoto", maxCount: 1 },
+]);
 
 router.post("/check-user", checkUser);
 router.post("/login", loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
 
-// Register route with dynamic file upload handling
+// Register route with proper file upload handling
 router.post("/register", (req, res, next) => {
-  // We need to determine the fields to expect, but body isn't parsed yet
-  // So we use multer's .none() to parse the form first
-  multer().none()(req, res, (err) => {
-    if (err) return next(err);
-    // Now the req.body is populated and we can check the role
-    configureUpload(req, res, (err) => {
-      if (err) {
-        if (err instanceof multer.MulterError) {
-          if (err.code === "LIMIT_FILE_SIZE") {
-            return res
-              .status(413)
-              .json({ error: "File too large. Maximum size is 5MB." });
-          }
+  uploadFields(req, res, (err) => {
+    if (err) {
+      console.error("Multer error:", err);
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res
+            .status(413)
+            .json({ error: "File too large. Maximum size is 15MB." });
         }
-        return next(err);
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+          return res
+            .status(400)
+            .json({ error: `Unexpected file field: ${err.field}` });
+        }
       }
-      registerUser(req, res);
-    });
+      return res.status(500).json({ error: "File upload error" });
+    }
+    registerUser(req, res);
   });
 });
 

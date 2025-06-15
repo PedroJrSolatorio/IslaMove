@@ -3,13 +3,13 @@ import {
   View,
   Text,
   TextInput,
-  StyleSheet,
   Alert,
   ScrollView,
   Image,
   TouchableOpacity,
   Platform,
   PermissionsAndroid,
+  Linking,
 } from 'react-native';
 import {Button, ProgressBar, List} from 'react-native-paper';
 import {
@@ -25,11 +25,13 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import ImageResizer from 'react-native-image-resizer';
 import api from '../../utils/api';
+import {styles} from '../styles/RegDriverStyles';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface VehicleInfo {
   make: string;
-  model: string;
-  year: string;
+  series: string;
+  yearModel: string;
   color: string;
   type: string;
   plateNumber: string;
@@ -42,6 +44,13 @@ interface DocumentInfo {
   mimeType?: string;
   verified: boolean;
   uploadDate: Date;
+}
+
+interface HomeAddress {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -82,20 +91,31 @@ const RegisterDriverScreen = () => {
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 5;
+  const totalSteps = 6;
   const [isLoading, setIsLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [personalInfo, setPersonalInfo] = useState({
-    fullName: '',
+    lastName: '',
+    firstName: '',
+    middleInitial: '',
+    birthdate: '',
     email: '',
     phone: '',
     licenseNumber: '',
   });
 
+  const [homeAddress, setHomeAddress] = useState<HomeAddress>({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+  });
+
   const [vehicleInfo, setVehicleInfo] = useState<VehicleInfo>({
     make: '',
-    model: '',
-    year: '',
+    series: '',
+    yearModel: '',
     color: '',
     type: 'bao-bao',
     plateNumber: '',
@@ -104,6 +124,12 @@ const RegisterDriverScreen = () => {
 
   const [profileImage, setProfileImage] = useState('');
   const [profileImageMime, setProfileImageMime] = useState('');
+
+  const [idDocument, setIdDocument] = useState({
+    type: 'drivers_license',
+    imageUrl: '',
+    mimeType: '',
+  });
 
   const [documents, setDocuments] = useState<DocumentInfo[]>([
     {
@@ -149,6 +175,10 @@ const RegisterDriverScreen = () => {
     setPersonalInfo({...personalInfo, [name]: value});
   };
 
+  const handleAddressChange = (name: keyof HomeAddress, value: string) => {
+    setHomeAddress({...homeAddress, [name]: value});
+  };
+
   const handleVehicleChange = (name: keyof VehicleInfo, value: string) => {
     setVehicleInfo({...vehicleInfo, [name]: value});
   };
@@ -160,6 +190,49 @@ const RegisterDriverScreen = () => {
     setCredentials({...credentials, [name]: value});
   };
 
+  const calculateAge = (birthdate: string): number => {
+    const birthDate = new Date(birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  };
+
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    const currentDate =
+      selectedDate ||
+      (personalInfo.birthdate ? new Date(personalInfo.birthdate) : new Date());
+
+    // Close picker on Android immediately, keep open on iOS until user interaction
+    setShowDatePicker(Platform.OS === 'ios');
+
+    if (selectedDate) {
+      const formatted = selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      handlePersonalInfoChange('birthdate', formatted);
+    }
+  };
+
+  // Format date for display in the TouchableOpacity
+  const formatDateForDisplay = (dateString: string): string => {
+    if (!dateString) return 'Select Birthdate';
+
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   const requestCameraPermission = async () => {
     if (Platform.OS === 'android') {
       try {
@@ -167,24 +240,26 @@ const RegisterDriverScreen = () => {
           PermissionsAndroid.PERMISSIONS.CAMERA,
           {
             title: 'Camera Permission',
-            message: 'This app needs access to your camera to take pictures',
+            message:
+              'This app needs access to your camera to take pictures of your documents',
             buttonNeutral: 'Ask Me Later',
             buttonNegative: 'Cancel',
             buttonPositive: 'OK',
           },
         );
+
+        console.log('Camera permission result:', granted);
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } catch (err) {
-        console.warn(err);
+        console.warn('Camera permission error:', err);
         return false;
       }
     } else {
-      // For iOS permission is handled by the image picker
       return true;
     }
   };
 
-  const pickImage = async (documentType?: string) => {
+  const pickImage = async (documentType?: string, isIdDocument?: boolean) => {
     try {
       const options: ImageLibraryOptions = {
         mediaType: 'photo',
@@ -207,15 +282,19 @@ const RegisterDriverScreen = () => {
       if (result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
 
-        // Compress the image
         const compressed = await compressImage(
           selectedAsset.uri || '',
           0.5,
-          documentType ? 1200 : 600, // Higher resolution for documents
+          documentType ? 1200 : 600,
         );
 
-        if (documentType) {
-          // For documents, update the documents array
+        if (isIdDocument) {
+          setIdDocument({
+            ...idDocument,
+            imageUrl: compressed.uri,
+            mimeType: compressed.mime,
+          });
+        } else if (documentType) {
           const updatedDocuments = documents.map(doc =>
             doc.documentType === documentType
               ? {
@@ -228,7 +307,6 @@ const RegisterDriverScreen = () => {
           );
           setDocuments(updatedDocuments);
         } else {
-          // For profile image, update the profileImage state
           setProfileImage(compressed.uri);
           setProfileImageMime(compressed.mime);
         }
@@ -239,14 +317,27 @@ const RegisterDriverScreen = () => {
     }
   };
 
-  const takePicture = async (documentType?: string) => {
+  const takePicture = async (documentType?: string, isIdDocument?: boolean) => {
     try {
+      // Request camera permission first
       const hasPermission = await requestCameraPermission();
 
       if (!hasPermission) {
         Alert.alert(
           'Permission Required',
-          'You need to grant camera permission to take pictures',
+          'Camera permission is required to take pictures. Please enable it in your device settings.',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                // For Android, you can open app settings
+                if (Platform.OS === 'android') {
+                  Linking.openSettings();
+                }
+              },
+            },
+          ],
         );
         return;
       }
@@ -256,49 +347,73 @@ const RegisterDriverScreen = () => {
         includeBase64: false,
         maxHeight: 2000,
         maxWidth: 2000,
-        quality: 1 as PhotoQuality, // Ensure quality is within the range [0, 1]
+        quality: 1 as PhotoQuality,
         saveToPhotos: false,
+        // Add these options for better camera handling
+        storageOptions: {
+          skipBackup: true,
+          path: 'images',
+        },
       };
 
-      const result = await launchCamera(options);
-
-      if (result.didCancel) {
-        return;
-      }
-
-      if (result.errorCode) {
-        throw new Error(result.errorMessage);
-      }
-
-      if (result.assets && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-
-        // Compress the image
-        const compressed = await compressImage(
-          selectedAsset.uri || '',
-          0.5,
-          documentType ? 1200 : 600, // Higher resolution for documents
-        );
-
-        if (documentType) {
-          // For documents, update the documents array
-          const updatedDocuments = documents.map(doc =>
-            doc.documentType === documentType
-              ? {
-                  ...doc,
-                  fileURL: compressed.uri,
-                  mimeType: compressed.mime,
-                  uploadDate: new Date(),
-                }
-              : doc,
-          );
-          setDocuments(updatedDocuments);
-        } else {
-          // For profile image, update the profileImage state
-          setProfileImage(compressed.uri);
-          setProfileImageMime(compressed.mime);
+      launchCamera(options, result => {
+        if (result.didCancel) {
+          console.log('User cancelled camera');
+          return;
         }
-      }
+
+        if (result.errorCode) {
+          console.error('Camera Error:', result.errorMessage);
+          Alert.alert(
+            'Camera Error',
+            result.errorMessage || 'Failed to capture image. Please try again.',
+          );
+          return;
+        }
+
+        if (result.assets && result.assets.length > 0) {
+          const selectedAsset = result.assets[0];
+
+          if (!selectedAsset.uri) {
+            Alert.alert('Error', 'Failed to capture image. Please try again.');
+            return;
+          }
+
+          // Process the image
+          compressImage(selectedAsset.uri, 0.5, documentType ? 1200 : 600)
+            .then(compressed => {
+              if (isIdDocument) {
+                setIdDocument({
+                  ...idDocument,
+                  imageUrl: compressed.uri,
+                  mimeType: compressed.mime,
+                });
+              } else if (documentType) {
+                const updatedDocuments = documents.map(doc =>
+                  doc.documentType === documentType
+                    ? {
+                        ...doc,
+                        fileURL: compressed.uri,
+                        mimeType: compressed.mime,
+                        uploadDate: new Date(),
+                      }
+                    : doc,
+                );
+                setDocuments(updatedDocuments);
+              } else {
+                setProfileImage(compressed.uri);
+                setProfileImageMime(compressed.mime);
+              }
+            })
+            .catch(error => {
+              console.error('Error compressing image:', error);
+              Alert.alert(
+                'Error',
+                'Failed to process image. Please try again.',
+              );
+            });
+        }
+      });
     } catch (error) {
       console.error('Error taking picture:', error);
       Alert.alert('Error', 'Failed to capture image. Please try again.');
@@ -306,9 +421,25 @@ const RegisterDriverScreen = () => {
   };
 
   const validatePersonalInfo = () => {
-    const {fullName, email, phone, licenseNumber} = personalInfo;
+    const {
+      lastName,
+      firstName,
+      middleInitial,
+      birthdate,
+      email,
+      phone,
+      licenseNumber,
+    } = personalInfo;
 
-    if (!fullName || !email || !phone || !licenseNumber) {
+    if (
+      !lastName ||
+      !firstName ||
+      !middleInitial ||
+      !birthdate ||
+      !email ||
+      !phone ||
+      !licenseNumber
+    ) {
       Alert.alert(
         'Validation Error',
         'All personal information fields are required.',
@@ -328,6 +459,27 @@ const RegisterDriverScreen = () => {
       return false;
     }
 
+    // Validate birthdate and age
+    const age = calculateAge(birthdate);
+    if (age < 18) {
+      Alert.alert(
+        'Validation Error',
+        'You must be at least 18 years old to register as a driver.',
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  const validateAddress = () => {
+    const {street, city, state, zipCode} = homeAddress;
+
+    if (!street || !city || !state || !zipCode) {
+      Alert.alert('Validation Error', 'All address fields are required.');
+      return false;
+    }
+
     return true;
   };
 
@@ -335,7 +487,7 @@ const RegisterDriverScreen = () => {
     try {
       setIsLoading(true);
 
-      const response = await api.post('/auth/check-user', {
+      const response = await api.post('/api/auth/check-user', {
         email: personalInfo.email,
         phone: personalInfo.phone,
         username: credentials.username,
@@ -343,7 +495,13 @@ const RegisterDriverScreen = () => {
 
       setIsLoading(false);
 
-      if (response.status >= 200 && response.status < 300) {
+      // Check if response is successful (200 status)
+      if (response.status === 200) {
+        // User information is available, no conflicts
+        return true;
+      }
+
+      if (response.status === 409) {
         const data = response.data;
         if (data.field === 'email') {
           Alert.alert(
@@ -357,34 +515,77 @@ const RegisterDriverScreen = () => {
             'This phone number is already registered.',
           );
           return false;
-        } else if (data.field === 'username' && currentStep === 5) {
+        } else if (data.field === 'username' && currentStep === 6) {
           Alert.alert(
             'Username Taken',
             'This username is already taken. Please choose another one.',
           );
           return false;
         }
-
-        Alert.alert('Error', data.error || 'Failed to check user information');
-        return false;
       }
 
-      return true;
-    } catch (error) {
+      // Handle other error responses
+      Alert.alert(
+        'Error',
+        response.data?.error || 'Failed to check user information',
+      );
+      return false;
+    } catch (error: any) {
       setIsLoading(false);
       console.error('Error checking existing user:', error);
-      Alert.alert(
-        'Network Error',
-        'Could not check if user already exists. Please check your connection.',
-      );
+      // Handle different types of errors
+      if (error.response) {
+        // Server responded with error status
+        const {status, data} = error.response;
+
+        if (status === 409) {
+          // Handle conflict responses in catch block too
+          if (data.field === 'email') {
+            Alert.alert(
+              'Already Registered',
+              'This email address is already registered.',
+            );
+          } else if (data.field === 'phone') {
+            Alert.alert(
+              'Already Registered',
+              'This phone number is already registered.',
+            );
+          } else if (data.field === 'username' && currentStep === 6) {
+            Alert.alert(
+              'Username Taken',
+              'This username is already taken. Please choose another one.',
+            );
+          }
+          return false;
+        }
+
+        Alert.alert('Error', data?.error || 'Failed to check user information');
+      } else if (error.request) {
+        // Network error
+        Alert.alert(
+          'Network Error',
+          'Could not check if user already exists. Please check your connection.',
+        );
+      } else {
+        // Other error
+        Alert.alert('Error', 'An unexpected error occurred.');
+      }
       return false;
     }
   };
 
   const validateVehicleInfo = () => {
-    const {make, model, year, color, plateNumber, bodyNumber} = vehicleInfo;
+    const {make, series, yearModel, color, plateNumber, bodyNumber} =
+      vehicleInfo;
 
-    if (!make || !model || !year || !color || !plateNumber || !bodyNumber) {
+    if (
+      !make ||
+      !series ||
+      !yearModel ||
+      !color ||
+      !plateNumber ||
+      !bodyNumber
+    ) {
       Alert.alert(
         'Validation Error',
         'All vehicle information fields are required.',
@@ -392,7 +593,7 @@ const RegisterDriverScreen = () => {
       return false;
     }
 
-    const yearValue = parseInt(year);
+    const yearValue = parseInt(yearModel);
     if (
       isNaN(yearValue) ||
       yearValue < 1900 ||
@@ -410,6 +611,17 @@ const RegisterDriverScreen = () => {
       Alert.alert(
         'Profile Image Required',
         'Please upload a profile photo to continue.',
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const validateIdDocument = () => {
+    if (!idDocument.imageUrl) {
+      Alert.alert(
+        'ID Document Required',
+        'Please upload your ID document to continue.',
       );
       return false;
     }
@@ -445,6 +657,14 @@ const RegisterDriverScreen = () => {
       return false;
     }
 
+    if (password.length < 6) {
+      Alert.alert(
+        'Validation Error',
+        'Password must be at least 6 characters long.',
+      );
+      return false;
+    }
+
     return true;
   };
 
@@ -455,24 +675,25 @@ const RegisterDriverScreen = () => {
       case 1:
         isValid = validatePersonalInfo();
         if (isValid) {
-          // Check if email and phone already exist before proceeding
           const userAvailable = await checkExistingUser();
           if (!userAvailable) return;
         }
         break;
       case 2:
-        isValid = validateVehicleInfo();
+        isValid = validateAddress();
         break;
       case 3:
-        isValid = validateProfileImage();
+        isValid = validateVehicleInfo();
         break;
       case 4:
-        isValid = validateDocuments();
+        isValid = validateProfileImage();
         break;
       case 5:
+        isValid = validateIdDocument() && validateDocuments();
+        break;
+      case 6:
         isValid = validateCredentials();
         if (isValid) {
-          // Final check for username availability
           const usernameAvailable = await checkExistingUser();
           if (!usernameAvailable) return;
           handleSubmit();
@@ -498,11 +719,15 @@ const RegisterDriverScreen = () => {
     try {
       setIsLoading(true);
 
-      // Create a FormData object to handle multipart/form-data submission
       const formData = new FormData();
+      const age = calculateAge(personalInfo.birthdate);
 
       // Add basic information
-      formData.append('fullName', personalInfo.fullName);
+      formData.append('lastName', personalInfo.lastName);
+      formData.append('firstName', personalInfo.firstName);
+      formData.append('middleInitial', personalInfo.middleInitial);
+      formData.append('birthdate', personalInfo.birthdate);
+      formData.append('age', age.toString());
       formData.append('username', credentials.username);
       formData.append('email', personalInfo.email);
       formData.append('phone', personalInfo.phone);
@@ -510,12 +735,15 @@ const RegisterDriverScreen = () => {
       formData.append('role', 'driver');
       formData.append('licenseNumber', personalInfo.licenseNumber);
 
-      // Add vehicle information as JSON string
+      // Add home address
+      formData.append('homeAddress', JSON.stringify(homeAddress));
+
+      // Add vehicle information
       formData.append(
         'vehicle',
         JSON.stringify({
           ...vehicleInfo,
-          year: parseInt(vehicleInfo.year),
+          yearModel: parseInt(vehicleInfo.yearModel),
         }),
       );
 
@@ -534,7 +762,29 @@ const RegisterDriverScreen = () => {
         } as any);
       }
 
-      // Add documents - field names should match the ones expected in the backend
+      // Add ID document
+      if (idDocument.imageUrl) {
+        const uriParts = idDocument.imageUrl.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+
+        formData.append(
+          'idDocument',
+          JSON.stringify({
+            type: idDocument.type,
+          }),
+        );
+
+        formData.append('idDocumentImage', {
+          uri:
+            Platform.OS === 'android'
+              ? idDocument.imageUrl
+              : idDocument.imageUrl.replace('file://', ''),
+          name: `id_document.${fileType}`,
+          type: idDocument.mimeType || `image/${fileType}`,
+        } as any);
+      }
+
+      // Add documents
       documents.forEach(doc => {
         if (doc.fileURL) {
           const documentFieldName = `document_${doc.documentType.replace(
@@ -557,8 +807,7 @@ const RegisterDriverScreen = () => {
         }
       });
 
-      // Using your api service instead of direct fetch
-      const response = await api.postForm('/auth/register', formData);
+      const response = await api.postForm('/api/auth/register', formData);
 
       setIsLoading(false);
 
@@ -586,12 +835,55 @@ const RegisterDriverScreen = () => {
             <Text style={styles.stepTitle}>Step 1: Personal Information</Text>
             <TextInput
               style={styles.input}
-              placeholder="Full Name"
-              value={personalInfo.fullName}
+              placeholder="Last Name"
+              value={personalInfo.lastName}
               onChangeText={value =>
-                handlePersonalInfoChange('fullName', value)
+                handlePersonalInfoChange('lastName', value)
               }
             />
+            <TextInput
+              style={styles.input}
+              placeholder="First Name"
+              value={personalInfo.firstName}
+              onChangeText={value =>
+                handlePersonalInfoChange('firstName', value)
+              }
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Middle Initial"
+              value={personalInfo.middleInitial}
+              onChangeText={value =>
+                handlePersonalInfoChange('middleInitial', value)
+              }
+            />
+            <TouchableOpacity
+              onPress={() => setShowDatePicker(true)}
+              style={[styles.input, styles.datePickerButton]}>
+              <Text
+                style={{
+                  color: personalInfo.birthdate ? '#000' : '#999',
+                  fontSize: 16,
+                }}>
+                {formatDateForDisplay(personalInfo.birthdate)}
+              </Text>
+            </TouchableOpacity>
+
+            {showDatePicker && (
+              <DateTimePicker
+                value={
+                  personalInfo.birthdate
+                    ? new Date(personalInfo.birthdate)
+                    : new Date()
+                }
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                maximumDate={new Date()} // prevent future dates
+                minimumDate={new Date(1900, 0, 1)} // reasonable minimum date
+                onChange={handleDateChange}
+              />
+            )}
+
             <TextInput
               style={styles.input}
               placeholder="Email"
@@ -627,7 +919,51 @@ const RegisterDriverScreen = () => {
       case 2:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Step 2: Vehicle Information</Text>
+            <Text style={styles.stepTitle}>Step 2: Home Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Street Address"
+              value={homeAddress.street}
+              onChangeText={value => handleAddressChange('street', value)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="City"
+              value={homeAddress.city}
+              onChangeText={value => handleAddressChange('city', value)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="State/Province"
+              value={homeAddress.state}
+              onChangeText={value => handleAddressChange('state', value)}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="ZIP/Postal Code"
+              value={homeAddress.zipCode}
+              onChangeText={value => handleAddressChange('zipCode', value)}
+            />
+            <View style={styles.buttonRow}>
+              <Button
+                mode="outlined"
+                style={styles.halfButton}
+                onPress={prevStep}>
+                Back
+              </Button>
+              <Button
+                mode="contained"
+                style={styles.halfButton}
+                onPress={nextStep}>
+                Next
+              </Button>
+            </View>
+          </View>
+        );
+      case 3:
+        return (
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Step 3: Vehicle Information</Text>
             <TextInput
               style={styles.input}
               placeholder="Vehicle Make"
@@ -636,16 +972,16 @@ const RegisterDriverScreen = () => {
             />
             <TextInput
               style={styles.input}
-              placeholder="Vehicle Model"
-              value={vehicleInfo.model}
-              onChangeText={value => handleVehicleChange('model', value)}
+              placeholder="Vehicle Series/Model"
+              value={vehicleInfo.series}
+              onChangeText={value => handleVehicleChange('series', value)}
             />
             <TextInput
               style={styles.input}
-              placeholder="Vehicle Year"
+              placeholder="Year Model"
               keyboardType="numeric"
-              value={vehicleInfo.year}
-              onChangeText={value => handleVehicleChange('year', value)}
+              value={vehicleInfo.yearModel}
+              onChangeText={value => handleVehicleChange('yearModel', value)}
             />
             <TextInput
               style={styles.input}
@@ -694,10 +1030,10 @@ const RegisterDriverScreen = () => {
             </View>
           </View>
         );
-      case 3:
+      case 4:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Step 3: Profile Photo</Text>
+            <Text style={styles.stepTitle}>Step 4: Profile Photo</Text>
             <Text style={styles.stepInstructions}>
               Please upload a clear profile photo. This will be visible to
               passengers.
@@ -745,14 +1081,6 @@ const RegisterDriverScreen = () => {
               )}
             </View>
 
-            <Text style={styles.tipsText}>
-              Tips for a good profile photo:
-              {'\n'}• Use a clear, well-lit headshot
-              {'\n'}• Make sure your face is clearly visible
-              {'\n'}• Choose a neutral background
-              {'\n'}• Wear professional attire
-            </Text>
-
             <View style={styles.buttonRow}>
               <Button
                 mode="outlined"
@@ -769,15 +1097,71 @@ const RegisterDriverScreen = () => {
             </View>
           </View>
         );
-      case 4:
+      case 5:
         return (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Step 4: Document Upload</Text>
+            <Text style={styles.stepTitle}>Step 5: Document Upload</Text>
             <Text style={styles.stepInstructions}>
-              Please upload clear images of the following documents. Make sure
-              the entire document is visible and all details are clear.
+              Please upload your ID document and verification documents.
             </Text>
 
+            {/* ID Document Section */}
+            <View style={styles.documentItem}>
+              <Text style={styles.documentLabel}>
+                ID Document (Driver's License)
+              </Text>
+              <List.Accordion
+                title={`ID Type: ${idDocument.type.replace('_', ' ')}`}
+                style={styles.dropdown}>
+                {['school_id', 'senior_id', 'valid_id', 'drivers_license'].map(
+                  type => (
+                    <List.Item
+                      key={type}
+                      title={type.replace('_', ' ')}
+                      onPress={() => {
+                        setIdDocument({...idDocument, type});
+                      }}
+                    />
+                  ),
+                )}
+              </List.Accordion>
+              {idDocument.imageUrl ? (
+                <View style={styles.documentPreviewContainer}>
+                  <Image
+                    source={{uri: idDocument.imageUrl}}
+                    style={styles.documentPreview}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.documentButtonRow}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => pickImage(undefined, true)}
+                      style={styles.documentButton}>
+                      Change
+                    </Button>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.documentButtonRow}>
+                  <Button
+                    mode="outlined"
+                    onPress={() => pickImage(undefined, true)}
+                    style={styles.documentButton}
+                    icon="folder">
+                    Gallery
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={() => takePicture(undefined, true)}
+                    style={styles.documentButton}
+                    icon="camera">
+                    Camera
+                  </Button>
+                </View>
+              )}
+            </View>
+
+            {/* Driver Documents */}
             {documents.map((doc, index) => (
               <View key={index} style={styles.documentItem}>
                 <Text style={styles.documentLabel}>{doc.documentType}</Text>
@@ -842,7 +1226,7 @@ const RegisterDriverScreen = () => {
             </View>
           </View>
         );
-      case 5:
+      case 6:
         return (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 5: Create Account</Text>
@@ -936,169 +1320,5 @@ const RegisterDriverScreen = () => {
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 16,
-    backgroundColor: '#f5f5f5',
-  },
-  container: {
-    flex: 1,
-    paddingBottom: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  progressContainer: {
-    marginBottom: 24,
-  },
-  progressBar: {
-    height: 10,
-    borderRadius: 5,
-    marginBottom: 8,
-  },
-  progressText: {
-    textAlign: 'center',
-    color: '#666',
-  },
-  stepContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  stepInstructions: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-    marginBottom: 16,
-    paddingHorizontal: 12,
-    backgroundColor: '#f9f9f9',
-  },
-  dropdown: {
-    marginBottom: 16,
-    backgroundColor: '#f9f9f9',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-  },
-  button: {
-    height: 48,
-    justifyContent: 'center',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-  },
-  halfButton: {
-    flex: 0.48,
-    height: 48,
-    justifyContent: 'center',
-  },
-  // Profile image styles
-  profileImageContainer: {
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  profilePreviewContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  profilePreview: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    marginBottom: 8,
-  },
-  emptyProfileContainer: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#ddd',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  emptyProfileText: {
-    color: '#999',
-  },
-  // Document styles
-  documentItem: {
-    marginBottom: 24,
-  },
-  documentLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  documentPreviewContainer: {
-    marginBottom: 8,
-  },
-  documentPreview: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#f0f0f0',
-    marginBottom: 8,
-    borderRadius: 4,
-  },
-  documentButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
-  },
-  documentButton: {
-    flex: 0.45,
-  },
-  tipsText: {
-    backgroundColor: '#f9f9f9',
-    padding: 15,
-    borderRadius: 5,
-    marginVertical: 15,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  infoContainer: {
-    backgroundColor: '#e7f3fe',
-    padding: 15,
-    borderRadius: 5,
-    marginVertical: 15,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3498db',
-  },
-  infoTitle: {
-    fontWeight: 'bold',
-    marginBottom: 10,
-    fontSize: 16,
-  },
-  infoText: {
-    lineHeight: 22,
-    marginBottom: 10,
-  },
-  infoNote: {
-    fontStyle: 'italic',
-    color: '#666',
-  },
-});
 
 export default RegisterDriverScreen;

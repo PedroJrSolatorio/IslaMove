@@ -81,18 +81,22 @@ export const checkUser = async (req, res) => {
 export const registerUser = async (req, res) => {
   try {
     const {
-      fullName,
+      lastName,
+      firstName,
+      middleInitial,
+      birthdate,
+      age,
       username,
       email,
       phone,
       password,
       role,
       licenseNumber,
-      profileImage,
-      documents,
+      homeAddress,
+      passengerCategory,
     } = req.body;
 
-    // Extract vehicle data
+    // Parse vehicle data if provided
     let vehicle = null;
     if (req.body.vehicle) {
       if (typeof req.body.vehicle === "string") {
@@ -102,13 +106,46 @@ export const registerUser = async (req, res) => {
       }
     }
 
-    // Check required fields
-    if (!fullName || !username || !email || !phone || !password || !role) {
-      console.error("🚨 Missing fields:", req.body);
-      return res.status(400).json({ error: "All fields are required" });
+    // Parse homeAddress if provided as string
+    let parsedHomeAddress = null;
+    if (homeAddress) {
+      if (typeof homeAddress === "string") {
+        parsedHomeAddress = JSON.parse(homeAddress);
+      } else {
+        parsedHomeAddress = homeAddress;
+      }
     }
 
-    // If role is "driver", ensure licenseNumber and vehicle info are provided
+    // Parse idDocument if provided
+    let idDocument = null;
+    if (req.body.idDocument) {
+      if (typeof req.body.idDocument === "string") {
+        idDocument = JSON.parse(req.body.idDocument);
+      } else {
+        idDocument = req.body.idDocument;
+      }
+    }
+
+    // Check required fields for all users
+    if (
+      !lastName ||
+      !firstName ||
+      !middleInitial ||
+      !birthdate ||
+      !age ||
+      !username ||
+      !email ||
+      !phone ||
+      !password ||
+      !role
+    ) {
+      console.error("🚨 Missing required fields:", req.body);
+      return res
+        .status(400)
+        .json({ error: "All required fields must be provided" });
+    }
+
+    // Role-specific validation
     if (role === "driver") {
       if (!licenseNumber) {
         return res.status(400).json({
@@ -117,16 +154,59 @@ export const registerUser = async (req, res) => {
       }
 
       if (
+        !parsedHomeAddress ||
+        !parsedHomeAddress.street ||
+        !parsedHomeAddress.city ||
+        !parsedHomeAddress.state ||
+        !parsedHomeAddress.zipCode
+      ) {
+        return res.status(400).json({
+          error: "Complete home address is required for drivers",
+        });
+      }
+
+      if (
         !vehicle ||
         !vehicle.make ||
-        !vehicle.model ||
-        !vehicle.year ||
+        !vehicle.series ||
+        !vehicle.yearModel ||
         !vehicle.color ||
         !vehicle.type ||
-        !vehicle.plateNumber
+        !vehicle.plateNumber ||
+        !vehicle.bodyNumber
       ) {
         return res.status(400).json({
           error: "Complete vehicle information is required for drivers",
+        });
+      }
+
+      // Validate vehicle type
+      if (vehicle.type !== "bao-bao") {
+        return res.status(400).json({
+          error: "Invalid vehicle type. Only 'bao-bao' is allowed",
+        });
+      }
+    }
+
+    if (role === "passenger") {
+      if (
+        !passengerCategory ||
+        !["regular", "student", "senior"].includes(passengerCategory)
+      ) {
+        return res.status(400).json({
+          error: "Valid passenger category is required for passengers",
+        });
+      }
+
+      if (
+        !parsedHomeAddress ||
+        !parsedHomeAddress.street ||
+        !parsedHomeAddress.city ||
+        !parsedHomeAddress.state ||
+        !parsedHomeAddress.zipCode
+      ) {
+        return res.status(400).json({
+          error: "Complete home address is required for passengers",
         });
       }
     }
@@ -153,9 +233,13 @@ export const registerUser = async (req, res) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user object based on role
+    // Create base user object
     const userData = {
-      fullName,
+      lastName,
+      firstName,
+      middleInitial,
+      birthdate: new Date(birthdate),
+      age: parseInt(age),
       username,
       email,
       phone,
@@ -163,58 +247,98 @@ export const registerUser = async (req, res) => {
       role,
     };
 
-    // Process profile image if provided
-    if (profileImage && profileImage.startsWith("data:image")) {
-      userData.profileImage = saveBase64Image(profileImage, "profiles");
-    } else if (req.file) {
-      // If using multer
-      userData.profileImage = `/uploads/profiles/${req.file.filename}`;
+    // Add home address for drivers and passengers (not admin)
+    if (role !== "admin" && parsedHomeAddress) {
+      userData.homeAddress = {
+        street: parsedHomeAddress.street,
+        city: parsedHomeAddress.city,
+        state: parsedHomeAddress.state,
+        zipCode: parsedHomeAddress.zipCode,
+        // coordinates can be added later when implementing geocoding
+      };
     }
 
-    // Only add fields for specific role
+    // Process profile image if provided
+    if (req.files && req.files.profileImage) {
+      const profileImageFile = req.files.profileImage[0];
+      userData.profileImage = `/uploads/profiles/${profileImageFile.filename}`;
+    }
+
+    // Add role-specific fields
     if (role === "driver") {
       userData.licenseNumber = licenseNumber;
-      userData.vehicle = vehicle;
+      userData.vehicle = {
+        make: vehicle.make,
+        series: vehicle.series,
+        yearModel: parseInt(vehicle.yearModel),
+        color: vehicle.color,
+        type: vehicle.type,
+        plateNumber: vehicle.plateNumber,
+        bodyNumber: vehicle.bodyNumber,
+      };
       userData.driverStatus = "offline";
       userData.isVerified = false;
+      userData.verificationStatus = "pending";
 
-      // Handle document uploads if they exist
-      if (documents) {
-        let parsedDocs;
-        if (typeof documents === "string") {
-          parsedDocs = JSON.parse(documents);
-        } else {
-          parsedDocs = documents;
-        }
+      // Handle ID document
+      if (idDocument && req.files && req.files.idDocumentImage) {
+        const idDocumentFile = req.files.idDocumentImage[0];
+        userData.idDocument = {
+          type: idDocument.type,
+          imageUrl: `/uploads/documents/${idDocumentFile.filename}`,
+          uploadedAt: new Date(),
+          verified: false,
+        };
+      }
 
-        userData.documents = parsedDocs.map((doc) => {
-          const result = {
-            documentType: doc.documentType,
+      // Handle driver verification documents
+      const documentTypes = [
+        "License",
+        "Registration",
+        "MODA Certificate",
+        "Vehicle Photo",
+      ];
+      userData.documents = [];
+
+      documentTypes.forEach((docType) => {
+        const fieldName = `document_${docType.replace(/\s+/g, "")}`;
+        if (req.files && req.files[fieldName]) {
+          const docFile = req.files[fieldName][0];
+          userData.documents.push({
+            documentType: docType,
+            fileURL: `/uploads/documents/${docFile.filename}`,
             verified: false,
             uploadDate: new Date(),
-          };
-
-          if (doc.fileURL && doc.fileURL.startsWith("data:image")) {
-            result.fileURL = saveBase64Image(doc.fileURL, "documents");
-          }
-
-          return result;
-        });
-      } else {
-        userData.documents = [];
-      }
+          });
+        }
+      });
     } else if (role === "passenger") {
+      userData.passengerCategory = passengerCategory;
       userData.savedAddresses = [];
+
+      // Handle ID document for passengers too
+      if (idDocument && req.files && req.files.idDocumentImage) {
+        const idDocumentFile = req.files.idDocumentImage[0];
+        userData.idDocument = {
+          type: idDocument.type,
+          imageUrl: `/uploads/documents/${idDocumentFile.filename}`,
+          uploadedAt: new Date(),
+          verified: false,
+        };
+      }
     }
 
-    // Create a new user
-    // const newUser = new User(userData);
-    // await newUser.save(); // only used when need to modify the instance before saving, but this is unnecessary since there is User.create()
-    // await newUser.validate(); // this line is unnecessary because User.create(userData) already validates and saves the user.
+    // Create the user
+    const newUser = await User.create(userData);
 
-    await User.create(userData);
+    // Remove password from response
+    const userResponse = newUser.toObject();
+    delete userResponse.password;
 
-    res.status(201).json({ message: "User registered successfully" });
+    res.status(201).json({
+      message: "User registered successfully",
+      user: userResponse,
+    });
   } catch (error) {
     console.error("Registration error:", error);
 
@@ -225,6 +349,16 @@ export const registerUser = async (req, res) => {
         .join(", ");
 
       return res.status(400).json({ error: errorMessage });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        error: `${
+          field.charAt(0).toUpperCase() + field.slice(1)
+        } already exists`,
+      });
     }
 
     res.status(500).json({ error: "Error registering user" });
