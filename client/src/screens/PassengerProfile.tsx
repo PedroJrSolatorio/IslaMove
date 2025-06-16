@@ -19,6 +19,7 @@ import {
   Portal,
   Modal,
   Dialog,
+  Chip,
 } from 'react-native-paper';
 import {launchCamera, CameraOptions} from 'react-native-image-picker';
 import {useNavigation} from '@react-navigation/native';
@@ -26,7 +27,7 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {TabsStyles} from '../styles/TabsStyles';
 import {BACKEND_URL} from '@env';
 import {GlobalStyles} from '../styles/GlobalStyles';
-import {useProfile} from '../context/ProfileContext';
+import {useProfile, isPassengerProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {RootStackParamList} from '../navigation/types';
 import api from '../../utils/api';
@@ -51,13 +52,19 @@ const PassengerProfileScreen = () => {
   const [editingAddresses, setEditingAddresses] = useState(false);
   const [newAddressLabel, setNewAddressLabel] = useState('');
   const [newAddressValue, setNewAddressValue] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Type guard to ensure we're working with passenger profile
+  const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
 
   // Form state for editing profile
   const [formData, setFormData] = useState({
-    fullName: profileData.fullName,
-    username: profileData.username,
-    email: profileData.email,
-    phone: profileData.phone,
+    firstName: profileData?.firstName || '',
+    lastName: profileData?.lastName || '',
+    middleInitial: profileData?.middleInitial || '',
+    username: profileData?.username || '',
+    email: profileData?.email || '',
+    phone: profileData?.phone || '',
   });
 
   // Dialog states
@@ -75,15 +82,92 @@ const PassengerProfileScreen = () => {
   const [editAddressLabel, setEditAddressLabel] = useState('');
   const [editAddressValue, setEditAddressValue] = useState('');
 
+  // Helper function to get full name
+  const getFullName = () => {
+    if (!profileData) return '';
+    const {firstName, lastName, middleInitial} = profileData;
+    return `${firstName} ${
+      middleInitial ? middleInitial + '. ' : ''
+    }${lastName}`.trim();
+  };
+
+  // Helper function to get initials
+  const getInitials = () => {
+    if (!profileData) return '';
+    const {firstName, lastName} = profileData;
+    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`;
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString: string | number | Date) => {
+    if (!dateString) return 'Not set';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  type VerificationStatus =
+    | 'pending'
+    | 'under_review'
+    | 'approved'
+    | 'rejected'
+    | string;
+
+  // Helper function to get verification status display
+  const getVerificationStatusDisplay = (status: VerificationStatus) => {
+    const statusMap = {
+      pending: {label: 'Pending', color: '#f39c12'},
+      under_review: {label: 'Under Review', color: '#3498db'},
+      approved: {label: 'Approved', color: '#27ae60'},
+      rejected: {label: 'Rejected', color: '#e74c3c'},
+    } as const;
+    return status in statusMap
+      ? statusMap[status as keyof typeof statusMap]
+      : {label: 'Unknown', color: '#95a5a6'};
+  };
+
+  // Check if profile image upload is pending
+  const isProfileImagePending = () => {
+    return (
+      profileData?.pendingProfileImage?.status === 'pending' ||
+      profileData?.verificationStatus === 'under_review' ||
+      profileData?.verificationStatus === 'pending'
+    );
+  };
+
+  // Get pending image upload status message
+  const getPendingImageStatusMessage = () => {
+    if (profileData?.pendingProfileImage?.status === 'pending') {
+      return 'Profile image upload is pending admin approval. You cannot upload another image until this is reviewed.';
+    }
+    if (profileData?.pendingProfileImage?.status === 'rejected') {
+      const reason = profileData.pendingProfileImage.rejectionReason;
+      return `Previous upload was rejected${
+        reason ? ': ' + reason : ''
+      }. You can upload a new profile image.`;
+    }
+    if (
+      profileData?.verificationStatus === 'under_review' ||
+      profileData?.verificationStatus === 'pending'
+    ) {
+      return 'You have a pending validation. Please wait for admin approval before uploading a new image.';
+    }
+    return '';
+  };
+
   // Reset form data when toggling edit mode
   const toggleEdit = () => {
     if (editing) {
       // Reset form if canceling edit
       setFormData({
-        fullName: profileData.fullName,
-        username: profileData.username,
-        email: profileData.email,
-        phone: profileData.phone,
+        firstName: profileData?.firstName || '',
+        lastName: profileData?.lastName || '',
+        middleInitial: profileData?.middleInitial || '',
+        username: profileData?.username || '',
+        email: profileData?.email || '',
+        phone: profileData?.phone || '',
       });
       setCurrentPassword('');
       setNewPassword('');
@@ -102,7 +186,16 @@ const PassengerProfileScreen = () => {
   };
 
   const pickImage = async () => {
+    // Check if there's already a pending validation
+    if (isProfileImagePending()) {
+      const message = getPendingImageStatusMessage();
+      Alert.alert('Validation Pending', message, [{text: 'OK'}]);
+      return;
+    }
+
     try {
+      setUploadingImage(true);
+
       // Using react-native-image-picker instead of expo-image-picker
       const options: CameraOptions = {
         mediaType: 'photo',
@@ -114,10 +207,12 @@ const PassengerProfileScreen = () => {
       launchCamera(options, response => {
         if (response.didCancel) {
           console.log('User cancelled image picker');
+          setUploadingImage(false);
           return;
         } else if (response.errorCode) {
           console.log('ImagePicker Error: ', response.errorMessage);
           Alert.alert('Error', response.errorMessage || 'Failed to pick image');
+          setUploadingImage(false);
           return;
         }
 
@@ -126,6 +221,7 @@ const PassengerProfileScreen = () => {
           const imageUri = asset.uri;
 
           if (!imageUri) {
+            setUploadingImage(false);
             return;
           }
 
@@ -144,7 +240,7 @@ const PassengerProfileScreen = () => {
           } as unknown as Blob);
 
           // Upload the image
-          fetch(`${BACKEND_URL}/api/users/upload-image/${profileData._id}`, {
+          fetch(`${BACKEND_URL}/api/users/upload-image/${profileData?._id}`, {
             method: 'POST',
             body: formData,
             headers: {
@@ -161,19 +257,28 @@ const PassengerProfileScreen = () => {
               return uploadResponse.json();
             })
             .then(uploadData => {
-              /// Force refresh of profile to get the updated image URL
+              // Force refresh of profile to get the updated verification status
               refreshProfile();
-              Alert.alert('Success', 'Profile image updated successfully!');
+              Alert.alert(
+                'Image Uploaded',
+                'Your profile image has been uploaded and is pending admin approval. It will be visible once approved.',
+                [{text: 'OK'}],
+              );
+              setUploadingImage(false);
             })
             .catch(uploadError => {
               console.error('Upload request failed:', uploadError);
               Alert.alert('Error', 'Failed to upload image');
+              setUploadingImage(false);
             });
+        } else {
+          setUploadingImage(false);
         }
       });
     } catch (error) {
       console.error('Error picking or uploading image:', error);
       Alert.alert('Error', 'Failed to update profile image');
+      setUploadingImage(false);
     }
   };
 
@@ -222,7 +327,7 @@ const PassengerProfileScreen = () => {
 
       // Use the addNewAddress API endpoint
       const response = await api.post(
-        `/api/users/addresses/${profileData._id}`,
+        `/api/users/addresses/${profileData?._id}`,
         {address: newAddress},
       );
 
@@ -261,7 +366,8 @@ const PassengerProfileScreen = () => {
   };
 
   const openEditAddressModal = (index: number) => {
-    const address = profileData.savedAddresses[index];
+    if (!passengerProfile?.savedAddresses) return;
+    const address = passengerProfile.savedAddresses[index];
     setEditAddressIndex(index);
     setEditAddressLabel(address.label);
     setEditAddressValue(address.address);
@@ -269,14 +375,19 @@ const PassengerProfileScreen = () => {
   };
 
   const handleUpdateAddress = async () => {
-    if (!editAddressLabel || !editAddressValue) {
+    if (
+      !editAddressLabel ||
+      !editAddressValue ||
+      !passengerProfile?.savedAddresses
+    ) {
       Alert.alert('Error', 'Both label and address value are required');
       return;
     }
 
     try {
       // Get existing location or create a new one with proper type
-      let location = profileData.savedAddresses[editAddressIndex]?.location || {
+      let location = passengerProfile.savedAddresses[editAddressIndex]
+        ?.location || {
         type: 'Point',
         coordinates: [0, 0],
         address: editAddressValue,
@@ -284,7 +395,7 @@ const PassengerProfileScreen = () => {
 
       // Check if address changed to avoid unnecessary geocoding
       const currentAddress =
-        profileData.savedAddresses[editAddressIndex].address;
+        passengerProfile.savedAddresses[editAddressIndex].address;
 
       if (editAddressValue !== currentAddress) {
         // Use our backend API to geocode the address
@@ -318,18 +429,18 @@ const PassengerProfileScreen = () => {
 
       // Follow the schema structure
       const updatedAddress = {
-        _id: profileData.savedAddresses[editAddressIndex]._id,
+        _id: passengerProfile.savedAddresses[editAddressIndex]._id,
         label: editAddressLabel,
         address: editAddressValue,
         location: location,
       };
 
-      const updatedAddresses = [...profileData.savedAddresses];
+      const updatedAddresses = [...passengerProfile.savedAddresses];
       updatedAddresses[editAddressIndex] = updatedAddress;
 
       // Save to database
       const response = await api.put(
-        `/api/users/addresses/${profileData._id}`,
+        `/api/users/addresses/${profileData?._id}`,
         {savedAddresses: updatedAddresses},
       );
 
@@ -357,7 +468,7 @@ const PassengerProfileScreen = () => {
     async (index: number) => {
       try {
         const response = await api.delete(
-          `/api/users/addresses/${profileData._id}/${index}`,
+          `/api/users/addresses/${profileData?._id}/${index}`,
         );
 
         if (response.status !== 200) {
@@ -375,10 +486,6 @@ const PassengerProfileScreen = () => {
     },
     [profileData],
   );
-
-  // const handleSaveAddresses = () => {
-  //   setEditingAddresses(false);
-  // };
 
   const handleChangePassword = async () => {
     if (newPassword != confirmPassword) {
@@ -401,7 +508,7 @@ const PassengerProfileScreen = () => {
       Alert.alert('Success', 'Password updated successfully!');
     } catch (error) {
       console.error('Error updating password:', error);
-      Alert.alert('Error', 'Incorrect current passworddd');
+      Alert.alert('Error', 'Incorrect current password');
     }
   };
 
@@ -424,6 +531,14 @@ const PassengerProfileScreen = () => {
     );
   }
 
+  if (!profileData || !passengerProfile) {
+    return (
+      <View style={GlobalStyles.loadingContainer}>
+        <Text>Profile not found or invalid user type</Text>
+      </View>
+    );
+  }
+
   return (
     <>
       <View style={GlobalStyles.header}>
@@ -442,7 +557,9 @@ const PassengerProfileScreen = () => {
           <Card.Content style={TabsStyles.profileContent}>
             <TouchableOpacity
               style={TabsStyles.avatarContainer}
-              onPress={editing ? pickImage : undefined}>
+              onPress={editing ? pickImage : undefined}
+              disabled={uploadingImage}>
+              {/* Show current active profile image, not pending one */}
               {profileData.profileImage ? (
                 <Avatar.Image
                   size={100}
@@ -452,33 +569,88 @@ const PassengerProfileScreen = () => {
               ) : (
                 <Avatar.Text
                   size={100}
-                  label={profileData.fullName
-                    .split(' ')
-                    .map(n => n[0])
-                    .join('')}
+                  label={getInitials()}
                   style={TabsStyles.avatar}
                 />
               )}
               {editing && (
                 <View style={TabsStyles.editAvatarOverlay}>
-                  <Text style={TabsStyles.editAvatarText}>Edit</Text>
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={TabsStyles.editAvatarText}>
+                      {isProfileImagePending() ? 'Pending' : 'Edit'}
+                    </Text>
+                  )}
                 </View>
               )}
             </TouchableOpacity>
 
+            {/* Show pending image status if applicable */}
+            {/* {profileData.pendingProfileImage?.status === 'pending' && (
+              <View style={{alignItems: 'center', marginTop: 8}}>
+                <Chip
+                  mode="flat"
+                  style={{backgroundColor: '#f39c12'}}
+                  textStyle={{color: 'white', fontSize: 12}}>
+                  Profile Image Pending Approval
+                </Chip>
+              </View>
+            )} */}
+
+            {/* Verification Status */}
+            {/* {profileData.verificationStatus && (
+              <View style={{alignItems: 'center', marginTop: 8}}>
+                <Chip
+                  mode="flat"
+                  style={{
+                    backgroundColor: getVerificationStatusDisplay(
+                      profileData.verificationStatus,
+                    ).color,
+                  }}
+                  textStyle={{color: 'white', fontSize: 12}}>
+                  {
+                    getVerificationStatusDisplay(profileData.verificationStatus)
+                      .label
+                  }
+                </Chip>
+              </View>
+            )} */}
+
             <View style={TabsStyles.profileInfo}>
               {editing ? (
-                <TextInput
-                  label="Name"
-                  value={formData.fullName}
-                  onChangeText={text =>
-                    setFormData({...formData, fullName: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
+                <>
+                  <TextInput
+                    label="First Name"
+                    value={formData.firstName}
+                    onChangeText={text =>
+                      setFormData({...formData, firstName: text})
+                    }
+                    style={TabsStyles.input}
+                    mode="outlined"
+                  />
+                  <TextInput
+                    label="Last Name"
+                    value={formData.lastName}
+                    onChangeText={text =>
+                      setFormData({...formData, lastName: text})
+                    }
+                    style={TabsStyles.input}
+                    mode="outlined"
+                  />
+                  <TextInput
+                    label="Middle Initial"
+                    value={formData.middleInitial}
+                    onChangeText={text =>
+                      setFormData({...formData, middleInitial: text})
+                    }
+                    style={TabsStyles.input}
+                    mode="outlined"
+                    maxLength={1}
+                  />
+                </>
               ) : (
-                <Text style={TabsStyles.nameText}>{profileData.fullName}</Text>
+                <Text style={TabsStyles.nameText}>{getFullName()}</Text>
               )}
 
               <Button
@@ -486,8 +658,39 @@ const PassengerProfileScreen = () => {
                 onPress={editing ? handleSave : () => {}}
                 style={TabsStyles.saveButton}
                 disabled={!editing}>
-                {editing ? 'Save Changes' : `Full Name`}
+                {editing ? 'Save Changes' : 'Full Name'}
               </Button>
+            </View>
+          </Card.Content>
+        </Card>
+
+        <Card style={TabsStyles.sectionCard}>
+          <Card.Content>
+            <Title>Personal Information</Title>
+            <Divider style={TabsStyles.divider} />
+
+            {/* Read-only fields - Birthdate and Age */}
+            <View style={TabsStyles.infoRow}>
+              <Text style={TabsStyles.infoLabel}>Birthdate</Text>
+              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                {formatDate(profileData.birthdate)}
+              </Text>
+            </View>
+
+            <View style={TabsStyles.infoRow}>
+              <Text style={TabsStyles.infoLabel}>Age</Text>
+              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                {profileData.age || 'Not set'}
+              </Text>
+            </View>
+
+            {/* Passenger Category - Read-only */}
+            <View style={TabsStyles.infoRow}>
+              <Text style={TabsStyles.infoLabel}>Category</Text>
+              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                {passengerProfile.passengerCategory?.charAt(0).toUpperCase() +
+                  passengerProfile.passengerCategory?.slice(1) || 'Not set'}
+              </Text>
             </View>
           </Card.Content>
         </Card>
@@ -501,7 +704,6 @@ const PassengerProfileScreen = () => {
               <Text style={TabsStyles.infoLabel}>Username</Text>
               {editing ? (
                 <TextInput
-                  // label="Username"
                   value={formData.username}
                   onChangeText={text =>
                     setFormData({...formData, username: text})
@@ -546,17 +748,76 @@ const PassengerProfileScreen = () => {
           </Card.Content>
         </Card>
 
+        {/* ID Document Section */}
+        {profileData.idDocument && (
+          <Card style={TabsStyles.sectionCard}>
+            <Card.Content>
+              <Title>ID Document</Title>
+              <Divider style={TabsStyles.divider} />
+
+              <View style={TabsStyles.infoRow}>
+                <Text style={TabsStyles.infoLabel}>Document Type</Text>
+                <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                  {profileData.idDocument.type
+                    ?.replace('_', ' ')
+                    .replace(/\b\w/g, l => l.toUpperCase()) || 'Not specified'}
+                </Text>
+              </View>
+
+              <View style={TabsStyles.infoRow}>
+                <Text style={TabsStyles.infoLabel}>Status</Text>
+                <Chip
+                  mode="flat"
+                  style={{
+                    backgroundColor: profileData.idDocument.verified
+                      ? '#27ae60'
+                      : '#f39c12',
+                    alignSelf: 'flex-start',
+                  }}
+                  textStyle={{color: 'white', fontSize: 12}}>
+                  {profileData.idDocument.verified
+                    ? 'Verified'
+                    : 'Pending Verification'}
+                </Chip>
+              </View>
+
+              {profileData.idDocument.uploadedAt && (
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Uploaded</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {formatDate(profileData.idDocument.uploadedAt)}
+                  </Text>
+                </View>
+              )}
+
+              {profileData.idDocument.verifiedAt && (
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Verified On</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {formatDate(profileData.idDocument.verifiedAt)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Show ID image if available - read-only */}
+              {profileData.idDocument.imageUrl && (
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Document Image</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    Uploaded (View only)
+                  </Text>
+                </View>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+
         {!editing && (
           <>
             <Card style={TabsStyles.sectionCard}>
               <Card.Content>
                 <View style={TabsStyles.titleRow}>
                   <Title>Saved Addresses</Title>
-                  {/* <IconButton
-                    icon={editingAddresses ? 'close' : 'pencil'}
-                    size={20}
-                    onPress={() => setEditingAddresses(!editingAddresses)}
-                  /> */}
                   <TouchableOpacity
                     onPress={() => setEditingAddresses(!editingAddresses)}>
                     <Text style={TabsStyles.editButtonText}>
@@ -566,12 +827,12 @@ const PassengerProfileScreen = () => {
                 </View>
                 <Divider style={TabsStyles.divider} />
 
-                {profileData.savedAddresses.length === 0 ? (
+                {passengerProfile.savedAddresses?.length === 0 ? (
                   <Text style={TabsStyles.noAddressText}>
                     No saved addresses
                   </Text>
                 ) : (
-                  profileData.savedAddresses.map((address, index) => (
+                  passengerProfile.savedAddresses?.map((address, index) => (
                     <List.Item
                       key={index}
                       title={address.label}
@@ -715,12 +976,12 @@ const PassengerProfileScreen = () => {
                 style={[
                   {
                     borderWidth: newAddressValue ? 2 : 1,
-                    borderColor: newAddressValue ? '#3498db' : '#ccc', // You can change to active color conditionally
+                    borderColor: newAddressValue ? '#3498db' : '#ccc',
                     borderRadius: 4,
                     padding: 4,
                     flexDirection: 'row',
                     alignItems: 'center',
-                    minHeight: 56, // matches default TextInput height
+                    minHeight: 56,
                     backgroundColor: '#fff',
                   },
                 ]}>
@@ -911,7 +1172,11 @@ const PassengerProfileScreen = () => {
             ? 'saveAddress'
             : 'destination'
         }
-        savedAddresses={profileData.savedAddresses}
+        savedAddresses={
+          (passengerProfile?.savedAddresses?.filter(
+            addr => addr._id,
+          ) as any[]) || []
+        }
       />
     </>
   );

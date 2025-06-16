@@ -50,6 +50,16 @@ interface IdDocument {
   verifiedBy?: string;
 }
 
+// NEW: Interface for pending profile image
+interface PendingProfileImage {
+  imageUrl: string;
+  uploadedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedAt?: string;
+  reviewedBy?: string;
+  rejectionReason?: string;
+}
+
 interface Warning {
   message: string;
   Date: string;
@@ -81,14 +91,15 @@ interface BaseProfile {
   lastName: string;
   firstName: string;
   middleInitial: string;
-  birthdate: string;
-  age: number;
+  birthdate: string; // READ-ONLY (viewable but not editable)
+  age: number; // READ-ONLY (viewable but not editable)
   username: string;
   email: string;
   phone: string;
   homeAddress: HomeAddress;
   role: 'passenger' | 'driver' | 'admin';
-  profileImage: string;
+  profileImage: string; // Current active profile image
+  pendingProfileImage?: PendingProfileImage; // NEW: Pending profile image
   isBlocked: boolean;
   blockReason: string;
   warnings: Warning[];
@@ -99,7 +110,7 @@ interface BaseProfile {
   isVerified: boolean;
   verificationStatus: 'pending' | 'under_review' | 'approved' | 'rejected';
   agreementsAccepted: Agreement[];
-  idDocument: IdDocument;
+  idDocument: IdDocument; // READ-ONLY (viewable but not editable)
   createdAt: string;
   updatedAt: string;
 }
@@ -136,11 +147,31 @@ interface ProfileContextProps {
     currentPassword: string,
     newPassword: string,
   ) => Promise<any>;
+  uploadProfileImage: (imageFile: any) => Promise<any>; // NEW: Upload profile image function
   refreshProfile: () => Promise<void>;
 }
 
-// List of fields that cannot be edited by users
-const PROTECTED_FIELDS = ['birthdate', 'age'] as const;
+// Updated list of fields that cannot be edited by users (but can be viewed)
+const READ_ONLY_FIELDS = [
+  'birthdate', // Can view but not edit
+  'age', // Can view but not edit
+  'idDocument', // Can view but not edit
+  'profileImage', // Can view but not edit directly (must use upload function)
+  'pendingProfileImage', // Can view but not edit directly
+  'verificationStatus',
+  'isVerified',
+  'rating',
+  'totalRides',
+  'totalRatings',
+  'isBlocked',
+  'blockReason',
+  'warnings',
+  'createdAt',
+  'updatedAt',
+] as const;
+
+// List of fields that are completely hidden/protected (not shown in UI)
+const PROTECTED_FIELDS = ['_id', 'password'] as const;
 
 // Create default profile data based on role
 const createDefaultProfile = (
@@ -163,6 +194,7 @@ const createDefaultProfile = (
       zipCode: '',
     },
     profileImage: '',
+    pendingProfileImage: undefined,
     isBlocked: false,
     blockReason: '',
     warnings: [],
@@ -231,6 +263,7 @@ const ProfileContext = createContext<ProfileContextProps>({
   loading: true,
   updateProfile: async () => {},
   updatePassword: async () => {},
+  uploadProfileImage: async () => {},
   refreshProfile: async () => {},
 });
 
@@ -302,6 +335,15 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
         Object.entries(updatedData).filter(([_, value]) => value !== undefined),
       );
 
+      // Remove read-only fields from the update data
+      const readOnlyFieldsFound: string[] = [];
+      READ_ONLY_FIELDS.forEach(field => {
+        if (field in filteredData) {
+          readOnlyFieldsFound.push(field);
+          delete filteredData[field];
+        }
+      });
+
       // Remove protected fields from the update data
       const protectedFieldsFound: string[] = [];
       PROTECTED_FIELDS.forEach(field => {
@@ -311,6 +353,21 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
         }
       });
 
+      // Alert user if they tried to update read-only fields
+      if (readOnlyFieldsFound.length > 0) {
+        console.warn(
+          `Attempted to update read-only fields: ${readOnlyFieldsFound.join(
+            ', ',
+          )}`,
+        );
+        Alert.alert(
+          'Update Restricted',
+          `The following fields cannot be modified: ${readOnlyFieldsFound.join(
+            ', ',
+          )}. These fields are read-only or require admin approval.`,
+        );
+      }
+
       // Alert user if they tried to update protected fields
       if (protectedFieldsFound.length > 0) {
         console.warn(
@@ -318,15 +375,9 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
             ', ',
           )}`,
         );
-        Alert.alert(
-          'Update Restricted',
-          `The following fields cannot be modified: ${protectedFieldsFound.join(
-            ', ',
-          )}`,
-        );
       }
 
-      // Check if there's still data to update after removing protected fields
+      // Check if there's still data to update after removing non-editable fields
       if (Object.keys(filteredData).length === 0) {
         setLoading(false);
         return profileData; // Return current profile data if no valid updates
@@ -370,9 +421,13 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
       if (error.response?.data?.error) {
         errorMessage = error.response.data.error;
       } else if (error.response?.data?.details) {
-        errorMessage = `Validation error: ${error.response.data.details.join(
-          ', ',
-        )}`;
+        if (Array.isArray(error.response.data.details)) {
+          errorMessage = `Validation error: ${error.response.data.details.join(
+            ', ',
+          )}`;
+        } else {
+          errorMessage = error.response.data.details;
+        }
       }
 
       Alert.alert('Error', errorMessage);
@@ -416,6 +471,64 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
     }
   };
 
+  // NEW: Function to upload profile image
+  const uploadProfileImage = async (imageFile: any) => {
+    if (!profileData) {
+      throw new Error('No profile data available');
+    }
+
+    try {
+      setLoading(true);
+
+      // Check if there's already a pending image
+      if (profileData.pendingProfileImage?.status === 'pending') {
+        setLoading(false);
+        throw new Error(
+          'A profile image is already pending approval. You cannot upload another.',
+        );
+      }
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('profileImage', imageFile);
+
+      // Upload to your backend endpoint
+      const response = await api.post(
+        `/api/users/profile/${profileData._id}/upload-image`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      );
+
+      if (response.status !== 200) {
+        throw new Error(response.data?.error || 'Failed to upload image');
+      }
+
+      // Refresh profile to get updated pendingProfileImage data
+      await fetchProfile();
+      setLoading(false);
+
+      Alert.alert(
+        'Upload Successful',
+        'Your profile image has been uploaded and is pending admin approval.',
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error uploading profile image:', error);
+      setLoading(false);
+
+      const errorMessage =
+        error.response?.data?.error || 'Failed to upload profile image';
+
+      Alert.alert('Upload Failed', errorMessage);
+      throw new Error(errorMessage);
+    }
+  };
+
   // Initial fetch when the app loads
   useEffect(() => {
     fetchProfile();
@@ -429,6 +542,7 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
         loading,
         updateProfile,
         updatePassword,
+        uploadProfileImage,
         refreshProfile: fetchProfile,
       }}>
       {children}
@@ -468,10 +582,76 @@ export const isAdminProfile = (
 
 // Helper function to check if a field can be edited
 export const isFieldEditable = (fieldName: string): boolean => {
+  return (
+    !READ_ONLY_FIELDS.includes(fieldName as any) &&
+    !PROTECTED_FIELDS.includes(fieldName as any)
+  );
+};
+
+// Helper function to check if a field should be visible (can be read)
+export const isFieldVisible = (fieldName: string): boolean => {
   return !PROTECTED_FIELDS.includes(fieldName as any);
+};
+
+// Helper function to check if a field is read-only (visible but not editable)
+export const isFieldReadOnly = (fieldName: string): boolean => {
+  return (
+    READ_ONLY_FIELDS.includes(fieldName as any) && isFieldVisible(fieldName)
+  );
+};
+
+// Helper function to get list of read-only fields
+export const getReadOnlyFields = (): readonly string[] => {
+  return READ_ONLY_FIELDS;
 };
 
 // Helper function to get list of protected fields
 export const getProtectedFields = (): readonly string[] => {
   return PROTECTED_FIELDS;
+};
+
+// NEW: Helper function to check if profile image upload is allowed
+export const canUploadProfileImage = (profile: Profile | null): boolean => {
+  if (!profile) return false;
+
+  // Cannot upload if there's already a pending image
+  return !(profile.pendingProfileImage?.status === 'pending');
+};
+
+// NEW: Helper function to get profile image upload status message
+export const getProfileImageUploadStatus = (
+  profile: Profile | null,
+): string => {
+  if (!profile) return 'Profile not loaded';
+
+  if (profile.pendingProfileImage?.status === 'pending') {
+    return 'Profile image upload is pending admin approval';
+  }
+
+  if (profile.pendingProfileImage?.status === 'rejected') {
+    return `Previous upload was rejected${
+      profile.pendingProfileImage.rejectionReason
+        ? ': ' + profile.pendingProfileImage.rejectionReason
+        : ''
+    }. You can upload a new profile image.`;
+  }
+
+  return 'You can upload a new profile image';
+};
+
+// NEW: Helper function to get the current effective profile image
+export const getCurrentProfileImage = (profile: Profile | null): string => {
+  if (!profile) return '';
+
+  // Return the active profile image (not the pending one)
+  return profile.profileImage || '';
+};
+
+// NEW: Helper function to get pending profile image info
+export const getPendingProfileImageInfo = (
+  profile: Profile | null,
+): PendingProfileImage | null => {
+  if (!profile || !profile.pendingProfileImage) return null;
+
+  return profile.pendingProfileImage;
 };

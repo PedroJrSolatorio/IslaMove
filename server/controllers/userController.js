@@ -40,61 +40,44 @@ export const uploadProfileImage = async (req, res) => {
     }
 
     const userId = req.params.id;
+    const user = await User.findById(userId);
 
-    // Get the server URL for file access
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Prevent upload if a pending image already exists
+    if (
+      user.pendingProfileImage &&
+      user.pendingProfileImage.status === "pending"
+    ) {
+      return res.status(403).json({
+        error:
+          "A profile image is already pending approval. You cannot upload another.",
+      });
+    }
+
+    // Save file as a pending image
     const fileUrl = `${req.protocol}://${req.get("host")}/uploads/profiles/${
       req.file.filename
     }`;
 
-    // Find the user and get their current profile image
-    const user = await User.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ error: "User not found in uploadProfileImage" });
-    }
-
-    // Delete the old profile image if it exists
-    if (user.profileImage) {
-      try {
-        // Construct the full path to the old image
-        const uploadsDir = path.resolve(process.cwd(), "uploads", "profiles");
-        const oldFilename = path.basename(user.profileImage);
-        const oldFilePath = path.join(uploadsDir, oldFilename);
-
-        // Check if file exists before attempting to delete
-        if (fs.existsSync(oldFilePath)) {
-          fs.unlinkSync(oldFilePath);
-          console.log(`Deleted old profile image: ${oldFilename}`);
-        } else {
-          console.log("Old image file not found:", oldFilePath);
-        }
-      } catch (deleteError) {
-        console.error("Failed to delete old profile image:", deleteError);
-        // Continue even if deletion fails
-      }
-    }
-
-    // Update user profile with new image URL
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { profileImage: fileUrl },
-      { new: true }
-    );
-
-    res.json({
-      success: true,
+    user.pendingProfileImage = {
       imageUrl: fileUrl,
-      user: {
-        _id: updatedUser._id,
-        username: updatedUser.username,
-        fullName: updatedUser.fullName,
-        profileImage: updatedUser.profileImage,
-      },
+      uploadedAt: new Date(),
+      status: "pending",
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Profile image uploaded and pending admin approval.",
+      pendingImageUrl: fileUrl,
     });
   } catch (error) {
     console.error("Error uploading profile image:", error);
-    res.status(500).json({ error: "Failed to upload image" });
+    return res.status(500).json({ error: "Failed to upload image" });
   }
 };
 
@@ -119,9 +102,9 @@ export const updateProfile = async (req, res) => {
         return res.status(400).json({ error: "Incorrect current password" });
       }
 
-      // Hash and update the new password
+      // Hash the new password
       const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(updateData.newPassword, salt);
+      const hashedPassword = await bcrypt.hash(updateData.newPassword, salt);
 
       // Update password using findByIdAndUpdate
       const updatedUser = await User.findByIdAndUpdate(
@@ -143,10 +126,26 @@ export const updateProfile = async (req, res) => {
       });
     }
 
-    // Prevent editing of non-editable fields
-    if (updateData.birthdate || updateData.age) {
+    // Prevent editing of non-editable fields (but allow viewing)
+    const nonEditableFields = [
+      "birthdate",
+      "age",
+      "idDocument",
+      "profileImage", // Users can't directly edit this - must go through upload process
+      "pendingProfileImage", // Users can't directly edit this
+      "verificationStatus",
+    ];
+
+    const attemptedNonEditableFields = nonEditableFields.filter((field) =>
+      updateData.hasOwnProperty(field)
+    );
+
+    if (attemptedNonEditableFields.length > 0) {
       return res.status(400).json({
-        error: "Birthdate and age cannot be modified",
+        error: `The following fields cannot be modified: ${attemptedNonEditableFields.join(
+          ", "
+        )}`,
+        details: "These fields are read-only or require admin approval",
       });
     }
 
@@ -206,7 +205,6 @@ export const updateProfile = async (req, res) => {
       "username",
       "email",
       "phone",
-      "profileImage",
       "currentLocation",
     ];
     basicFields.forEach((field) => {
@@ -228,9 +226,6 @@ export const updateProfile = async (req, res) => {
       if (updateData.homeAddress !== undefined) {
         updateObject.homeAddress = updateData.homeAddress;
       }
-      if (updateData.idDocument !== undefined) {
-        updateObject.idDocument = updateData.idDocument;
-      }
     } else if (user.role === "driver") {
       // Driver-specific fields
       if (updateData.driverStatus !== undefined) {
@@ -249,14 +244,11 @@ export const updateProfile = async (req, res) => {
       if (updateData.homeAddress !== undefined) {
         updateObject.homeAddress = updateData.homeAddress;
       }
-      if (updateData.idDocument !== undefined) {
-        updateObject.idDocument = updateData.idDocument;
-      }
     } else if (user.role === "admin") {
       // Admin users cannot update homeAddress or idDocument
-      if (updateData.homeAddress || updateData.idDocument) {
+      if (updateData.homeAddress) {
         return res.status(400).json({
-          error: "Admin users cannot have home address or ID document",
+          error: "Admin users cannot have home address",
         });
       }
     }
@@ -329,6 +321,65 @@ export const updateProfile = async (req, res) => {
     }
 
     res.status(500).json({ error: "Failed to update profile" });
+  }
+};
+
+// Admin function to approve/reject pending profile images
+export const reviewProfileImage = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { action, rejectionReason } = req.body; // action: "approve" or "reject"
+    const adminId = req.user.id; // Assuming admin ID is available in req.user
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (
+      !user.pendingProfileImage ||
+      user.pendingProfileImage.status !== "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ error: "No pending profile image to review" });
+    }
+
+    if (action === "approve") {
+      // Move pending image to active profile image
+      user.profileImage = user.pendingProfileImage.imageUrl;
+      user.pendingProfileImage.status = "approved";
+      user.pendingProfileImage.reviewedAt = new Date();
+      user.pendingProfileImage.reviewedBy = adminId;
+
+      await user.save();
+
+      return res.json({
+        message: "Profile image approved successfully",
+        profileImage: user.profileImage,
+      });
+    } else if (action === "reject") {
+      user.pendingProfileImage.status = "rejected";
+      user.pendingProfileImage.reviewedAt = new Date();
+      user.pendingProfileImage.reviewedBy = adminId;
+      if (rejectionReason) {
+        user.pendingProfileImage.rejectionReason = rejectionReason;
+      }
+
+      await user.save();
+
+      return res.json({
+        message: "Profile image rejected",
+        rejectionReason: rejectionReason || "No reason provided",
+      });
+    } else {
+      return res
+        .status(400)
+        .json({ error: "Invalid action. Use 'approve' or 'reject'" });
+    }
+  } catch (error) {
+    console.error("Error reviewing profile image:", error);
+    return res.status(500).json({ error: "Failed to review profile image" });
   }
 };
 

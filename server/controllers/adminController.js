@@ -870,3 +870,77 @@ export const getPassengerStats = async (req, res) => {
     });
   }
 };
+
+export const approveProfileImage = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+
+    if (!user || !user.pendingProfileImage) {
+      return res
+        .status(400)
+        .json({ error: "No pending profile image to approve" });
+    }
+
+    // Delete old image if it exists
+    if (user.profileImage) {
+      try {
+        const uploadsDir = path.resolve(process.cwd(), "uploads", "profiles");
+        const oldFilename = path.basename(user.profileImage);
+        const oldFilePath = path.join(uploadsDir, oldFilename);
+        if (fs.existsSync(oldFilePath)) fs.unlinkSync(oldFilePath);
+      } catch (err) {
+        console.error(
+          "Failed to delete old profile image during approval:",
+          err
+        );
+      }
+    }
+
+    // Promote pending to active
+    user.profileImage = user.pendingProfileImage;
+    user.pendingProfileImage = null;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Profile image approved",
+      imageUrl: user.profileImage,
+    });
+  } catch (error) {
+    console.error("Error approving profile image:", error);
+    res.status(500).json({ error: "Failed to approve image" });
+  }
+};
+
+export const rejectProfileImage = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const user = await User.findById(userId);
+
+    if (!user || !user.pendingProfileImage) {
+      return res
+        .status(400)
+        .json({ error: "No pending profile image to reject" });
+    }
+
+    const uploadsDir = path.resolve(process.cwd(), "uploads", "profiles");
+    const pendingFilename = path.basename(user.pendingProfileImage);
+    const pendingFilePath = path.join(uploadsDir, pendingFilename);
+
+    if (fs.existsSync(pendingFilePath)) {
+      fs.unlinkSync(pendingFilePath);
+    }
+
+    user.pendingProfileImage = null;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Profile image rejected and deleted",
+    });
+  } catch (error) {
+    console.error("Error rejecting profile image:", error);
+    res.status(500).json({ error: "Failed to reject image" });
+  }
+};

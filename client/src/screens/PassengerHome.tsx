@@ -69,7 +69,7 @@ const PassengerHome = () => {
   );
 
   // Only show loading on initial app load, not on every navigation
-  if (initialLoad && !profileData._id) {
+  if (initialLoad && (!profileData || !profileData._id)) {
     return (
       <View style={GlobalStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#6200ee" />
@@ -87,7 +87,7 @@ const PassengerHome = () => {
     <>
       <View style={GlobalStyles.header}>
         <Text style={GlobalStyles.headerTitle}>
-          Welcome back, {profileData.firstName.split(' ')[0] || 'Passenger'}!
+          Welcome back, {profileData?.firstName?.split(' ')[0] || 'Passenger'}!
         </Text>
         <View style={{height: 46}} />
       </View>

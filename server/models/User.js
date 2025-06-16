@@ -40,8 +40,8 @@ const userSchema = new mongoose.Schema(
     lastName: { type: String, required: true },
     firstName: { type: String, required: true },
     middleInitial: { type: String, required: true },
-    birthdate: { type: Date, required: true }, // Non-editable
-    age: { type: Number, required: true }, // Non-editable
+    birthdate: { type: Date, required: true }, // Non-editable (viewable)
+    age: { type: Number, required: true }, // Non-editable (viewable)
     username: { type: String, unique: true, required: true },
     email: { type: String, unique: true, required: true },
     password: { type: String, required: true },
@@ -85,10 +85,27 @@ const userSchema = new mongoose.Schema(
       enum: ["passenger", "driver", "admin"],
       required: true,
     },
+
+    // Current active profile image
     profileImage: {
       type: String,
       default: "",
     },
+
+    // Pending profile image awaiting admin approval
+    pendingProfileImage: {
+      imageUrl: { type: String },
+      uploadedAt: { type: Date, default: Date.now },
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+      },
+      reviewedAt: { type: Date },
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Admin who reviewed
+      rejectionReason: { type: String },
+    },
+
     isBlocked: {
       type: Boolean,
       default: false,
