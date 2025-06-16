@@ -167,4 +167,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 50,
   },
+  categoryInfo: {
+    marginTop: 10,
+    marginBottom: 20,
+    paddingHorizontal: 15,
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
 });

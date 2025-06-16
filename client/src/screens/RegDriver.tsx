@@ -25,7 +25,7 @@ import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../navigation/types';
 import ImageResizer from 'react-native-image-resizer';
 import api from '../../utils/api';
-import {styles} from '../styles/RegDriverStyles';
+import {styles} from '../styles/RegistrationStyles';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface VehicleInfo {
