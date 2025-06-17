@@ -397,7 +397,7 @@ export const loginUser = async (req, res) => {
       refreshToken,
       userId: user._id,
       role: user.role,
-      fullName: user.fullName,
+      firstName: user.firstName,
       username: user.username,
     });
   } catch (error) {

@@ -30,7 +30,6 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isDriverProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {RootStackParamList} from '../navigation/types';
-import api from '../../utils/api';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 

@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Get user by email
 export const getUserByEmail = async (req, res) => {
   try {
     const user = await User.findOne({ email: req.params.email });
@@ -18,7 +17,6 @@ export const getUserByEmail = async (req, res) => {
   }
 };
 
-// Get user profile by id
 export const getProfileById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select("-password");
@@ -78,6 +76,64 @@ export const uploadProfileImage = async (req, res) => {
   } catch (error) {
     console.error("Error uploading profile image:", error);
     return res.status(500).json({ error: "Failed to upload image" });
+  }
+};
+
+export const reviewProfileImage = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { action, rejectionReason } = req.body; // action: "approve" or "reject"
+    const adminId = req.user.id; // Assuming admin ID is available in req.user
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (
+      !user.pendingProfileImage ||
+      user.pendingProfileImage.status !== "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ error: "No pending profile image to review" });
+    }
+
+    if (action === "approve") {
+      // Move pending image to active profile image
+      user.profileImage = user.pendingProfileImage.imageUrl;
+      user.pendingProfileImage.status = "approved";
+      user.pendingProfileImage.reviewedAt = new Date();
+      user.pendingProfileImage.reviewedBy = adminId;
+
+      await user.save();
+
+      return res.json({
+        message: "Profile image approved successfully",
+        profileImage: user.profileImage,
+      });
+    } else if (action === "reject") {
+      user.pendingProfileImage.status = "rejected";
+      user.pendingProfileImage.reviewedAt = new Date();
+      user.pendingProfileImage.reviewedBy = adminId;
+      if (rejectionReason) {
+        user.pendingProfileImage.rejectionReason = rejectionReason;
+      }
+
+      await user.save();
+
+      return res.json({
+        message: "Profile image rejected",
+        rejectionReason: rejectionReason || "No reason provided",
+      });
+    } else {
+      return res
+        .status(400)
+        .json({ error: "Invalid action. Use 'approve' or 'reject'" });
+    }
+  } catch (error) {
+    console.error("Error reviewing profile image:", error);
+    return res.status(500).json({ error: "Failed to review profile image" });
   }
 };
 
@@ -321,65 +377,6 @@ export const updateProfile = async (req, res) => {
     }
 
     res.status(500).json({ error: "Failed to update profile" });
-  }
-};
-
-// Admin function to approve/reject pending profile images
-export const reviewProfileImage = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { action, rejectionReason } = req.body; // action: "approve" or "reject"
-    const adminId = req.user.id; // Assuming admin ID is available in req.user
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (
-      !user.pendingProfileImage ||
-      user.pendingProfileImage.status !== "pending"
-    ) {
-      return res
-        .status(400)
-        .json({ error: "No pending profile image to review" });
-    }
-
-    if (action === "approve") {
-      // Move pending image to active profile image
-      user.profileImage = user.pendingProfileImage.imageUrl;
-      user.pendingProfileImage.status = "approved";
-      user.pendingProfileImage.reviewedAt = new Date();
-      user.pendingProfileImage.reviewedBy = adminId;
-
-      await user.save();
-
-      return res.json({
-        message: "Profile image approved successfully",
-        profileImage: user.profileImage,
-      });
-    } else if (action === "reject") {
-      user.pendingProfileImage.status = "rejected";
-      user.pendingProfileImage.reviewedAt = new Date();
-      user.pendingProfileImage.reviewedBy = adminId;
-      if (rejectionReason) {
-        user.pendingProfileImage.rejectionReason = rejectionReason;
-      }
-
-      await user.save();
-
-      return res.json({
-        message: "Profile image rejected",
-        rejectionReason: rejectionReason || "No reason provided",
-      });
-    } else {
-      return res
-        .status(400)
-        .json({ error: "Invalid action. Use 'approve' or 'reject'" });
-    }
-  } catch (error) {
-    console.error("Error reviewing profile image:", error);
-    return res.status(500).json({ error: "Failed to review profile image" });
   }
 };
 

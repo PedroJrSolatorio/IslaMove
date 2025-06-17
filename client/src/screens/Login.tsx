@@ -118,7 +118,7 @@ const LoginScreen = ({navigation}: Props) => {
         role,
         userData: {
           userId: response.data.userId,
-          fullName: response.data.fullName,
+          firstName: response.data.firstName,
           username: response.data.username,
         },
       });

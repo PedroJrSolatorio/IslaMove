@@ -13,7 +13,7 @@ type Role = 'admin' | 'driver' | 'passenger' | null;
 
 interface UserData {
   userId: string;
-  fullName: string;
+  firstName: string;
   username: string;
   // Add other user data fields as needed
 }
