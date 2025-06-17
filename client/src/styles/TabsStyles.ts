@@ -23,7 +23,7 @@ export const TabsStyles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: '#f39c12',
     borderRadius: 15,
     padding: 5,
   },

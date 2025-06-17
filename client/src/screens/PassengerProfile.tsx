@@ -666,37 +666,6 @@ const PassengerProfileScreen = () => {
 
         <Card style={TabsStyles.sectionCard}>
           <Card.Content>
-            <Title>Personal Information</Title>
-            <Divider style={TabsStyles.divider} />
-
-            {/* Read-only fields - Birthdate and Age */}
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Birthdate</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                {formatDate(profileData.birthdate)}
-              </Text>
-            </View>
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Age</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                {profileData.age || 'Not set'}
-              </Text>
-            </View>
-
-            {/* Passenger Category - Read-only */}
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Category</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                {passengerProfile.passengerCategory?.charAt(0).toUpperCase() +
-                  passengerProfile.passengerCategory?.slice(1) || 'Not set'}
-              </Text>
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Card style={TabsStyles.sectionCard}>
-          <Card.Content>
             <Title>Account Information</Title>
             <Divider style={TabsStyles.divider} />
 
@@ -748,72 +717,88 @@ const PassengerProfileScreen = () => {
           </Card.Content>
         </Card>
 
-        {/* ID Document Section */}
-        {profileData.idDocument && (
-          <Card style={TabsStyles.sectionCard}>
-            <Card.Content>
-              <Title>ID Document</Title>
-              <Divider style={TabsStyles.divider} />
-
-              <View style={TabsStyles.infoRow}>
-                <Text style={TabsStyles.infoLabel}>Document Type</Text>
-                <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                  {profileData.idDocument.type
-                    ?.replace('_', ' ')
-                    .replace(/\b\w/g, l => l.toUpperCase()) || 'Not specified'}
-                </Text>
-              </View>
-
-              <View style={TabsStyles.infoRow}>
-                <Text style={TabsStyles.infoLabel}>Status</Text>
-                <Chip
-                  mode="flat"
-                  style={{
-                    backgroundColor: profileData.idDocument.verified
-                      ? '#27ae60'
-                      : '#f39c12',
-                    alignSelf: 'flex-start',
-                  }}
-                  textStyle={{color: 'white', fontSize: 12}}>
-                  {profileData.idDocument.verified
-                    ? 'Verified'
-                    : 'Pending Verification'}
-                </Chip>
-              </View>
-
-              {profileData.idDocument.uploadedAt && (
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Uploaded</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    {formatDate(profileData.idDocument.uploadedAt)}
-                  </Text>
-                </View>
-              )}
-
-              {profileData.idDocument.verifiedAt && (
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Verified On</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    {formatDate(profileData.idDocument.verifiedAt)}
-                  </Text>
-                </View>
-              )}
-
-              {/* Show ID image if available - read-only */}
-              {profileData.idDocument.imageUrl && (
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Document Image</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    Uploaded (View only)
-                  </Text>
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
         {!editing && (
           <>
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
+                <Title>Personal Information</Title>
+                <Divider style={TabsStyles.divider} />
+
+                {/* Read-only fields - Birthdate and Age */}
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Birthdate</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {formatDate(profileData.birthdate)}
+                  </Text>
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Age</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {profileData.age || 'Not set'}
+                  </Text>
+                </View>
+
+                {/* Passenger Category - Read-only */}
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Category</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {passengerProfile.passengerCategory
+                      ?.charAt(0)
+                      .toUpperCase() +
+                      passengerProfile.passengerCategory?.slice(1) || 'Not set'}
+                  </Text>
+                </View>
+              </Card.Content>
+            </Card>
+
+            {/* ID Document Section */}
+            {profileData.idDocument && (
+              <Card style={TabsStyles.sectionCard}>
+                <Card.Content>
+                  <Title>ID Document</Title>
+                  <Divider style={TabsStyles.divider} />
+
+                  <View style={TabsStyles.infoRow}>
+                    <Text style={TabsStyles.infoLabel}>Document Type</Text>
+                    <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                      {profileData.idDocument.type
+                        ?.replace('_', ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase()) ||
+                        'Not specified'}
+                    </Text>
+                  </View>
+
+                  {profileData.idDocument.uploadedAt && (
+                    <View style={TabsStyles.infoRow}>
+                      <Text style={TabsStyles.infoLabel}>Uploaded</Text>
+                      <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                        {formatDate(profileData.idDocument.uploadedAt)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {profileData.idDocument.verifiedAt && (
+                    <View style={TabsStyles.infoRow}>
+                      <Text style={TabsStyles.infoLabel}>Verified On</Text>
+                      <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                        {formatDate(profileData.idDocument.verifiedAt)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Show ID image if available - read-only */}
+                  {profileData.idDocument.imageUrl && (
+                    <View style={TabsStyles.infoRow}>
+                      <Text style={TabsStyles.infoLabel}>Document Image</Text>
+                      <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                        Uploaded (View only)
+                      </Text>
+                    </View>
+                  )}
+                </Card.Content>
+              </Card>
+            )}
             <Card style={TabsStyles.sectionCard}>
               <Card.Content>
                 <View style={TabsStyles.titleRow}>
