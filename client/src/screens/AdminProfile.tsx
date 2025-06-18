@@ -28,6 +28,7 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isAdminProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {RootStackParamList} from '../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -92,7 +93,7 @@ const AdminProfileScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState<string>('');
 
   // Check if user is admin
-  if (profileData && !isAdminProfile(profileData)) {
+  if (!loading && profileData && !isAdminProfile(profileData)) {
     return (
       <View style={GlobalStyles.loadingContainer}>
         <Text style={{color: 'red', fontSize: 16}}>
@@ -261,11 +262,6 @@ const AdminProfileScreen = () => {
       console.error('Failed to clear AsyncStorage:', error);
       Alert.alert('Error', 'Failed to log out.');
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'Not set';
-    return new Date(dateString).toLocaleDateString();
   };
 
   if (loading) {

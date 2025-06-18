@@ -16,6 +16,7 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import api from '../../utils/api';
 import {useFocusEffect} from '@react-navigation/native';
 import {AxiosError, AxiosRequestConfig} from 'axios';
+import {useProfile} from '../context/ProfileContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -27,6 +28,7 @@ const LoginScreen = ({navigation}: Props) => {
   const [loading, setLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const {login, userToken, userRole} = useAuth();
+  const {refreshProfile} = useProfile();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -122,6 +124,11 @@ const LoginScreen = ({navigation}: Props) => {
           username: response.data.username,
         },
       });
+
+      // Wait a bit for AsyncStorage to be updated, then refresh profile
+      setTimeout(() => {
+        refreshProfile();
+      }, 100);
     } catch (error) {
       const axiosError = error as AxiosError<{message?: string}>;
       const backendMessage =

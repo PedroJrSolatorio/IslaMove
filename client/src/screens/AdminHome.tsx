@@ -19,13 +19,15 @@ import DriverManagement from '../screens/admin/dManagement';
 import PassengerManagement from '../screens/admin/pManagement';
 import ZoneFareCalculator from '../screens/admin/zoneFare';
 import AdminStats from '../screens/admin/adminStats';
+import {useProfile} from '../context/ProfileContext';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function AdminHome() {
-  const {userToken, userRole} = useContext(AuthContext);
+  const {userToken, userRole, logout} = useContext(AuthContext);
   const navigation = useNavigation<NavigationProp>();
   const [activeTab, setActiveTab] = useState('stats');
+  const {profileData} = useProfile();
 
   // Custom back handler (Android only)
   useEffect(() => {
@@ -86,7 +88,10 @@ export default function AdminHome() {
   return (
     <View style={GlobalStyles.container}>
       <View style={GlobalStyles.header}>
-        <Text style={GlobalStyles.headerTitle}>Admin Dashboard</Text>
+        <Text style={GlobalStyles.headerTitle}>
+          Admin Dashboard (
+          {profileData?.firstName?.split(' ')[0] || 'Passenger'}!)
+        </Text>
         <View style={{height: 46}} />
       </View>
 

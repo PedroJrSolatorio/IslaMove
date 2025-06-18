@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   View,
   ScrollView,
@@ -30,6 +30,7 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isDriverProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {RootStackParamList} from '../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 

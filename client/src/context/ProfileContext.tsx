@@ -173,90 +173,6 @@ const READ_ONLY_FIELDS = [
 // List of fields that are completely hidden/protected (not shown in UI)
 const PROTECTED_FIELDS = ['_id', 'password'] as const;
 
-// Create default profile data based on role
-const createDefaultProfile = (
-  role: 'passenger' | 'driver' | 'admin' = 'passenger',
-): Profile => {
-  const baseProfile = {
-    _id: '',
-    lastName: '',
-    firstName: '',
-    middleInitial: '',
-    birthdate: '',
-    age: 0,
-    username: '',
-    email: '',
-    phone: '',
-    homeAddress: {
-      street: '',
-      city: '',
-      state: '',
-      zipCode: '',
-    },
-    profileImage: '',
-    pendingProfileImage: undefined,
-    isBlocked: false,
-    blockReason: '',
-    warnings: [],
-    rating: 5,
-    totalRides: 0,
-    totalRatings: 0,
-    isVerified: false,
-    verificationStatus: 'pending' as const,
-    agreementsAccepted: [],
-    idDocument: {
-      type: 'valid_id' as const,
-      imageUrl: '',
-      uploadedAt: '',
-      verified: false,
-    },
-    createdAt: '',
-    updatedAt: '',
-  };
-
-  switch (role) {
-    case 'passenger':
-      return {
-        ...baseProfile,
-        role: 'passenger',
-        passengerCategory: 'regular',
-        savedAddresses: [],
-      } as PassengerProfile;
-
-    case 'driver':
-      return {
-        ...baseProfile,
-        role: 'driver',
-        licenseNumber: '',
-        driverStatus: 'offline',
-        vehicle: {
-          make: '',
-          series: '',
-          yearModel: 0,
-          color: '',
-          type: 'bao-bao',
-          plateNumber: '',
-          bodyNumber: '',
-        },
-        documents: [],
-      } as DriverProfile;
-
-    case 'admin':
-      return {
-        ...baseProfile,
-        role: 'admin',
-      } as AdminProfile;
-
-    default:
-      return {
-        ...baseProfile,
-        role: 'passenger',
-        passengerCategory: 'regular',
-        savedAddresses: [],
-      } as PassengerProfile;
-  }
-};
-
 // Create the context with a default value
 const ProfileContext = createContext<ProfileContextProps>({
   profileData: null,
@@ -278,7 +194,12 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const userId = await AsyncStorage.getItem('userId');
+      let userId = await AsyncStorage.getItem('userId');
+
+      // Clean the userId of any extra quotes
+      if (userId) {
+        userId = userId.replace(/^["']|["']$/g, ''); // Remove leading/trailing quotes
+      }
 
       if (!userId) {
         // console.warn('User ID not found in AsyncStorage'); //remove this in production

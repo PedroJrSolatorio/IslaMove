@@ -29,7 +29,7 @@ interface AuthContextProps {
   userToken: string | null;
   refreshToken: string | null;
   userData: UserData | null;
-  login: (data: AuthData) => void;
+  login: (data: AuthData) => Promise<void>;
   logout: () => void;
   refreshAccessToken: () => Promise<boolean>;
   isLoading: boolean;
@@ -88,29 +88,32 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
     loadStoredAuth();
   }, []);
 
-  const login = async (data: AuthData) => {
+  const login = async (data: AuthData): Promise<void> => {
     try {
-      // Save to state
+      console.log('🔐 Starting login process...');
+
+      // Save to AsyncStorage first
+      await AsyncStorage.multiSet([
+        ['userToken', data.token],
+        ['refreshToken', data.refreshToken],
+        ['userRole', data.role || ''],
+        ['userData', JSON.stringify(data.userData)],
+        ['userId', data.userData.userId],
+      ]);
+
+      // Then update state
       setUserRole(data.role);
       setUserToken(data.token);
       setRefreshToken(data.refreshToken);
       setUserData(data.userData);
 
-      // Save to AsyncStorage
-      await AsyncStorage.setItem('userToken', data.token);
-      await AsyncStorage.setItem('refreshToken', data.refreshToken);
-      await AsyncStorage.setItem('userRole', data.role || '');
-      await AsyncStorage.setItem('userData', JSON.stringify(data.userData));
-
-      // Explicitly store userId separately for easier access
-      await AsyncStorage.setItem('userId', data.userData.userId);
-
       console.log(
-        'Auth data saved successfully. User ID:',
+        '✅ Auth data saved successfully. User ID:',
         data.userData.userId,
       );
     } catch (error) {
-      console.error('Error saving auth data:', error);
+      console.error('❌ Error saving auth data:', error);
+      throw error; // Re-throw so the login component knows about the error
     }
   };
 
@@ -157,18 +160,60 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
       setRefreshToken(null);
       setUserData(null);
 
-      // Clear AsyncStorage
-      await AsyncStorage.multiRemove([
+      // Clear ALL auth-related items from AsyncStorage
+      const keysToRemove = [
         'userToken',
         'refreshToken',
         'userRole',
         'userData',
         'userId',
-      ]);
+        // Add any other auth-related keys you might have
+      ];
+
+      // Clear AsyncStorage
+      await AsyncStorage.multiRemove(keysToRemove);
+
+      // Verify the items were actually removed
+      const verifyCleared = await AsyncStorage.multiGet(keysToRemove);
+      const stillPresent = verifyCleared.filter(
+        ([key, value]) => value !== null,
+      );
+
+      if (stillPresent.length > 0) {
+        console.warn('⚠️ Some items were not cleared:', stillPresent);
+
+        // Force remove any remaining items
+        for (const [key] of stillPresent) {
+          await AsyncStorage.removeItem(key);
+        }
+      }
 
       console.log('Auth data cleared successfully');
+
+      // Final verification
+      const finalCheck = await AsyncStorage.multiGet(keysToRemove);
+      const finalStillPresent = finalCheck.filter(
+        ([key, value]) => value !== null,
+      );
+
+      if (finalStillPresent.length === 0) {
+        console.log('✅ Logout verification passed - all data cleared');
+      } else {
+        console.error(
+          '❌ Logout verification failed - some data still present:',
+          finalStillPresent,
+        );
+      }
     } catch (error) {
       console.error('Error clearing auth data:', error);
+
+      // Even if there's an error, try to clear the state
+      setUserRole(null);
+      setUserToken(null);
+      setRefreshToken(null);
+      setUserData(null);
+
+      throw error; // Re-throw so the UI can handle it
     }
   };
 

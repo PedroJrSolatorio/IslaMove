@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useContext} from 'react';
 import {
   View,
   ScrollView,
@@ -11,7 +11,8 @@ import {Card, Title, Paragraph, Button, Avatar, Text} from 'react-native-paper';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {GlobalStyles} from '../styles/GlobalStyles';
 import {TabsStyles} from '../styles/TabsStyles';
-import {useAuth} from '../context/AuthContext';
+import {useAuth} from '../context/AuthContext'; // this or {AuthContext} will work
+// import {AuthContext} from '../context/AuthContext';
 import {useProfile} from '../context/ProfileContext';
 
 let backPressCount = 0;
@@ -19,6 +20,7 @@ let backPressCount = 0;
 const PassengerHome = () => {
   const navigation = useNavigation();
   const {userToken, userRole, logout} = useAuth();
+  // const {userToken, userRole, logout} = useContext(AuthContext);
   const {profileData, refreshProfile} = useProfile();
   const [initialLoad, setInitialLoad] = useState(true);
 
@@ -146,10 +148,6 @@ const PassengerHome = () => {
             </Button>
           </Card.Actions>
         </Card>
-
-        {/* <Button mode="outlined" style={{marginTop: 32}} onPress={logout}>
-        Logout
-      </Button> */}
       </ScrollView>
     </>
   );

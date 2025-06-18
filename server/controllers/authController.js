@@ -400,6 +400,9 @@ export const loginUser = async (req, res) => {
       firstName: user.firstName,
       username: user.username,
     });
+    console.log(
+      `User name: ${user.username}, userId: ${user._id} logged in successfully, token generated`
+    );
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "Login failed" });
