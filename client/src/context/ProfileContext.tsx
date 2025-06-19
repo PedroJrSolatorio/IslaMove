@@ -155,6 +155,7 @@ interface ProfileContextProps {
 const READ_ONLY_FIELDS = [
   'birthdate', // Can view but not edit
   'age', // Can view but not edit
+  'licenseNumber', // Can view but not edit
   'idDocument', // Can view but not edit
   'profileImage', // Can view but not edit directly (must use upload function)
   'pendingProfileImage', // Can view but not edit directly
@@ -307,7 +308,6 @@ export const ProfileProvider: React.FC<{children: ReactNode}> = ({
       // Role-specific validation
       if (profileData.role === 'passenger') {
         // Remove driver-specific fields if somehow included
-        delete filteredData.licenseNumber;
         delete filteredData.driverStatus;
         delete filteredData.vehicle;
         delete filteredData.documents;

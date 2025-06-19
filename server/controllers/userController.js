@@ -186,6 +186,7 @@ export const updateProfile = async (req, res) => {
     const nonEditableFields = [
       "birthdate",
       "age",
+      "licenseNumber",
       "idDocument",
       "profileImage", // Users can't directly edit this - must go through upload process
       "pendingProfileImage", // Users can't directly edit this
@@ -290,9 +291,6 @@ export const updateProfile = async (req, res) => {
       if (updateData.vehicle !== undefined) {
         updateObject.vehicle = updateData.vehicle;
       }
-      if (updateData.licenseNumber !== undefined) {
-        updateObject.licenseNumber = updateData.licenseNumber;
-      }
       if (updateData.documents !== undefined) {
         updateObject.documents = updateData.documents;
       }
@@ -323,7 +321,6 @@ export const updateProfile = async (req, res) => {
       if (
         updateData.driverStatus ||
         updateData.vehicle ||
-        updateData.licenseNumber ||
         updateData.documents
       ) {
         return res.status(400).json({

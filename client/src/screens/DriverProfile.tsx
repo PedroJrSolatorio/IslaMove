@@ -55,7 +55,6 @@ const DriverProfileScreen = () => {
     username: profileData?.username || '',
     email: profileData?.email || '',
     phone: profileData?.phone || '',
-    licenseNumber: driverProfile?.licenseNumber || '',
   });
 
   // Vehicle form state
@@ -174,7 +173,6 @@ const DriverProfileScreen = () => {
         username: profileData?.username || '',
         email: profileData?.email || '',
         phone: profileData?.phone || '',
-        licenseNumber: driverProfile?.licenseNumber || '',
       });
       setCurrentPassword('');
       setNewPassword('');
@@ -475,82 +473,6 @@ const DriverProfileScreen = () => {
 
         <Card style={TabsStyles.sectionCard}>
           <Card.Content>
-            <Title>Driver Status</Title>
-            <Divider style={TabsStyles.divider} />
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Current Status</Text>
-              <Chip
-                mode="flat"
-                style={{
-                  backgroundColor: getDriverStatusDisplay(
-                    driverProfile.driverStatus,
-                  ).color,
-                  alignSelf: 'flex-start',
-                }}
-                textStyle={{color: 'white', fontSize: 12}}>
-                {getDriverStatusDisplay(driverProfile.driverStatus).label}
-              </Chip>
-            </View>
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Rating</Text>
-              <Text style={TabsStyles.infoValue}>
-                {profileData.rating.toFixed(1)} ⭐ ({profileData.totalRatings}{' '}
-                ratings)
-              </Text>
-            </View>
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Total Rides</Text>
-              <Text style={TabsStyles.infoValue}>{profileData.totalRides}</Text>
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Card style={TabsStyles.sectionCard}>
-          <Card.Content>
-            <Title>Personal Information</Title>
-            <Divider style={TabsStyles.divider} />
-
-            {/* Read-only fields - Birthdate and Age */}
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Birthdate</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                {formatDate(profileData.birthdate)}
-              </Text>
-            </View>
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Age</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                {profileData.age || 'Not set'}
-              </Text>
-            </View>
-
-            {/* License Number - Editable for drivers */}
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>License Number</Text>
-              {editing ? (
-                <TextInput
-                  value={formData.licenseNumber}
-                  onChangeText={text =>
-                    setFormData({...formData, licenseNumber: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.licenseNumber || 'Not set'}
-                </Text>
-              )}
-            </View>
-          </Card.Content>
-        </Card>
-
-        <Card style={TabsStyles.sectionCard}>
-          <Card.Content>
             <Title>Account Information</Title>
             <Divider style={TabsStyles.divider} />
 
@@ -602,254 +524,324 @@ const DriverProfileScreen = () => {
           </Card.Content>
         </Card>
 
-        {/* Vehicle Information Section */}
-        <Card style={TabsStyles.sectionCard}>
-          <Card.Content>
-            <View style={TabsStyles.titleRow}>
-              <Title>Vehicle Information</Title>
-              {!editing && (
-                <TouchableOpacity onPress={toggleVehicleEdit}>
-                  <Text style={TabsStyles.editButtonText}>
-                    {editingVehicle ? 'Cancel' : 'Edit'}
+        {!editing && (
+          <>
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
+                <Title>Driver Status</Title>
+                <Divider style={TabsStyles.divider} />
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Current Status</Text>
+                  <Chip
+                    mode="flat"
+                    style={{
+                      backgroundColor: getDriverStatusDisplay(
+                        driverProfile.driverStatus,
+                      ).color,
+                      alignSelf: 'flex-start',
+                    }}
+                    textStyle={{color: 'white', fontSize: 12}}>
+                    {getDriverStatusDisplay(driverProfile.driverStatus).label}
+                  </Chip>
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Rating</Text>
+                  <Text style={TabsStyles.infoValue}>
+                    {profileData.rating.toFixed(1)} ⭐ (
+                    {profileData.totalRatings} ratings)
                   </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <Divider style={TabsStyles.divider} />
+                </View>
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Make</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.make}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, make: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.make || 'Not set'}
-                </Text>
-              )}
-            </View>
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Total Rides</Text>
+                  <Text style={TabsStyles.infoValue}>
+                    {profileData.totalRides}
+                  </Text>
+                </View>
+              </Card.Content>
+            </Card>
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Series</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.series}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, series: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.series || 'Not set'}
-                </Text>
-              )}
-            </View>
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
+                <Title>Personal Information</Title>
+                <Divider style={TabsStyles.divider} />
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Year Model</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.yearModel}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, yearModel: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                  keyboardType="numeric"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.yearModel || 'Not set'}
-                </Text>
-              )}
-            </View>
+                {/* Read-only fields - Birthdate and Age */}
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Birthdate</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {formatDate(profileData.birthdate)}
+                  </Text>
+                </View>
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Color</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.color}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, color: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.color || 'Not set'}
-                </Text>
-              )}
-            </View>
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Age</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    {profileData.age || 'Not set'}
+                  </Text>
+                </View>
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Type</Text>
-              <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                Bao-Bao
-              </Text>
-            </View>
+                {/* License Number - Editable for drivers */}
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>License Number</Text>
+                  <Text style={TabsStyles.infoValue}>
+                    {driverProfile.licenseNumber || 'Not set'}
+                  </Text>
+                </View>
+              </Card.Content>
+            </Card>
 
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Plate Number</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.plateNumber}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, plateNumber: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.plateNumber || 'Not set'}
-                </Text>
-              )}
-            </View>
-
-            <View style={TabsStyles.infoRow}>
-              <Text style={TabsStyles.infoLabel}>Body Number</Text>
-              {editingVehicle ? (
-                <TextInput
-                  value={vehicleData.bodyNumber}
-                  onChangeText={text =>
-                    setVehicleData({...vehicleData, bodyNumber: text})
-                  }
-                  style={TabsStyles.input}
-                  mode="outlined"
-                />
-              ) : (
-                <Text style={TabsStyles.infoValue}>
-                  {driverProfile.vehicle?.bodyNumber || 'Not set'}
-                </Text>
-              )}
-            </View>
-
-            {editingVehicle && (
-              <View style={TabsStyles.addressButtonsContainer}>
-                <Button
-                  mode="contained"
-                  onPress={handleSaveVehicle}
-                  style={TabsStyles.saveAddressesButton}>
-                  Save Vehicle Info
-                </Button>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Documents Section */}
-        <Card style={TabsStyles.sectionCard}>
-          <Card.Content>
-            <Title>Documents</Title>
-            <Divider style={TabsStyles.divider} />
-
-            {driverProfile.documents?.length === 0 ||
-            !driverProfile.documents ? (
-              <Text style={TabsStyles.noAddressText}>
-                No documents uploaded
-              </Text>
-            ) : (
-              driverProfile.documents?.map((doc, index) => (
-                <List.Item
-                  key={index}
-                  title={doc.documentType}
-                  description={`Uploaded: ${formatDate(doc.uploadDate)}`}
-                  left={props => (
-                    <List.Icon
-                      {...props}
-                      icon={
-                        doc.documentType === 'License'
-                          ? 'card-account-details'
-                          : doc.documentType === 'Registration'
-                          ? 'file-document'
-                          : doc.documentType === 'MODA Certificate'
-                          ? 'certificate'
-                          : 'camera'
-                      }
-                    />
+            {/* Vehicle Information Section */}
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
+                <View style={TabsStyles.titleRow}>
+                  <Title>Vehicle Information</Title>
+                  {!editing && (
+                    <TouchableOpacity onPress={toggleVehicleEdit}>
+                      <Text style={TabsStyles.editButtonText}>
+                        {editingVehicle ? 'Cancel' : 'Edit'}
+                      </Text>
+                    </TouchableOpacity>
                   )}
-                  right={props => (
+                </View>
+                <Divider style={TabsStyles.divider} />
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Make</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.make}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, make: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.make || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Series</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.series}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, series: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.series || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Year Model</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.yearModel}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, yearModel: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                      keyboardType="numeric"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.yearModel || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Color</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.color}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, color: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.color || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Type</Text>
+                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                    Bao-Bao
+                  </Text>
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Plate Number</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.plateNumber}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, plateNumber: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.plateNumber || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Body Number</Text>
+                  {editingVehicle ? (
+                    <TextInput
+                      value={vehicleData.bodyNumber}
+                      onChangeText={text =>
+                        setVehicleData({...vehicleData, bodyNumber: text})
+                      }
+                      style={TabsStyles.input}
+                      mode="outlined"
+                    />
+                  ) : (
+                    <Text style={TabsStyles.infoValue}>
+                      {driverProfile.vehicle?.bodyNumber || 'Not set'}
+                    </Text>
+                  )}
+                </View>
+
+                {editingVehicle && (
+                  <View style={TabsStyles.addressButtonsContainer}>
+                    <Button
+                      mode="contained"
+                      onPress={handleSaveVehicle}
+                      style={TabsStyles.saveAddressesButton}>
+                      Save Vehicle Info
+                    </Button>
+                  </View>
+                )}
+              </Card.Content>
+            </Card>
+
+            {/* Documents Section */}
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
+                <Title>Documents</Title>
+                <Divider style={TabsStyles.divider} />
+
+                {driverProfile.documents?.length === 0 ||
+                !driverProfile.documents ? (
+                  <Text style={TabsStyles.noAddressText}>
+                    No documents uploaded
+                  </Text>
+                ) : (
+                  driverProfile.documents?.map((doc, index) => (
+                    <List.Item
+                      key={index}
+                      title={doc.documentType}
+                      description={`Uploaded: ${formatDate(doc.uploadDate)}`}
+                      left={props => (
+                        <List.Icon
+                          {...props}
+                          icon={
+                            doc.documentType === 'License'
+                              ? 'card-account-details'
+                              : doc.documentType === 'Registration'
+                              ? 'file-document'
+                              : doc.documentType === 'MODA Certificate'
+                              ? 'certificate'
+                              : 'camera'
+                          }
+                        />
+                      )}
+                      right={props => (
+                        <Chip
+                          mode="flat"
+                          style={{
+                            backgroundColor: doc.verified
+                              ? '#27ae60'
+                              : '#f39c12',
+                            alignSelf: 'center',
+                          }}
+                          textStyle={{color: 'white', fontSize: 12}}>
+                          {doc.verified ? 'Verified' : 'Pending'}
+                        </Chip>
+                      )}
+                    />
+                  ))
+                )}
+              </Card.Content>
+            </Card>
+
+            {/* ID Document Section */}
+            {profileData.idDocument && (
+              <Card style={TabsStyles.sectionCard}>
+                <Card.Content>
+                  <Title>ID Document</Title>
+                  <Divider style={TabsStyles.divider} />
+
+                  <View style={TabsStyles.infoRow}>
+                    <Text style={TabsStyles.infoLabel}>Document Type</Text>
+                    <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                      {profileData.idDocument.type
+                        ?.replace('_', ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase()) ||
+                        'Not specified'}
+                    </Text>
+                  </View>
+
+                  <View style={TabsStyles.infoRow}>
+                    <Text style={TabsStyles.infoLabel}>Status</Text>
                     <Chip
                       mode="flat"
                       style={{
-                        backgroundColor: doc.verified ? '#27ae60' : '#f39c12',
-                        alignSelf: 'center',
+                        backgroundColor: profileData.idDocument.verified
+                          ? '#27ae60'
+                          : '#f39c12',
+                        alignSelf: 'flex-start',
                       }}
                       textStyle={{color: 'white', fontSize: 12}}>
-                      {doc.verified ? 'Verified' : 'Pending'}
+                      {profileData.idDocument.verified
+                        ? 'Verified'
+                        : 'Pending Verification'}
                     </Chip>
+                  </View>
+
+                  {profileData.idDocument.uploadedAt && (
+                    <View style={TabsStyles.infoRow}>
+                      <Text style={TabsStyles.infoLabel}>Uploaded</Text>
+                      <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                        {formatDate(profileData.idDocument.uploadedAt)}
+                      </Text>
+                    </View>
                   )}
-                />
-              ))
+
+                  {profileData.idDocument.verifiedAt && (
+                    <View style={TabsStyles.infoRow}>
+                      <Text style={TabsStyles.infoLabel}>Verified On</Text>
+                      <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                        {formatDate(profileData.idDocument.verifiedAt)}
+                      </Text>
+                    </View>
+                  )}
+                </Card.Content>
+              </Card>
             )}
-          </Card.Content>
-        </Card>
 
-        {/* ID Document Section */}
-        {profileData.idDocument && (
-          <Card style={TabsStyles.sectionCard}>
-            <Card.Content>
-              <Title>ID Document</Title>
-              <Divider style={TabsStyles.divider} />
-
-              <View style={TabsStyles.infoRow}>
-                <Text style={TabsStyles.infoLabel}>Document Type</Text>
-                <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                  {profileData.idDocument.type
-                    ?.replace('_', ' ')
-                    .replace(/\b\w/g, l => l.toUpperCase()) || 'Not specified'}
-                </Text>
-              </View>
-
-              <View style={TabsStyles.infoRow}>
-                <Text style={TabsStyles.infoLabel}>Status</Text>
-                <Chip
-                  mode="flat"
-                  style={{
-                    backgroundColor: profileData.idDocument.verified
-                      ? '#27ae60'
-                      : '#f39c12',
-                    alignSelf: 'flex-start',
-                  }}
-                  textStyle={{color: 'white', fontSize: 12}}>
-                  {profileData.idDocument.verified
-                    ? 'Verified'
-                    : 'Pending Verification'}
-                </Chip>
-              </View>
-
-              {profileData.idDocument.uploadedAt && (
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Uploaded</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    {formatDate(profileData.idDocument.uploadedAt)}
-                  </Text>
-                </View>
-              )}
-
-              {profileData.idDocument.verifiedAt && (
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Verified On</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    {formatDate(profileData.idDocument.verifiedAt)}
-                  </Text>
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
-        {!editing && (
-          <>
             <Card style={TabsStyles.sectionCard}>
               <Card.Content>
                 <Title>Account Security</Title>
