@@ -96,6 +96,10 @@ export const registerUser = async (req, res) => {
       passengerCategory,
     } = req.body;
 
+    // Get the base URL for file paths
+    const baseUrl =
+      process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
+
     // Parse vehicle data if provided
     let vehicle = null;
     if (req.body.vehicle) {
@@ -261,7 +265,7 @@ export const registerUser = async (req, res) => {
     // Process profile image if provided
     if (req.files && req.files.profileImage) {
       const profileImageFile = req.files.profileImage[0];
-      userData.profileImage = `/uploads/profiles/${profileImageFile.filename}`;
+      userData.profileImage = `${baseUrl}/uploads/profiles/${profileImageFile.filename}`;
     }
 
     // Add role-specific fields
@@ -285,7 +289,7 @@ export const registerUser = async (req, res) => {
         const idDocumentFile = req.files.idDocumentImage[0];
         userData.idDocument = {
           type: idDocument.type,
-          imageUrl: `/uploads/documents/${idDocumentFile.filename}`,
+          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
           uploadedAt: new Date(),
           verified: false,
         };
@@ -306,7 +310,7 @@ export const registerUser = async (req, res) => {
           const docFile = req.files[fieldName][0];
           userData.documents.push({
             documentType: docType,
-            fileURL: `/uploads/documents/${docFile.filename}`,
+            fileURL: `${baseUrl}/uploads/documents/${docFile.filename}`,
             verified: false,
             uploadDate: new Date(),
           });
@@ -321,7 +325,7 @@ export const registerUser = async (req, res) => {
         const idDocumentFile = req.files.idDocumentImage[0];
         userData.idDocument = {
           type: idDocument.type,
-          imageUrl: `/uploads/documents/${idDocumentFile.filename}`,
+          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
           uploadedAt: new Date(),
           verified: false,
         };
