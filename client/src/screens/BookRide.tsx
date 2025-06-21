@@ -35,6 +35,7 @@ import MapTypeSelector from '../components/MapTypeSelector';
 import DriverSearchingModal from '../components/DriverSearchingModal';
 import DriverDetailsModal from '../components/DriverDetailsModal';
 import RatingModal from '../components/RatingModal';
+import MapCompass from '../components/MapCompass';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
@@ -125,6 +126,7 @@ const BookRide = () => {
   const [driverEta, setDriverEta] = useState(0);
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
+  const [mapBearing, setMapBearing] = useState(0);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -146,6 +148,19 @@ const BookRide = () => {
     }
 
     return false;
+  };
+
+  // function to handle compass press (reset to north)
+  const resetMapBearing = () => {
+    if (mapRef.current) {
+      mapRef.current.animateCamera(
+        {
+          heading: 0, // Reset to north
+        },
+        {duration: 300},
+      );
+      setMapBearing(0);
+    }
   };
 
   // Getting user's current location
@@ -869,18 +884,24 @@ const BookRide = () => {
 
   return (
     <View style={styles.container}>
-      {/* Custom Back Button */}
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={styles.backButton}>
         <Icon name="arrow-left" size={28} color="black" />
       </TouchableOpacity>
 
+      <MapCompass
+        bearing={mapBearing}
+        onPress={resetMapBearing}
+        visible={true}
+      />
+
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         mapType={mapType}
         style={styles.map}
+        showsCompass={false} // Disable default compass to use custom one
         initialRegion={
           currentLocation
             ? {
@@ -933,7 +954,6 @@ const BookRide = () => {
         )}
       </MapView>
 
-      {/* Map Type Button */}
       <TouchableOpacity
         style={styles.mapTypeButton}
         onPress={() => setShowMapTypeSelector(true)}>
@@ -942,7 +962,6 @@ const BookRide = () => {
 
       <View style={styles.contentContainer}>{renderContent()}</View>
 
-      {/* Location Search Modal */}
       <LocationSearchModal
         visible={showLocationModal}
         onClose={() => setShowLocationModal(false)}
@@ -957,7 +976,6 @@ const BookRide = () => {
         }
       />
 
-      {/* Rating Modal */}
       <RatingModal
         visible={showRatingModal}
         onClose={() => {
@@ -968,7 +986,6 @@ const BookRide = () => {
         driverName={assignedDriver?.fullName || 'your driver'}
       />
 
-      {/* MapTypeSelector component */}
       <MapTypeSelector
         visible={showMapTypeSelector}
         currentMapType={mapType}
