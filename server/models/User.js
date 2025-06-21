@@ -197,8 +197,8 @@ const userSchema = new mongoose.Schema(
           documentType: {
             type: String,
             enum: [
-              "License",
-              "Registration",
+              "Official Receipt (OR)",
+              "Certificate of Registration (CR)",
               "MODA Certificate",
               "Vehicle Photo",
             ],
