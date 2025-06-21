@@ -18,14 +18,20 @@ import {
   Divider,
   Avatar,
 } from 'react-native-paper';
-import MapView, {Marker, PROVIDER_GOOGLE, Polyline} from 'react-native-maps';
+import MapView, {
+  Marker,
+  PROVIDER_GOOGLE,
+  Polyline,
+  MapType,
+} from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import {useNavigation} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {decode} from '@googlemaps/polyline-codec';
 import {useAuth} from '../context/AuthContext';
-import {useProfile} from '../context/ProfileContext';
+import {isPassengerProfile, useProfile} from '../context/ProfileContext';
 import LocationSearchModal from '../components/LocationSearchModal';
+import MapTypeSelector from '../components/MapTypeSelector';
 import DriverSearchingModal from '../components/DriverSearchingModal';
 import DriverDetailsModal from '../components/DriverDetailsModal';
 import RatingModal from '../components/RatingModal';
@@ -94,6 +100,9 @@ const BookRide = () => {
   const {profileData} = useProfile();
   const mapRef = useRef<MapView | null>(null);
 
+  // Type guard to ensure we're working with passenger profile
+  const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
+
   // States
   const [loading, setLoading] = useState(true);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
@@ -114,6 +123,8 @@ const BookRide = () => {
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
   const [driverEta, setDriverEta] = useState(0);
+  const [mapType, setMapType] = useState<MapType>('satellite');
+  const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -864,9 +875,11 @@ const BookRide = () => {
         style={styles.backButton}>
         <Icon name="arrow-left" size={28} color="black" />
       </TouchableOpacity>
+
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        mapType={mapType}
         style={styles.map}
         initialRegion={
           currentLocation
@@ -920,6 +933,13 @@ const BookRide = () => {
         )}
       </MapView>
 
+      {/* Map Type Button */}
+      <TouchableOpacity
+        style={styles.mapTypeButton}
+        onPress={() => setShowMapTypeSelector(true)}>
+        <Icon name="layers" size={24} color="#000" />
+      </TouchableOpacity>
+
       <View style={styles.contentContainer}>{renderContent()}</View>
 
       {/* Location Search Modal */}
@@ -930,7 +950,11 @@ const BookRide = () => {
         searching={
           selectingFor === 'destination' ? 'destination' : 'saveAddress'
         }
-        savedAddresses={profileData.savedAddresses}
+        savedAddresses={
+          (passengerProfile?.savedAddresses?.filter(
+            addr => addr._id,
+          ) as any[]) || []
+        }
       />
 
       {/* Rating Modal */}
@@ -942,6 +966,14 @@ const BookRide = () => {
         }}
         onSubmit={submitRating}
         driverName={assignedDriver?.fullName || 'your driver'}
+      />
+
+      {/* MapTypeSelector component */}
+      <MapTypeSelector
+        visible={showMapTypeSelector}
+        currentMapType={mapType}
+        onClose={() => setShowMapTypeSelector(false)}
+        onMapTypeSelect={setMapType}
       />
     </View>
   );

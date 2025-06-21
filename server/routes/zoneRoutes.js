@@ -13,6 +13,8 @@ import { adminAuth } from "../middleware/adminAuth.js";
 
 const router = express.Router();
 
+router.get("/lookup", lookupZoneByCoordinates);
+
 // All routes require authentication
 // This line means: all routes defined after this line will automatically use the adminAuth middleware.
 router.use(adminAuth);
@@ -24,6 +26,5 @@ router.get("/:id", getZoneById);
 router.get("/:parentId/children", getChildZones);
 router.put("/:id", updateZone);
 router.delete("/:id", deleteZone);
-router.get("/lookup", lookupZoneByCoordinates);
 
 export default router;
