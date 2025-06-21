@@ -3,6 +3,7 @@ import AdminTabs from '../navigation/AdminTabs';
 import DriverTabs from './DriverTabs';
 import PassengerTabs from '../navigation/PassengerTabs';
 import BookRide from '../screens/BookRide';
+import MapLocationPicker from '../screens/MapLocationPicker';
 import {useAuth} from '../context/AuthContext';
 
 const Stack = createNativeStackNavigator();
@@ -25,6 +26,14 @@ const AppNavigator = () => {
         <>
           <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
           <Stack.Screen name="BookRide" component={BookRide} />
+          <Stack.Screen
+            name="MapLocationPicker"
+            component={MapLocationPicker}
+            options={{
+              headerShown: false,
+              presentation: 'modal',
+            }}
+          />
         </>
       )}
     </Stack.Navigator>

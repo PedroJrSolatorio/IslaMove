@@ -7,6 +7,7 @@ import {
   Platform,
   PermissionsAndroid,
   Pressable,
+  Modal,
 } from 'react-native';
 import {
   Text,
@@ -127,6 +128,10 @@ const BookRide = () => {
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
   const [mapBearing, setMapBearing] = useState(0);
+  const [showDestinationConfirmation, setShowDestinationConfirmation] =
+    useState(false);
+  const [tempSelectedLocation, setTempSelectedLocation] =
+    useState<Location | null>(null);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -148,6 +153,73 @@ const BookRide = () => {
     }
 
     return false;
+  };
+
+  // Add this function to handle map press for destination selection
+  const handleMapPress = async (event: any) => {
+    // Only allow destination selection when in idle state
+    if (rideStatus !== 'idle' && rideStatus !== 'selecting_location') {
+      return;
+    }
+
+    const {latitude, longitude} = event.nativeEvent.coordinate;
+
+    try {
+      // Reverse geocoding to get address
+      const response = await api.get(`/api/google/geocode`, {
+        params: {latlng: `${latitude},${longitude}`},
+      });
+
+      const address =
+        response.data.results[0]?.formatted_address || 'Unknown location';
+
+      const newLocation: Location = {
+        type: 'Point',
+        coordinates: [longitude, latitude],
+        address: address,
+      };
+
+      setTempSelectedLocation(newLocation);
+      setShowDestinationConfirmation(true);
+    } catch (error) {
+      console.error('Error getting location details:', error);
+      Alert.alert('Error', 'Failed to get location details');
+    }
+  };
+
+  // Add this function to confirm destination selection
+  const confirmDestinationSelection = async () => {
+    if (tempSelectedLocation) {
+      setDestination(tempSelectedLocation);
+
+      // Get zone for destination location
+      try {
+        const zoneResponse = await api.get('/api/zones/lookup', {
+          params: {
+            longitude: tempSelectedLocation.coordinates[0],
+            latitude: tempSelectedLocation.coordinates[1],
+          },
+        });
+
+        if (zoneResponse.data) {
+          setToZone(zoneResponse.data);
+        } else {
+          Alert.alert(
+            'Zone Not Found',
+            'Service is not available in this destination area',
+          );
+        }
+      } catch (error) {
+        console.error('Error getting zone info:', error);
+      }
+
+      setShowDestinationConfirmation(false);
+      setTempSelectedLocation(null);
+
+      if (currentLocation) {
+        setRideStatus('selecting_location');
+      }
+    }
   };
 
   // function to handle compass press (reset to north)
@@ -902,6 +974,7 @@ const BookRide = () => {
         mapType={mapType}
         style={styles.map}
         showsCompass={false} // Disable default compass to use custom one
+        onPress={handleMapPress}
         initialRegion={
           currentLocation
             ? {
@@ -952,6 +1025,17 @@ const BookRide = () => {
             strokeColor="#3498db"
           />
         )}
+
+        {tempSelectedLocation && (
+          <Marker
+            coordinate={{
+              latitude: tempSelectedLocation.coordinates[1],
+              longitude: tempSelectedLocation.coordinates[0],
+            }}
+            title="Selected Destination"
+            pinColor="#f39c12"
+          />
+        )}
       </MapView>
 
       <TouchableOpacity
@@ -992,6 +1076,45 @@ const BookRide = () => {
         onClose={() => setShowMapTypeSelector(false)}
         onMapTypeSelect={setMapType}
       />
+
+      {/* Destination Confirmation Modal */}
+      <Modal
+        visible={showDestinationConfirmation}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDestinationConfirmation(false);
+          setTempSelectedLocation(null);
+        }}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmationModal}>
+            <Text style={styles.confirmationTitle}>Set as Destination?</Text>
+            <View style={styles.confirmationContent}>
+              <Icon name="map-marker" size={24} color="#e74c3c" />
+              <Text style={styles.confirmationAddress} numberOfLines={3}>
+                {tempSelectedLocation?.address}
+              </Text>
+            </View>
+            <View style={styles.confirmationButtons}>
+              <Button
+                mode="outlined"
+                style={styles.confirmationButton}
+                onPress={() => {
+                  setShowDestinationConfirmation(false);
+                  setTempSelectedLocation(null);
+                }}>
+                Cancel
+              </Button>
+              <Button
+                mode="contained"
+                style={styles.confirmationButton}
+                onPress={confirmDestinationSelection}>
+                Confirm
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

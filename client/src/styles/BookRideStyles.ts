@@ -246,4 +246,52 @@ export const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmationModal: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    margin: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  confirmationTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  confirmationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 10,
+  },
+  confirmationAddress: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#333',
+  },
+  confirmationButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    width: '100%',
+  },
+  confirmationButton: {
+    flex: 1,
+    minWidth: 0,
+  },
 });

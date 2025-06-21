@@ -5,9 +5,8 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
-import {Text, Searchbar, Divider, IconButton} from 'react-native-paper';
+import {Text, Searchbar, Divider, IconButton, Button} from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 import debounce from 'lodash/debounce';
@@ -15,6 +14,7 @@ import {useAuth} from '../context/AuthContext';
 import {BACKEND_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {styles} from '../styles/LocationSMStyles';
+import {useNavigation} from '@react-navigation/native';
 
 interface Address {
   _id: string;
@@ -33,6 +33,7 @@ interface LocationSearchModalProps {
   visible: boolean;
   onClose: () => void;
   onLocationSelected: (location: Location) => void;
+  onMapPickerRequest?: () => void;
   searching: 'saveAddress' | 'destination';
   savedAddresses: Address[];
 }
@@ -49,13 +50,12 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [recentLocations, setRecentLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
+  const navigation = useNavigation<any>();
 
   // Load recent locations from storage
   useEffect(() => {
     const loadRecentLocations = async () => {
       try {
-        // Implementation would depend on your storage method
-        // This is a placeholder for actual implementation
         const stored = await AsyncStorage.getItem('recentLocations');
         if (stored) {
           setRecentLocations(JSON.parse(stored));
@@ -110,42 +110,52 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           ],
           address: place.formatted_address || place.name,
         };
-
-        // Save to recent locations
-        saveRecentLocation(newLocation);
-
-        onLocationSelected(newLocation);
+        navigateToMapPicker(newLocation);
       }
     } catch (error) {
       console.error('Error getting place details:', error);
     }
   };
 
-  // Save location to recent locations
-  const saveRecentLocation = async (location: Location) => {
-    try {
-      const updatedRecentLocations = [
-        location,
-        ...recentLocations
-          .filter(loc => loc.address !== location.address)
-          .slice(0, 4),
-      ];
-      setRecentLocations(updatedRecentLocations);
+  const navigateToMapPicker = (preselectedLocation?: Location) => {
+    onClose(); // Close the search modal first
 
-      // Implementation would depend on your storage method
-      await AsyncStorage.setItem(
-        'recentLocations',
-        JSON.stringify(updatedRecentLocations),
-      );
-    } catch (error) {
-      console.error('Error saving recent location:', error);
-    }
+    navigation.navigate('MapLocationPicker', {
+      onLocationSelected: (location: Location) => {
+        onLocationSelected(location);
+      },
+      preselectedLocation: preselectedLocation, // Pass the preselected location
+    });
   };
 
   // Handle search input change
   const onChangeSearch = (query: string) => {
     setSearchQuery(query);
     searchLocations(query);
+  };
+
+  // Handle saved address selection
+  const handleSavedAddressSelection = (address: Address) => {
+    if (address.location) {
+      navigateToMapPicker(address.location);
+    } else {
+      console.error('Location data is missing for this address');
+    }
+  };
+
+  // Handle recent location selection
+  const handleRecentLocationSelection = (location: Location) => {
+    navigateToMapPicker(location);
+  };
+
+  // function to handle "Choose on Map" button
+  const handleChooseOnMap = () => {
+    if (searching === 'destination') {
+      // Close modal and let user select on BookRide map
+      onClose();
+    } else if (searching === 'saveAddress') {
+      navigateToMapPicker();
+    }
   };
 
   return (
@@ -193,16 +203,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                     <React.Fragment key={`saved-${address._id}`}>
                       <TouchableOpacity
                         style={styles.locationItem}
-                        onPress={() => {
-                          if (address.location) {
-                            onLocationSelected(address.location);
-                            onClose();
-                          } else {
-                            console.error(
-                              'Location data is missing for this address',
-                            );
-                          }
-                        }}>
+                        onPress={() => handleSavedAddressSelection(address)}>
                         <Icon name="bookmark" size={24} color="#3498db" />
                         <View style={styles.locationItemContent}>
                           <Text style={styles.locationName} numberOfLines={1}>
@@ -229,7 +230,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                     <React.Fragment key={`recent-${index}`}>
                       <TouchableOpacity
                         style={styles.locationItem}
-                        onPress={() => onLocationSelected(location)}>
+                        onPress={() => handleRecentLocationSelection(location)}>
                         <Icon name="history" size={24} color="#7f8c8d" />
                         <View style={styles.locationItemContent}>
                           <Text
@@ -272,6 +273,13 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
             ) : null
           }
         />
+        <Button
+          mode="outlined"
+          icon="map"
+          style={styles.chooseOnMapButton}
+          onPress={handleChooseOnMap}>
+          Choose on Map
+        </Button>
       </View>
     </Modal>
   );

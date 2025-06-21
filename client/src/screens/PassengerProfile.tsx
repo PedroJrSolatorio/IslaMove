@@ -1,4 +1,4 @@
-import React, {useState, useCallback} from 'react';
+import React, {useState, useCallback, useEffect} from 'react';
 import {
   View,
   ScrollView,
@@ -19,7 +19,6 @@ import {
   Portal,
   Modal,
   Dialog,
-  Chip,
 } from 'react-native-paper';
 import {launchCamera, CameraOptions} from 'react-native-image-picker';
 import {useNavigation} from '@react-navigation/native';
@@ -81,6 +80,9 @@ const PassengerProfileScreen = () => {
   const [editAddressIndex, setEditAddressIndex] = useState<number>(-1);
   const [editAddressLabel, setEditAddressLabel] = useState('');
   const [editAddressValue, setEditAddressValue] = useState('');
+  const [returningFromMapPicker, setReturningFromMapPicker] = useState(false);
+  const [pendingLocationData, setPendingLocationData] =
+    useState<Location | null>(null);
 
   // Helper function to get full name
   const getFullName = () => {
@@ -289,6 +291,8 @@ const PassengerProfileScreen = () => {
       setNewAddressValue(location.address);
     }
     setShowLocationModal(false);
+    setPendingLocationData(location);
+    setReturningFromMapPicker(true);
   };
 
   const addNewAddress = async () => {
@@ -364,6 +368,54 @@ const PassengerProfileScreen = () => {
       );
     }
   };
+
+  const handleMapPickerNavigation = () => {
+    // Close both modals
+    setShowLocationModal(false);
+    setModalVisible(false);
+    setEditAddressModalVisible(false);
+
+    // Store that we're going to map picker
+    setReturningFromMapPicker(true);
+
+    // Navigate to map picker
+    navigation.navigate('MapLocationPicker', {
+      onLocationSelected: handleLocationSelected,
+    });
+  };
+
+  // Add this useEffect to handle reopening modal when returning from map picker
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (returningFromMapPicker && pendingLocationData) {
+        // Small delay to ensure navigation is complete
+        setTimeout(() => {
+          if (selectingFor === 'editAddress') {
+            setEditAddressModalVisible(true);
+          } else {
+            setModalVisible(true);
+          }
+          setReturningFromMapPicker(false);
+          setPendingLocationData(null);
+        }, 100);
+      }
+    });
+    return unsubscribe;
+  }, [navigation, returningFromMapPicker, pendingLocationData, selectingFor]);
+
+  // Add useEffect to close modal when navigating away
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      // Only reset flags when actually leaving the screen
+      if (!returningFromMapPicker) {
+        setModalVisible(false);
+        setEditAddressModalVisible(false);
+        setShowLocationModal(false);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, returningFromMapPicker]);
 
   const openEditAddressModal = (index: number) => {
     if (!passengerProfile?.savedAddresses) return;
@@ -1150,6 +1202,7 @@ const PassengerProfileScreen = () => {
         visible={showLocationModal}
         onClose={() => setShowLocationModal(false)}
         onLocationSelected={handleLocationSelected}
+        onMapPickerRequest={handleMapPickerNavigation}
         searching={
           selectingFor === 'saveAddress'
             ? 'saveAddress'
