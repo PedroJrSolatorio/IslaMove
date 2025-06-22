@@ -8,10 +8,10 @@ import {
   Text,
   TextInput,
   Modal,
-  ActivityIndicator,
   FlatList,
   ScrollView,
   ListRenderItem,
+  SafeAreaView,
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -390,7 +390,6 @@ const DriverManagement: React.FC = () => {
             driver.username.toLowerCase().includes(searchQuery.toLowerCase())),
       );
     }
-
     return result;
   };
 
@@ -429,6 +428,140 @@ const DriverManagement: React.FC = () => {
       showSnackbar('Document not found');
     }
   };
+
+  const renderHeader = () => (
+    <View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Driver Management</Text>
+        {pendingCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{pendingCount}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.searchContainer}>
+        <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
+        <TextInput
+          placeholder="Search drivers..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon
+              name="close"
+              size={20}
+              color="#999"
+              style={styles.clearIcon}
+            />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'all' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('all')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'all' ? styles.activeTabText : null,
+            ]}>
+            All
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'pending' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('pending')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'pending' ? styles.activeTabText : null,
+            ]}>
+            Pending
+          </Text>
+          {pendingCount > 0 && (
+            <View style={styles.smallBadge}>
+              <Text style={styles.smallBadgeText}>{pendingCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'verified' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('verified')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'verified' ? styles.activeTabText : null,
+            ]}>
+            Verified
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'blocked' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('blocked')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'blocked' ? styles.activeTabText : null,
+            ]}>
+            Blocked
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'low-rated' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('low-rated')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'low-rated' ? styles.activeTabText : null,
+            ]}>
+            Low Rated
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'documents' ? styles.activeTab : null,
+          ]}
+          onPress={() => setActiveTab('documents')}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'documents' ? styles.activeTabText : null,
+            ]}>
+            Documents
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+
+  const renderEmptyComponent = () => (
+    <View style={styles.noResultsCard}>
+      <Text style={styles.noResultsText}>No drivers found</Text>
+    </View>
+  );
 
   const renderDriverCard: ListRenderItem<Driver> = ({item: driver}) => (
     <View style={styles.driverCard}>
@@ -793,17 +926,8 @@ const DriverManagement: React.FC = () => {
     }
   };
 
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Loading drivers...</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {/* Main Modal */}
       <Modal
         visible={isModalVisible}
@@ -877,144 +1001,18 @@ const DriverManagement: React.FC = () => {
         </View>
       </Modal>
 
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Driver Management</Text>
-        {pendingCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pendingCount}</Text>
-          </View>
-        )}
-      </View>
-
-      <View style={styles.searchContainer}>
-        <Icon name="search" size={20} color="#999" style={styles.searchIcon} />
-        <TextInput
-          placeholder="Search drivers..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchInput}
-        />
-        {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon
-              name="close"
-              size={20}
-              color="#999"
-              style={styles.clearIcon}
-            />
-          </TouchableOpacity>
-        ) : null}
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'all' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('all')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'all' ? styles.activeTabText : null,
-            ]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'pending' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('pending')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'pending' ? styles.activeTabText : null,
-            ]}>
-            Pending
-          </Text>
-          {pendingCount > 0 && (
-            <View style={styles.smallBadge}>
-              <Text style={styles.smallBadgeText}>{pendingCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'verified' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('verified')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'verified' ? styles.activeTabText : null,
-            ]}>
-            Verified
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'blocked' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('blocked')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'blocked' ? styles.activeTabText : null,
-            ]}>
-            Blocked
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'low-rated' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('low-rated')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'low-rated' ? styles.activeTabText : null,
-            ]}>
-            Low Rated
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.tabButton,
-            activeTab === 'documents' ? styles.activeTab : null,
-          ]}
-          onPress={() => setActiveTab('documents')}>
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'documents' ? styles.activeTabText : null,
-            ]}>
-            Documents
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {filteredDrivers().length === 0 ? (
-        <View style={styles.noResultsCard}>
-          <Text style={styles.noResultsText}>No drivers found</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filteredDrivers()}
-          renderItem={renderDriverCard}
-          keyExtractor={item => item._id}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={fetchDrivers} />
-          }
-        />
-      )}
+      {/* Main content with FlatList */}
+      <FlatList
+        data={filteredDrivers()}
+        renderItem={renderDriverCard}
+        keyExtractor={item => item._id}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={styles.listContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={fetchDrivers} />
+        }
+      />
 
       {snackbarVisible && (
         <View style={styles.snackbar}>
@@ -1024,7 +1022,7 @@ const DriverManagement: React.FC = () => {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </SafeAreaView>
   );
 };
 

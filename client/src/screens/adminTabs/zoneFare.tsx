@@ -1061,9 +1061,6 @@ const ZoneFareCalculator = () => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Zone & Fare Management</Text>
-          <Text style={styles.headerSubtitle}>
-            Manage barangays, areas, and pricing rules
-          </Text>
         </View>
 
         {/* Zone Lookup Section */}

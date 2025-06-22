@@ -20,14 +20,15 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#2c3e50',
     elevation: 2,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#fff',
   },
   badge: {
     backgroundColor: '#e74c3c',
@@ -413,5 +414,8 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 8,
     fontSize: 14,
+  },
+  listContainer: {
+    paddingBottom: 20,
   },
 });

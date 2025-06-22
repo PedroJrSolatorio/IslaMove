@@ -7,14 +7,13 @@ export const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#2c3e50',
-    padding: 20,
-    paddingTop: 40,
+    padding: 16,
+    paddingTop: 16,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 5,
   },
   headerSubtitle: {
     fontSize: 16,
