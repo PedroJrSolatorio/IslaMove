@@ -77,4 +77,17 @@ export const styles = StyleSheet.create({
     borderColor: '#3498db',
     margin: 16,
   },
+  locationIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  locationIndicatorText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#27ae60',
+    fontStyle: 'italic',
+  },
 });

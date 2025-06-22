@@ -564,7 +564,7 @@ const BookRide = () => {
     setShowLocationModal(false);
 
     if (currentLocation && destination) {
-      setRideStatus('confirming_booking');
+      setRideStatus('selecting_location');
     }
   };
 

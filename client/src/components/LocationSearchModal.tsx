@@ -5,11 +5,14 @@ import {
   TouchableOpacity,
   FlatList,
   ActivityIndicator,
+  PermissionsAndroid,
+  Platform,
 } from 'react-native';
 import {Text, Searchbar, Divider, IconButton, Button} from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import axios from 'axios';
 import debounce from 'lodash/debounce';
+import Geolocation from 'react-native-geolocation-service';
 import {useAuth} from '../context/AuthContext';
 import {BACKEND_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -38,6 +41,11 @@ interface LocationSearchModalProps {
   savedAddresses: Address[];
 }
 
+interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
 const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   visible,
   onClose,
@@ -50,6 +58,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [recentLocations, setRecentLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const navigation = useNavigation<any>();
 
   // Load recent locations from storage
@@ -68,6 +77,55 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
     loadRecentLocations();
   }, []);
 
+  // Get user's current location when modal opens
+  useEffect(() => {
+    if (visible) {
+      getCurrentLocation();
+    }
+  }, [visible]);
+
+  // Request location permission and get current location
+  const getCurrentLocation = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message:
+              'This app needs access to your location to show nearby places.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          },
+        );
+
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Location permission denied');
+          return;
+        }
+      }
+
+      Geolocation.getCurrentPosition(
+        position => {
+          const {latitude, longitude} = position.coords;
+          setUserLocation({latitude, longitude});
+          console.log('Current location:', latitude, longitude);
+        },
+        error => {
+          console.error('Error getting location:', error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 10000,
+        },
+      );
+    } catch (error) {
+      console.error('Error requesting location permission:', error);
+    }
+  };
+
   // Search for locations
   const searchLocations = debounce(async (query: string) => {
     if (!query.trim()) {
@@ -77,10 +135,20 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
 
     setLoading(true);
     try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        input: query,
+      });
+
+      // Add location bias if user location is available
+      if (userLocation) {
+        params.append('lat', userLocation.latitude.toString());
+        params.append('lng', userLocation.longitude.toString());
+        params.append('radius', '50000'); // 50km radius
+      }
+
       const response = await axios.get(
-        `${BACKEND_URL}/api/places/autocomplete?input=${encodeURIComponent(
-          query,
-        )}`,
+        `${BACKEND_URL}/api/places/autocomplete?${params.toString()}`,
         {headers: {Authorization: `Bearer ${userToken}`}},
       );
 
@@ -110,7 +178,17 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           ],
           address: place.formatted_address || place.name,
         };
-        navigateToMapPicker(newLocation);
+        // Check if we're in destination mode (coming from BookRide)
+        if (searching === 'destination') {
+          // Save to recent locations
+          await saveToRecent(newLocation);
+          // Close modal and pass location back to BookRide
+          onLocationSelected(newLocation);
+          onClose();
+        } else {
+          // Navigate to map picker for address saving
+          navigateToMapPicker(newLocation);
+        }
       }
     } catch (error) {
       console.error('Error getting place details:', error);
@@ -137,7 +215,14 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   // Handle saved address selection
   const handleSavedAddressSelection = (address: Address) => {
     if (address.location) {
-      navigateToMapPicker(address.location);
+      if (searching === 'destination') {
+        // Coming from BookRide - pass location back directly
+        onLocationSelected(address.location);
+        onClose();
+      } else {
+        // Going to map picker for address saving
+        navigateToMapPicker(address.location);
+      }
     } else {
       console.error('Location data is missing for this address');
     }
@@ -145,7 +230,35 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
 
   // Handle recent location selection
   const handleRecentLocationSelection = (location: Location) => {
-    navigateToMapPicker(location);
+    if (searching === 'destination') {
+      // Coming from BookRide - pass location back directly
+      onLocationSelected(location);
+      onClose();
+    } else {
+      // Going to map picker for address saving
+      navigateToMapPicker(location);
+    }
+  };
+
+  // helper function to save locations to recent
+  const saveToRecent = async (location: Location) => {
+    try {
+      // Add to recent locations (avoid duplicates)
+      const updatedRecent = [
+        location,
+        ...recentLocations.filter(
+          recent => recent.address !== location.address,
+        ),
+      ].slice(0, 5); // Keep only 5 recent locations
+
+      setRecentLocations(updatedRecent);
+      await AsyncStorage.setItem(
+        'recentLocations',
+        JSON.stringify(updatedRecent),
+      );
+    } catch (error) {
+      console.error('Error saving to recent locations:', error);
+    }
   };
 
   // function to handle "Choose on Map" button
@@ -195,6 +308,16 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           ItemSeparatorComponent={() => <Divider />}
           ListHeaderComponent={() => (
             <>
+              {/* Current Location Indicator */}
+              {userLocation && searchQuery.trim() && (
+                <View style={styles.locationIndicator}>
+                  <Icon name="crosshairs-gps" size={16} color="#27ae60" />
+                  <Text style={styles.locationIndicatorText}>
+                    Showing places near your location
+                  </Text>
+                </View>
+              )}
+
               {/* Saved Addresses Section */}
               {!searchQuery.trim() && savedAddresses.length > 0 && (
                 <>
