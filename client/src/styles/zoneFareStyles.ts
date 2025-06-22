@@ -21,9 +21,9 @@ export const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: '#fff',
-    margin: 10,
+    margin: 12,
     borderRadius: 8,
-    padding: 15,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
@@ -58,7 +58,8 @@ export const styles = StyleSheet.create({
     height: 250,
     borderRadius: 8,
     overflow: 'hidden',
-    marginBottom: 10,
+    marginTop: 2,
+    marginBottom: 2,
   },
   map: {
     flex: 1,

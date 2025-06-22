@@ -48,7 +48,7 @@ export const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
+    margin: 12,
     paddingHorizontal: 12,
     backgroundColor: '#ffffff',
     borderRadius: 8,
@@ -68,8 +68,8 @@ export const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
   },
   tabButton: {
     paddingVertical: 10,
@@ -111,8 +111,8 @@ export const styles = StyleSheet.create({
   driverCard: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
     elevation: 2,
     overflow: 'hidden',
   },
@@ -282,7 +282,7 @@ export const styles = StyleSheet.create({
   noResultsCard: {
     backgroundColor: '#ffffff',
     borderRadius: 8,
-    margin: 16,
+    margin: 12,
     padding: 32,
     alignItems: 'center',
     elevation: 2,

@@ -37,7 +37,7 @@ export const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
+    margin: 12,
     paddingHorizontal: 12,
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -54,8 +54,8 @@ export const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
   },
   tabButton: {
     paddingVertical: 10,
@@ -98,7 +98,7 @@ export const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   noResultsCard: {
-    margin: 16,
+    margin: 12,
     padding: 20,
     backgroundColor: '#fff',
     borderRadius: 8,
@@ -110,9 +110,8 @@ export const styles = StyleSheet.create({
     color: '#888',
   },
   passengerCard: {
-    margin: 8,
-    marginHorizontal: 16,
-    padding: 16,
+    marginHorizontal: 12,
+    padding: 12,
     backgroundColor: '#fff',
     borderRadius: 8,
     shadowColor: '#000',
@@ -125,7 +124,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   passengerInfo: {
     flexDirection: 'row',
