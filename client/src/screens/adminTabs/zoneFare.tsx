@@ -586,7 +586,7 @@ const ZoneFareCalculator = () => {
     setToZone('');
     setFareAmount('');
     setPricingType('fixed');
-    setVehicleType('sedan');
+    setVehicleType('bao-bao');
     setPricingDescription('');
     setPricingPriority('');
   };
@@ -1072,7 +1072,8 @@ const ZoneFareCalculator = () => {
               region={mapRegion}
               onPress={handleMapPress}
               showsUserLocation={true}
-              showsMyLocationButton={false}>
+              // showsMyLocationButton={false} // deafult is true so the my location button is shown
+            >
               {/* Render all zones as polygons */}
               {zones
                 .filter(zone => {
