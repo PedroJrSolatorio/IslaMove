@@ -75,5 +75,6 @@ export const styles = StyleSheet.create({
   },
   chooseOnMapButton: {
     borderColor: '#3498db',
+    margin: 16,
   },
 });

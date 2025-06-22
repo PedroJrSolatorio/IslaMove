@@ -15,7 +15,6 @@ import {
   Card,
   Title,
   Paragraph,
-  RadioButton,
   Divider,
   Avatar,
 } from 'react-native-paper';
@@ -36,7 +35,6 @@ import MapTypeSelector from '../components/MapTypeSelector';
 import DriverSearchingModal from '../components/DriverSearchingModal';
 import DriverDetailsModal from '../components/DriverDetailsModal';
 import RatingModal from '../components/RatingModal';
-import MapCompass from '../components/MapCompass';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
@@ -131,7 +129,6 @@ const BookRide = () => {
   const [driverEta, setDriverEta] = useState(0);
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
-  const [mapBearing, setMapBearing] = useState(0);
   const [showDestinationConfirmation, setShowDestinationConfirmation] =
     useState(false);
   const [tempSelectedLocation, setTempSelectedLocation] =
@@ -223,19 +220,6 @@ const BookRide = () => {
       if (currentLocation) {
         setRideStatus('selecting_location');
       }
-    }
-  };
-
-  // function to handle compass press (reset to north)
-  const resetMapBearing = () => {
-    if (mapRef.current) {
-      mapRef.current.animateCamera(
-        {
-          heading: 0, // Reset to north
-        },
-        {duration: 300},
-      );
-      setMapBearing(0);
     }
   };
 
@@ -1027,21 +1011,17 @@ const BookRide = () => {
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={styles.backButton}>
-        <Icon name="arrow-left" size={28} color="black" />
+        <Icon name="arrow-left" size={24} color="black" />
       </TouchableOpacity>
-
-      <MapCompass
-        bearing={mapBearing}
-        onPress={resetMapBearing}
-        visible={true}
-      />
 
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         mapType={mapType}
         style={styles.map}
-        showsCompass={false} // Disable default compass to use custom one
+        showsUserLocation={true}
+        showsCompass={true}
+        showsMyLocationButton={true}
         onPress={handleMapPress}
         initialRegion={
           currentLocation

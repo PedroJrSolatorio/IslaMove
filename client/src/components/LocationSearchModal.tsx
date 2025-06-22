@@ -275,7 +275,9 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
         />
         <Button
           mode="outlined"
-          icon="map"
+          icon={({color}) => (
+            <Icon name="gesture-tap" size={28} color={color} />
+          )}
           style={styles.chooseOnMapButton}
           onPress={handleChooseOnMap}>
           Choose on Map

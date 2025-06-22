@@ -3,7 +3,7 @@ import AdminTabs from '../navigation/AdminTabs';
 import DriverTabs from './DriverTabs';
 import PassengerTabs from '../navigation/PassengerTabs';
 import BookRide from '../screens/BookRide';
-import MapLocationPicker from '../screens/MapLocationPicker';
+import MapLocationPicker from '../components/MapLocationPicker';
 import {useAuth} from '../context/AuthContext';
 
 const Stack = createNativeStackNavigator();

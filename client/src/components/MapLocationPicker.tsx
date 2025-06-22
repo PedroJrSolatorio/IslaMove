@@ -12,8 +12,7 @@ import MapView, {Marker, PROVIDER_GOOGLE, MapType} from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import MapCompass from '../components/MapCompass';
-import MapTypeSelector from '../components/MapTypeSelector';
+import MapTypeSelector from './MapTypeSelector';
 import api from '../../utils/api';
 import {styles} from '../styles/MapLocationPickerStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,7 +45,6 @@ const MapLocationPicker = () => {
   );
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
-  const [mapBearing, setMapBearing] = useState(0);
   const [processingLocation, setProcessingLocation] = useState(false);
 
   // Function to request location permissions
@@ -65,19 +63,6 @@ const MapLocationPicker = () => {
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     }
     return false;
-  };
-
-  // Function to handle compass press (reset to north)
-  const resetMapBearing = () => {
-    if (mapRef.current) {
-      mapRef.current.animateCamera(
-        {
-          heading: 0,
-        },
-        {duration: 300},
-      );
-      setMapBearing(0);
-    }
   };
 
   // Get current location on component mount
@@ -243,21 +228,17 @@ const MapLocationPicker = () => {
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={styles.backButton}>
-        <Icon name="arrow-left" size={28} color="black" />
+        <Icon name="arrow-left" size={24} color="black" />
       </TouchableOpacity>
-
-      <MapCompass
-        bearing={mapBearing}
-        onPress={resetMapBearing}
-        visible={true}
-      />
 
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         mapType={mapType}
         style={styles.map}
-        showsCompass={false}
+        showsUserLocation={true}
+        showsCompass={true}
+        showsMyLocationButton={true}
         onPress={handleMapPress}
         initialRegion={getInitialRegion()}>
         {currentLocation && (
@@ -293,14 +274,12 @@ const MapLocationPicker = () => {
       <Card style={styles.instructionsCard}>
         <Card.Content>
           <Title style={styles.instructionsTitle}>
-            {preselectedLocation
-              ? 'Confirm or Adjust Location'
-              : 'Select Location on Map'}
+            {preselectedLocation ? 'Confirm or Adjust' : 'Select Location'}
           </Title>
           <Text style={styles.instructionsText}>
             {preselectedLocation
-              ? 'The selected location is shown. Tap elsewhere to adjust or confirm to proceed.'
-              : 'Tap anywhere on the map to select a location'}
+              ? 'Tap elsewhere or confirm'
+              : 'Tap anywhere to select'}
           </Text>
         </Card.Content>
       </Card>

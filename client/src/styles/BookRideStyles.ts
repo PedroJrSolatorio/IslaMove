@@ -15,12 +15,16 @@ export const styles = StyleSheet.create({
   },
   backButton: {
     position: 'absolute',
-    top: 10, // adjust for safe area
-    left: 10,
+    top: 60,
+    left: 12,
     zIndex: 999, // so it appears over the map
     backgroundColor: 'white',
     padding: 4,
     borderRadius: 20,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
     elevation: 5, // for Android shadow
     shadowColor: '#000',
     shadowOffset: {width: 0, height: 2},
@@ -232,11 +236,14 @@ export const styles = StyleSheet.create({
   },
   mapTypeButton: {
     position: 'absolute',
-    top: 10,
-    right: 16,
+    top: 60,
+    right: 12,
     backgroundColor: 'white',
     borderRadius: 25,
-    padding: 10,
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
