@@ -294,4 +294,77 @@ export const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  fareDisplayContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+    marginVertical: 8,
+  },
+
+  fareBreakdown: {
+    marginBottom: 12,
+  },
+
+  fareRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+
+  fareLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+
+  fareAmount: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+
+  discountLabel: {
+    fontSize: 14,
+    color: '#27ae60',
+    fontWeight: '500',
+  },
+
+  discountAmount: {
+    fontSize: 14,
+    color: '#27ae60',
+    fontWeight: '600',
+  },
+
+  fareDivider: {
+    marginVertical: 8,
+    backgroundColor: '#e0e0e0',
+  },
+
+  totalFareLabel: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+
+  totalFareAmount: {
+    fontSize: 18,
+    color: '#3498db',
+    fontWeight: '700',
+  },
+
+  passengerTypeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    padding: 8,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+
+  passengerTypeText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#1976d2',
+    fontWeight: '500',
+  },
 });

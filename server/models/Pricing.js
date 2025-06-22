@@ -62,7 +62,7 @@ pricingSchema.index({ pricingType: 1 });
 pricingSchema.statics.findPricingWithHierarchy = async function (
   fromZoneId,
   toZoneId,
-  vehicleType = "sedan"
+  vehicleType = "bao-bao"
 ) {
   // First, try to find exact zone-to-zone pricing
   let pricing = await this.findOne({

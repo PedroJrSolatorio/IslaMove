@@ -43,9 +43,17 @@ import api from '../../utils/api';
 
 // Interface for fare types
 interface FareInfo {
-  regular: number;
-  student: number;
-  senior: number;
+  _id: string;
+  fromZone: Zone;
+  toZone: Zone;
+  amount: number;
+  pricingType: string;
+  description?: string;
+  priority: number;
+  pricePerKm: number;
+  surgeMultiplier: number;
+  vehicleType: string;
+  isActive: boolean;
 }
 
 // Interface for Zone data
@@ -93,9 +101,6 @@ type RideStatus =
   | 'in_progress'
   | 'completed';
 
-// Passenger type
-type PassengerType = 'regular' | 'student' | 'senior';
-
 const BookRide = () => {
   const navigation = useNavigation();
   const {userToken} = useAuth();
@@ -120,7 +125,6 @@ const BookRide = () => {
   const [routeCoordinates, setRouteCoordinates] = useState<any[]>([]);
   const [estimatedDistance, setEstimatedDistance] = useState(0);
   const [estimatedDuration, setEstimatedDuration] = useState(0);
-  const [passengerType, setPassengerType] = useState<PassengerType>('regular');
   const [assignedDriver, setAssignedDriver] = useState<Driver | null>(null);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [currentRideId, setCurrentRideId] = useState<string | null>(null);
@@ -233,6 +237,56 @@ const BookRide = () => {
       );
       setMapBearing(0);
     }
+  };
+
+  const calculateFinalFare = (
+    baseFare: number,
+    passengerCategory: string,
+    age: number,
+  ): number => {
+    let discount = 0;
+
+    // 50% discount for children 12 and below
+    if (age <= 12) {
+      discount = 0.5;
+    }
+    // 20% discount for students and seniors
+    else if (
+      passengerCategory === 'student' ||
+      passengerCategory === 'senior'
+    ) {
+      discount = 0.2;
+    }
+
+    return baseFare * (1 - discount);
+  };
+
+  const getDiscountLabel = (passengerCategory: string, age: number): string => {
+    if (age <= 12) {
+      return 'Child Discount (50% off)';
+    } else if (passengerCategory === 'student') {
+      return 'Student Discount (20% off)';
+    } else if (passengerCategory === 'senior') {
+      return 'Senior Citizen Discount (20% off)';
+    }
+    return 'Regular Fare';
+  };
+
+  const getFareCalculationData = () => {
+    const baseFare = fareEstimate?.amount || 0;
+    const passengerAge = passengerProfile?.age || 0;
+    const category = passengerProfile?.passengerCategory || 'regular';
+    const finalFare = calculateFinalFare(baseFare, category, passengerAge);
+    const discountLabel = getDiscountLabel(category, passengerAge);
+
+    return {
+      baseFare,
+      passengerAge,
+      category,
+      finalFare,
+      discountLabel,
+      discountApplied: baseFare - finalFare,
+    };
   };
 
   // Getting user's current location
@@ -482,11 +536,16 @@ const BookRide = () => {
     if (!fromZone || !toZone) return;
 
     try {
-      const response = await api.get('/api/fares/estimate', {
+      const response = await api.get('/api/pricing/getPricingForRoute', {
         params: {fromZone: fromZone._id, toZone: toZone._id, distance},
       });
 
-      setFareEstimate(response.data);
+      if (response.data.success && response.data.data) {
+        // Store the pricing data returned from the API
+        setFareEstimate(response.data.data);
+      } else {
+        Alert.alert('Error', 'No pricing information available for this route');
+      }
     } catch (error) {
       console.error('Error fetching fare estimate:', error);
       Alert.alert('Error', 'Failed to calculate fare estimate');
@@ -538,6 +597,8 @@ const BookRide = () => {
     setRideStatus('searching_driver');
 
     try {
+      const fareData = getFareCalculationData();
+
       const rideData = {
         pickupLocation: currentLocation,
         destinationLocation: destination,
@@ -545,13 +606,11 @@ const BookRide = () => {
         toZone: toZone._id,
         estimatedDistance,
         estimatedDuration,
-        passengerType,
-        price:
-          passengerType === 'regular'
-            ? fareEstimate?.regular
-            : passengerType === 'student'
-            ? fareEstimate?.student
-            : fareEstimate?.senior,
+        passengerType: fareData.category,
+        price: fareData.finalFare,
+        baseFare: fareData.baseFare,
+        discountApplied: fareData.discountApplied,
+        passengerAge: fareData.passengerAge,
       };
 
       const response = await api.post(`/api/rides/request`, rideData);
@@ -683,6 +742,8 @@ const BookRide = () => {
         );
 
       case 'confirming_booking':
+        const fareData = getFareCalculationData();
+
         return (
           <Card style={styles.confirmBookingCard}>
             <Card.Content>
@@ -726,60 +787,67 @@ const BookRide = () => {
 
                 <Divider style={styles.divider} />
 
-                <Title style={styles.fareTitle}>Fare Options</Title>
+                <Title style={styles.fareTitle}>Fare Information</Title>
 
-                <RadioButton.Group
-                  onValueChange={value =>
-                    setPassengerType(value as PassengerType)
-                  }
-                  value={passengerType}>
-                  <View style={styles.fareOption}>
-                    <View style={styles.fareOptionDetails}>
-                      <RadioButton value="regular" />
-                      <View>
-                        <Text style={styles.fareOptionText}>Regular</Text>
-                        <Text style={styles.fareOptionSubtext}>
-                          Standard fare
-                        </Text>
-                      </View>
+                <View style={styles.fareDisplayContainer}>
+                  <View style={styles.fareBreakdown}>
+                    <View style={styles.fareRow}>
+                      <Text style={styles.fareLabel}>Base Fare:</Text>
+                      <Text style={styles.fareAmount}>
+                        ₱{fareData.baseFare.toFixed(2)}
+                      </Text>
                     </View>
-                    <Text style={styles.farePrice}>
-                      ₱{fareEstimate?.regular.toFixed(2)}
-                    </Text>
+
+                    {(fareData.category === 'student' ||
+                      fareData.category === 'senior' ||
+                      fareData.passengerAge <= 12) && (
+                      <>
+                        <View style={styles.fareRow}>
+                          <Text style={styles.discountLabel}>
+                            {fareData.discountLabel}:
+                          </Text>
+                          <Text style={styles.discountAmount}>
+                            -₱{fareData.discountApplied.toFixed(2)}
+                          </Text>
+                        </View>
+                        <Divider style={styles.fareDivider} />
+                      </>
+                    )}
+
+                    <View style={styles.fareRow}>
+                      <Text style={styles.totalFareLabel}>Total Fare:</Text>
+                      <Text style={styles.totalFareAmount}>
+                        ₱{fareData.finalFare.toFixed(2)}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.fareOption}>
-                    <View style={styles.fareOptionDetails}>
-                      <RadioButton value="student" />
-                      <View>
-                        <Text style={styles.fareOptionText}>Student</Text>
-                        <Text style={styles.fareOptionSubtext}>
-                          Valid student ID required
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.farePrice}>
-                      ₱{fareEstimate?.student.toFixed(2)}
+                  <View style={styles.passengerTypeInfo}>
+                    <Icon
+                      name={
+                        fareData.passengerAge <= 12
+                          ? 'account-child'
+                          : fareData.category === 'student'
+                          ? 'school'
+                          : fareData.category === 'senior'
+                          ? 'account-supervisor'
+                          : 'account'
+                      }
+                      size={20}
+                      color="#3498db"
+                    />
+                    <Text style={styles.passengerTypeText}>
+                      {fareData.passengerAge <= 12
+                        ? 'Child'
+                        : fareData.category === 'student'
+                        ? 'Student'
+                        : fareData.category === 'senior'
+                        ? 'Senior Citizen'
+                        : 'Regular'}{' '}
+                      Passenger
                     </Text>
                   </View>
-
-                  <View style={styles.fareOption}>
-                    <View style={styles.fareOptionDetails}>
-                      <RadioButton value="senior" />
-                      <View>
-                        <Text style={styles.fareOptionText}>
-                          Senior Citizen
-                        </Text>
-                        <Text style={styles.fareOptionSubtext}>
-                          Senior Citizen ID required
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={styles.farePrice}>
-                      ₱{fareEstimate?.senior.toFixed(2)}
-                    </Text>
-                  </View>
-                </RadioButton.Group>
+                </View>
               </View>
 
               <View style={styles.buttonRow}>
