@@ -1,7 +1,7 @@
 import express from "express";
 import {
   getAdminStats,
-  getAllDrivers,
+  getDrivers,
   verifyDriver,
   blockDriver,
   unblockDriver,
@@ -26,7 +26,7 @@ router.get("/stats", adminAuth, getAdminStats);
 router.use(adminAuth);
 
 // Driver management routes
-router.get("/drivers", getAllDrivers);
+router.get("/drivers", getDrivers);
 router.put("/drivers/:driverId/verify", verifyDriver);
 router.put("/drivers/:driverId/block", blockDriver);
 router.put("/drivers/:driverId/unblock", unblockDriver);

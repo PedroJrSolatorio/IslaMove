@@ -37,6 +37,15 @@ interface Vehicle {
   bodyNumber: string;
 }
 
+interface IdDocument {
+  type: 'school_id' | 'senior_id' | 'valid_id' | 'drivers_license';
+  imageUrl: string;
+  uploadedAt: Date;
+  verified: boolean;
+  verifiedAt?: Date;
+  verifiedBy?: string;
+}
+
 interface Document {
   documentType: string;
   fileURL: string;
@@ -49,35 +58,49 @@ interface Warning {
   Date: string;
 }
 
+interface AgreementAccepted {
+  documentType: 'terms_and_conditions' | 'privacy_policy';
+  version: string;
+  acceptedAt: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
 interface Driver {
   _id: string;
   firstName: string;
   lastName: string;
+  middleInitial: string;
+  birthdate: Date;
+  age: number;
   username: string;
   email: string;
   phone: string;
-  age: number;
-  birthdate: string;
   homeAddress: Address;
+  idDocument: IdDocument;
+  role: 'driver';
   profileImage?: string;
-  role: string;
-  verificationStatus: string;
-  isVerified: boolean;
   isBlocked: boolean;
   blockReason?: string;
-  licenseNumber: string;
-  vehicle: Vehicle;
-  rating: number;
-  totalRatings: number;
-  totalRides: number;
-  driverStatus: 'available' | 'busy' | 'offline';
-  documents: Document[];
   warnings: Warning[];
+  rating: number;
+  totalRides: number;
+  totalRatings: number;
+  isVerified: boolean;
+  verificationStatus: string;
+  agreementsAccepted: AgreementAccepted[];
+  licenseNumber: string;
+  driverStatus: 'available' | 'busy' | 'offline';
+  vehicle: Vehicle;
+  documents: Document[];
   createdAt: string;
 }
 
 interface ApiResponse {
-  users: Driver[];
+  success: boolean;
+  message: string;
+  drivers: Driver[];
+  count: number;
 }
 
 interface SelectedDocument extends Document {
@@ -94,7 +117,6 @@ type TabType =
   | 'low-rated'
   | 'documents';
 
-// Driver status constants
 const VERIFICATION_STATUS = {
   PENDING: 'pending',
   UNDER_REVIEW: 'under_review',
@@ -113,7 +135,6 @@ const DriverManagement: React.FC = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
   const [modalType, setModalType] = useState<ModalType>('');
@@ -134,7 +155,6 @@ const DriverManagement: React.FC = () => {
 
   const fetchDrivers = async (): Promise<void> => {
     try {
-      setLoading(true);
       setRefreshing(true);
       const token = await AsyncStorage.getItem('userToken');
       const response = await axios.get<ApiResponse>(
@@ -144,9 +164,8 @@ const DriverManagement: React.FC = () => {
         },
       );
 
-      // Filter only drivers from users
-      const driverUsers =
-        response.data.users?.filter(user => user.role === 'driver') || [];
+      const driverUsers = response.data.drivers || [];
+      console.log('Drivers fetched:', driverUsers.length);
       setDrivers(driverUsers);
 
       // Count pending verification requests
@@ -156,12 +175,9 @@ const DriverManagement: React.FC = () => {
           !driver.isBlocked,
       ).length;
       setPendingCount(pending);
-
-      setLoading(false);
       setRefreshing(false);
     } catch (error) {
       console.error('Error fetching drivers:', error);
-      setLoading(false);
       setRefreshing(false);
       showSnackbar('Failed to load drivers');
     }

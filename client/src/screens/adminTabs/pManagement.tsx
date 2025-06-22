@@ -72,27 +72,40 @@ interface Passenger {
   email: string;
   phone: string;
   homeAddress: HomeAddress;
-  passengerCategory: 'regular' | 'student' | 'senior';
   idDocument: IdDocument;
   role: 'passenger';
   profileImage: string;
   isBlocked: boolean;
   blockReason: string;
   warnings: Warning[];
-  currentLocation?: GeoLocation;
   rating: number;
   totalRides: number;
   totalRatings: number;
   isVerified: boolean;
-  verificationStatus: 'pending' | 'under_review' | 'approved' | 'rejected';
+  verificationStatus: string;
   agreementsAccepted: AgreementAccepted[];
+  passengerCategory: 'regular' | 'student' | 'senior';
   savedAddresses: Address[];
   createdAt: string;
-  updatedAt: string;
 }
+
+interface ApiResponse {
+  success: boolean;
+  message: string;
+  passengers: Passenger[];
+  count: number;
+}
+
+const VERIFICATION_STATUS = {
+  PENDING: 'pending',
+  UNDER_REVIEW: 'under_review',
+  APPROVED: 'approved',
+  REJECTED: 'rejected',
+} as const;
 
 const PassengerManagement = () => {
   const [passengers, setPassengers] = useState<Passenger[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(
     null,
@@ -118,10 +131,23 @@ const PassengerManagement = () => {
     try {
       setRefreshing(true);
       const token = await AsyncStorage.getItem('userToken');
-      const response = await axios.get(`${BACKEND_URL}/api/admin/passengers`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setPassengers(response.data.passengers);
+      const response = await axios.get<ApiResponse>(
+        `${BACKEND_URL}/api/admin/passengers`,
+        {
+          headers: {Authorization: `Bearer ${token}`},
+        },
+      );
+
+      const passengerUsers = response.data.passengers || [];
+      setPassengers(passengerUsers);
+
+      // Count pending verification requests
+      const pending = passengerUsers.filter(
+        passenger =>
+          passenger.verificationStatus === VERIFICATION_STATUS.PENDING &&
+          !passenger.isBlocked,
+      ).length;
+      setPendingCount(pending);
       setRefreshing(false);
     } catch (error) {
       console.error('Error fetching passengers:', error);
@@ -245,11 +271,6 @@ const PassengerManagement = () => {
     }
   };
 
-  const formatVerificationStatus = (status: string | undefined) => {
-    if (!status) return 'PENDING';
-    return status.replace('_', ' ').toUpperCase();
-  };
-
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'student':
@@ -301,6 +322,11 @@ const PassengerManagement = () => {
     <View>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Passenger Management</Text>
+        {pendingCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{pendingCount}</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.searchContainer}>
@@ -313,7 +339,7 @@ const PassengerManagement = () => {
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Icon name="close" size={20} color="#666" />
+            <Icon name="close" size={20} color="#999" />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -350,6 +376,11 @@ const PassengerManagement = () => {
             ]}>
             Pending Verification
           </Text>
+          {pendingCount > 0 && (
+            <View style={styles.smallBadge}>
+              <Text style={styles.smallBadgeText}>{pendingCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity

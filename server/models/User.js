@@ -59,14 +59,6 @@ const userSchema = new mongoose.Schema(
       },
     },
 
-    passengerCategory: {
-      type: String,
-      enum: ["regular", "student", "senior"],
-      required: function () {
-        return this.userType === "passenger";
-      },
-    },
-
     // Only for drivers and passengers (not admin)
     idDocument: {
       type: {
@@ -220,6 +212,13 @@ const userSchema = new mongoose.Schema(
     },
 
     // Passenger-only field
+    passengerCategory: {
+      type: String,
+      enum: ["regular", "student", "senior"],
+      required: function () {
+        return this.userType === "passenger";
+      },
+    },
     savedAddresses: {
       type: [
         {

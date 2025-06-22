@@ -179,18 +179,19 @@ export const getAdminStats = async (req, res) => {
 };
 
 // Driver management
-// Get all users (including drivers) for admin dashboard
-export const getAllDrivers = async (req, res) => {
+// Get all drivers for admin dashboard
+export const getDrivers = async (req, res) => {
   try {
     // Fetch all users from the database
-    const users = await User.find({})
+    const drivers = await User.find({ role: "driver" })
       .select("-password") // Exclude password field
       .sort({ createdAt: -1 }); // Sort by newest first
 
     res.status(200).json({
       success: true,
-      users: users,
-      message: "Users fetched successfully",
+      message: "Driver fetched successfully",
+      drivers,
+      count: drivers.length,
     });
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -538,7 +539,6 @@ export const sendWarningToPassenger = async (req, res) => {
   try {
     const { id } = req.params;
     const { message } = req.body;
-    const adminId = req.user.id; // From adminAuth middleware
 
     // Validate input
     if (!message || message.trim() === "") {
@@ -598,7 +598,6 @@ export const blockPassenger = async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
-    const adminId = req.user.id; // From adminAuth middleware
 
     // Validate input
     if (!reason || reason.trim() === "") {
@@ -670,7 +669,6 @@ export const blockPassenger = async (req, res) => {
 export const unblockPassenger = async (req, res) => {
   try {
     const { id } = req.params;
-    const adminId = req.user.id; // From adminAuth middleware
 
     // Validate passenger ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
