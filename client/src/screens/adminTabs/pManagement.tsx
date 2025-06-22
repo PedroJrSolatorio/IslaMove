@@ -18,18 +18,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {styles} from '../../styles/pManagementStyles';
 
-interface GeoLocation {
-  type: 'Point';
-  coordinates: [number, number]; // [longitude, latitude]
-  address?: string;
-}
-
-interface Address {
-  label: string;
-  address: string;
-  location: GeoLocation;
-}
-
 interface Warning {
   message: string;
   Date: Date;
@@ -85,7 +73,6 @@ interface Passenger {
   verificationStatus: string;
   agreementsAccepted: AgreementAccepted[];
   passengerCategory: 'regular' | 'student' | 'senior';
-  savedAddresses: Address[];
   createdAt: string;
 }
 
@@ -119,9 +106,6 @@ const PassengerManagement = () => {
   const [actionType, setActionType] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
-  const [expandedAddresses, setExpandedAddresses] = useState<{
-    [key: string]: boolean;
-  }>({});
 
   useEffect(() => {
     fetchPassengers();
@@ -243,13 +227,6 @@ const PassengerManagement = () => {
       console.error('Error verifying ID:', error);
       Alert.alert('Error', 'Failed to verify ID');
     }
-  };
-
-  const toggleAddresses = (passengerId: string) => {
-    setExpandedAddresses(prev => ({
-      ...prev,
-      [passengerId]: !prev[passengerId],
-    }));
   };
 
   const getFullName = (passenger: Passenger) => {
@@ -565,40 +542,6 @@ const PassengerManagement = () => {
               passenger.warnings[passenger.warnings.length - 1].Date,
             ).toLocaleDateString()}
           </Text>
-        </View>
-      )}
-
-      {passenger.savedAddresses && passenger.savedAddresses.length > 0 && (
-        <View>
-          <TouchableOpacity
-            style={styles.addressAccordion}
-            onPress={() => toggleAddresses(passenger._id)}>
-            <Icon name="location-on" size={24} color="#333" />
-            <Text style={styles.addressTitle}>Saved Addresses</Text>
-            <Icon
-              name={
-                expandedAddresses[passenger._id]
-                  ? 'keyboard-arrow-up'
-                  : 'keyboard-arrow-down'
-              }
-              size={24}
-              color="#333"
-            />
-          </TouchableOpacity>
-
-          {expandedAddresses[passenger._id] && (
-            <View style={styles.addressList}>
-              {passenger.savedAddresses.map((address, index) => (
-                <View key={index} style={styles.addressItem}>
-                  <Icon name="home" size={20} color="#555" />
-                  <View style={styles.addressTextContainer}>
-                    <Text style={styles.addressLabel}>{address.label}</Text>
-                    <Text style={styles.addressText}>{address.address}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
       )}
 
