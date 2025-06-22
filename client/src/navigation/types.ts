@@ -9,11 +9,10 @@ export type RootStackParamList = {
   RegisterSelection: undefined;
   RegisterDriver: undefined;
   RegisterPassenger: undefined;
+  AdminHome: undefined;
+  DriverHome: undefined;
+  PassengerHome: undefined;
   MapLocationPicker: {
     onLocationSelected: (location: Location) => void;
   };
-  // AdminHome: undefined; to be checked if i really need this
-  // DriverHome: undefined;
-  // PassengerHome: undefined;
-  // BookRide: undefined;
 };

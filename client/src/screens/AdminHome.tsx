@@ -15,10 +15,10 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {AuthContext} from '../context/AuthContext';
 
 // Dashboard tabs
-import DriverManagement from '../screens/admin/dManagement';
-import PassengerManagement from '../screens/admin/pManagement';
-import ZoneFareCalculator from '../screens/admin/zoneFare';
-import AdminStats from '../screens/admin/adminStats';
+import DriverManagement from './adminTabs/dManagement';
+import PassengerManagement from './adminTabs/pManagement';
+import ZoneFareCalculator from './adminTabs/zoneFare';
+import AdminStats from './adminTabs/adminStats';
 import {useProfile} from '../context/ProfileContext';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;

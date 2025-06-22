@@ -63,13 +63,13 @@ const LoginScreen = ({navigation}: Props) => {
   const navigateBasedOnRole = (role: string) => {
     switch (role) {
       case 'driver':
-        navigation.replace('DriverHome' as keyof RootStackParamList);
+        navigation.replace('DriverHome');
         break;
       case 'passenger':
-        navigation.replace('PassengerHome' as keyof RootStackParamList);
+        navigation.replace('PassengerHome');
         break;
       case 'admin':
-        navigation.replace('AdminHome' as keyof RootStackParamList);
+        navigation.replace('AdminHome');
         break;
       default:
         Alert.alert('Error', 'Unknown user role');
@@ -83,10 +83,12 @@ const LoginScreen = ({navigation}: Props) => {
     try {
       const response = await api.get(`/api/auth/validate`);
 
-      if (response.status === 401) return false;
-      return !!response.data?.role;
-    } catch {
-      return true;
+      if (response.status === 200 && response.data?.role) {
+        return true;
+      }
+      return false;
+    } catch (error) {
+      return false;
     } finally {
       setIsValidating(false);
     }
@@ -144,11 +146,13 @@ const LoginScreen = ({navigation}: Props) => {
     const isValid = await validateUserToken();
     if (isValid && userRole) {
       navigateBasedOnRole(userRole);
-    } else {
+    } else if (userToken) {
       Alert.alert(
         'Session Expired',
         'Your session has expired. Please log in again.',
       );
+    } else {
+      Alert.alert('Login Required', 'Please log in to continue.');
     }
   };
 
