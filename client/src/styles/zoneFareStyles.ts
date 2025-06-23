@@ -261,6 +261,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 14,
     backgroundColor: '#fff',
+    width: '100%',
+    minWidth: '100%',
   },
   multilineInput: {
     height: 80,

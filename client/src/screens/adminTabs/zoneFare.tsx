@@ -185,7 +185,15 @@ const ZoneFareCalculator = () => {
       setBarangayZones(
         normalizedZones.filter((zone: Zone) => zone.zoneType === 'barangay'),
       );
-      setPricing(pricingResponse.data.pricing || []);
+
+      // It might be pricingResponse.data directly or pricingResponse.data.data
+      const pricingData =
+        pricingResponse.data.pricing ||
+        pricingResponse.data.data ||
+        pricingResponse.data ||
+        [];
+
+      setPricing(pricingData);
     } catch (error: any) {
       console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to fetch zones and pricing data');
@@ -505,7 +513,7 @@ const ZoneFareCalculator = () => {
       }
 
       await axios.put(
-        `${BACKEND_URL}/api/admin/pricing/${selectedPricing._id}`,
+        `${BACKEND_URL}/api/pricing/${selectedPricing._id}`,
         payload,
         {
           headers: {Authorization: `Bearer ${token}`},
