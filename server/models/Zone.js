@@ -49,7 +49,7 @@ const zoneSchema = new mongoose.Schema(
 
 // Create a 2dsphere index for geospatial queries
 zoneSchema.index({ coordinates: "2dsphere" });
-zoneSchema.index({ zoneType: 1, parentZOne: 1 });
+zoneSchema.index({ zoneType: 1, parentZone: 1 });
 zoneSchema.index({ priority: -1 });
 
 zoneSchema.statics.findByCoordinates = async function (longitude, latitude) {

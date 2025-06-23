@@ -230,20 +230,35 @@ export const updateZone = async (req, res) => {
       }
     }
 
+    // Prepare update object
+    const updateData = {
+      name: name || zone.name,
+      color: color || zone.color,
+      description: description !== undefined ? description : zone.description,
+      zoneType: zoneType || zone.zoneType,
+      parentZone: parentZone !== undefined ? parentZone : zone.parentZone,
+      priority: priority !== undefined ? priority : zone.priority,
+    };
+
+    // Handle coordinates properly - ensure GeoJSON format
+    if (coordinates) {
+      // If coordinates is already in GeoJSON format
+      if (coordinates.type && coordinates.coordinates) {
+        updateData.coordinates = coordinates;
+      }
+      // If coordinates is raw array format, convert to GeoJSON
+      else if (Array.isArray(coordinates)) {
+        updateData.coordinates = {
+          type: "Polygon",
+          coordinates: coordinates,
+        };
+      }
+    }
+
     // Update zone
-    const updatedZone = await Zone.findByIdAndUpdate(
-      id,
-      {
-        name: name || zone.name,
-        coordinates: coordinates || zone.coordinates,
-        color: color || zone.color,
-        description: description !== undefined ? description : zone.description,
-        zoneType: zoneType || zone.zoneType,
-        parentZone: parentZone !== undefined ? parentZone : zone.parentZone,
-        priority: priority !== undefined ? priority : zone.priority,
-      },
-      { new: true }
-    ).populate("parentZone");
+    const updatedZone = await Zone.findByIdAndUpdate(id, updateData, {
+      new: true,
+    }).populate("parentZone");
 
     res.json({
       success: true,

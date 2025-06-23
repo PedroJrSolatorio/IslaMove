@@ -1,4 +1,5 @@
 import Pricing from "../models/Pricing.js";
+import Zone from "../models/Zone.js";
 
 export const createPricing = async (req, res) => {
   try {
@@ -40,7 +41,7 @@ export const createPricing = async (req, res) => {
     const existingRule = await Pricing.findOne({
       fromZone,
       toZone,
-      vehicleType: "bao-bao",
+      vehicleType: vehicleType || "bao-bao",
     });
 
     if (existingRule) {
@@ -56,7 +57,7 @@ export const createPricing = async (req, res) => {
       fromZone,
       toZone,
       amount: parseFloat(amount),
-      vehicleType: "bao-bao",
+      vehicleType: vehicleType || "bao-bao",
       pricingType: pricingType || "fixed",
       description: description || "",
       priority: priority || 1,

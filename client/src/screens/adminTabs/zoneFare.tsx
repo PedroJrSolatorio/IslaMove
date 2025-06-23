@@ -164,37 +164,33 @@ const ZoneFareCalculator = () => {
   const fetchZonesAndPricing = async () => {
     try {
       setRefreshing(true);
-      setLoading(true);
       const token = await AsyncStorage.getItem('userToken');
 
-      // Fetch all zones
-      const zonesResponse = await axios.get(`${BACKEND_URL}/api/zones`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-
-      // Fetch barangay zones specifically
-      const barangayResponse = await axios.get(
-        `${BACKEND_URL}/api/zones/barangays`,
-        {
+      const [zonesResponse, pricingResponse] = await Promise.all([
+        axios.get(`${BACKEND_URL}/api/zones`, {
           headers: {Authorization: `Bearer ${token}`},
-        },
+        }),
+        axios.get(`${BACKEND_URL}/api/pricing`, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+      ]);
+
+      // Normalize zone coordinates to always be raw arrays
+      const normalizedZones = zonesResponse.data.zones.map((zone: any) => ({
+        ...zone,
+        coordinates: extractCoordinates(zone.coordinates),
+      }));
+
+      setZones(normalizedZones);
+      setBarangayZones(
+        normalizedZones.filter((zone: Zone) => zone.zoneType === 'barangay'),
       );
-
-      // Fetch pricing rules
-      const pricingResponse = await axios.get(`${BACKEND_URL}/api/pricing`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-
-      setZones(zonesResponse.data.zones || []);
-      setBarangayZones(barangayResponse.data.zones || []);
-      setPricing(pricingResponse.data.data || []);
-      setRefreshing(false);
-      setLoading(false);
+      setPricing(pricingResponse.data.pricing || []);
     } catch (error: any) {
-      console.error('Error fetching zones and pricing:', error);
+      console.error('Error fetching data:', error);
+      Alert.alert('Error', 'Failed to fetch zones and pricing data');
+    } finally {
       setRefreshing(false);
-      setLoading(false);
-      Alert.alert('Error', 'Failed to load zones and pricing');
     }
   };
 
@@ -205,8 +201,33 @@ const ZoneFareCalculator = () => {
     try {
       const parsed = JSON.parse(coordinatesString);
 
-      // Check if it's a valid polygon structure
-      if (!Array.isArray(parsed) || !Array.isArray(parsed[0])) {
+      // We expect format: [[[lng, lat], [lng, lat], ...]]
+      if (!Array.isArray(parsed)) {
+        return {
+          isValid: false,
+          error: 'Coordinates must be an array',
+          coordinates: [],
+        };
+      }
+
+      // Handle both 3-level and 4-level nesting for flexibility
+      let coordinates: number[][][];
+
+      if (Array.isArray(parsed[0]) && Array.isArray(parsed[0][0])) {
+        if (typeof parsed[0][0][0] === 'number') {
+          // Format: [[[lng, lat], ...]] - correct format
+          coordinates = parsed;
+        } else if (Array.isArray(parsed[0][0][0])) {
+          // Format: [[[[lng, lat], ...]]] - remove one level of nesting
+          coordinates = parsed[0];
+        } else {
+          return {
+            isValid: false,
+            error: 'Invalid coordinate structure',
+            coordinates: [],
+          };
+        }
+      } else {
         return {
           isValid: false,
           error: 'Invalid coordinate structure',
@@ -215,7 +236,7 @@ const ZoneFareCalculator = () => {
       }
 
       // Check if polygon has at least 3 points
-      if (parsed[0].length < 3) {
+      if (!coordinates[0] || coordinates[0].length < 3) {
         return {
           isValid: false,
           error: 'Polygon must have at least 3 coordinate points',
@@ -224,7 +245,7 @@ const ZoneFareCalculator = () => {
       }
 
       // Check if each coordinate pair is valid
-      for (const coord of parsed[0]) {
+      for (const coord of coordinates[0]) {
         if (
           !Array.isArray(coord) ||
           coord.length !== 2 ||
@@ -239,7 +260,7 @@ const ZoneFareCalculator = () => {
         }
       }
 
-      return {isValid: true, coordinates: parsed};
+      return {isValid: true, coordinates};
     } catch (error) {
       return {isValid: false, error: 'Invalid JSON format', coordinates: []};
     }
@@ -260,7 +281,7 @@ const ZoneFareCalculator = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
 
-      // Fix: Define proper interface for the payload
+      // Define proper interface for the payload
       interface ZonePayload {
         name: string;
         coordinates: {
@@ -278,20 +299,15 @@ const ZoneFareCalculator = () => {
         name: zoneName,
         coordinates: {
           type: 'Polygon',
-          coordinates: validation.coordinates,
+          coordinates: validation.coordinates, // Keep GeoJSON format
         },
         color: zoneColor,
         zoneType,
         description: zoneDescription,
+        parentZone:
+          parentZone && zoneType !== 'barangay' ? parentZone : undefined,
+        priority: zonePriority ? parseInt(zonePriority) : undefined,
       };
-
-      if (parentZone && zoneType !== 'barangay') {
-        payload.parentZone = parentZone;
-      }
-
-      if (zonePriority) {
-        payload.priority = parseInt(zonePriority);
-      }
 
       await axios.post(`${BACKEND_URL}/api/zones`, payload, {
         headers: {Authorization: `Bearer ${token}`},
@@ -302,7 +318,6 @@ const ZoneFareCalculator = () => {
       resetZoneForm();
       fetchZonesAndPricing();
     } catch (error: any) {
-      // Fix: Properly type the error
       console.error('Error adding zone:', error);
       Alert.alert(
         'Error',
@@ -326,9 +341,13 @@ const ZoneFareCalculator = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
 
+      // Define proper interface for the update payload
       interface ZoneUpdatePayload {
         name: string;
-        coordinates: number[][][];
+        coordinates: {
+          type: string;
+          coordinates: number[][][];
+        };
         color: string;
         zoneType: 'barangay' | 'area' | 'landmark';
         description: string;
@@ -336,18 +355,19 @@ const ZoneFareCalculator = () => {
         priority?: number;
       }
 
+      // Send coordinates in GeoJSON format, not raw array
       const payload: ZoneUpdatePayload = {
         name: zoneName,
-        coordinates: validation.coordinates,
+        coordinates: {
+          type: 'Polygon',
+          coordinates: validation.coordinates, // This maintains GeoJSON format
+        },
         color: zoneColor,
         zoneType,
         description: zoneDescription,
         parentZone: parentZone || null,
+        priority: zonePriority ? parseInt(zonePriority) : undefined,
       };
-
-      if (zonePriority) {
-        payload.priority = parseInt(zonePriority);
-      }
 
       await axios.put(`${BACKEND_URL}/api/zones/${selectedZone._id}`, payload, {
         headers: {Authorization: `Bearer ${token}`},
@@ -533,10 +553,46 @@ const ZoneFareCalculator = () => {
     );
   };
 
+  const extractCoordinates = (coords: any): number[][][] => {
+    if (!coords) return [];
+
+    // If it's a GeoJSON object, extract the coordinates
+    if (coords.type === 'Polygon' && coords.coordinates) {
+      return coords.coordinates; // This is already [[[lng, lat], ...]]
+    }
+
+    // If it's already a raw coordinates array
+    if (Array.isArray(coords)) {
+      // Check if we have the right nesting level
+      // We want [[[lng, lat], [lng, lat], ...]] (3 levels)
+      if (
+        coords.length > 0 &&
+        Array.isArray(coords[0]) &&
+        Array.isArray(coords[0][0])
+      ) {
+        // If coords[0][0] is an array of numbers, we have the right format
+        if (typeof coords[0][0][0] === 'number') {
+          return coords; // Format: [[[lng, lat], ...]]
+        }
+        // If coords[0][0][0] is an array, we have too much nesting
+        if (Array.isArray(coords[0][0][0])) {
+          return coords[0]; // Remove one level: [[[[lng, lat], ...]]] -> [[[lng, lat], ...]]
+        }
+      }
+    }
+
+    return [];
+  };
+
   const editZone = (zone: Zone) => {
     setSelectedZone(zone);
     setZoneName(zone.name);
-    setZoneCoordinates(JSON.stringify(zone.coordinates));
+
+    // Extract coordinates and ensure proper format for display
+    const coordinatesArray = extractCoordinates(zone.coordinates);
+    // Always display in the 3-level format: [[[lng, lat], ...]]
+    setZoneCoordinates(JSON.stringify(coordinatesArray, null, 2));
+
     setZoneColor(zone.color || '#3498db');
     setZoneType(zone.zoneType);
     setZoneDescription(zone.description || '');
