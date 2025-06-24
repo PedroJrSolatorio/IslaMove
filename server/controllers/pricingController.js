@@ -1,4 +1,5 @@
 import Pricing from "../models/Pricing.js";
+import DiscountConfig from "../models/DiscountConfig.js";
 import Zone from "../models/Zone.js";
 
 export const createPricing = async (req, res) => {
@@ -6,7 +7,7 @@ export const createPricing = async (req, res) => {
     const {
       fromZone,
       toZone,
-      amount,
+      baseAmount,
       vehicleType,
       pricingType,
       description,
@@ -17,8 +18,8 @@ export const createPricing = async (req, res) => {
     if (
       !fromZone ||
       !toZone ||
-      amount === undefined ||
-      isNaN(parseFloat(amount))
+      baseAmount === undefined ||
+      isNaN(parseFloat(baseAmount))
     ) {
       return res.status(400).json({
         success: false,
@@ -56,7 +57,7 @@ export const createPricing = async (req, res) => {
     const pricing = new Pricing({
       fromZone,
       toZone,
-      amount: parseFloat(amount),
+      baseAmount: parseFloat(baseAmount),
       vehicleType: vehicleType || "bao-bao",
       pricingType: pricingType || "fixed",
       description: description || "",
@@ -84,7 +85,11 @@ export const createPricing = async (req, res) => {
 // Get all pricing rules
 export const getAllPricing = async (req, res) => {
   try {
-    const { pricingType, vehicleType } = req.query;
+    const {
+      pricingType,
+      vehicleType,
+      passengerCategory = "regular",
+    } = req.query;
 
     let query = {};
     if (pricingType) query.pricingType = pricingType;
@@ -101,17 +106,44 @@ export const getAllPricing = async (req, res) => {
       })
       .sort({ priority: -1, createdAt: -1 });
 
-    res.json({ success: true, data: pricing });
+    // Get discount config for fare calculations
+    const discountConfig = await DiscountConfig.findOne({ isActive: true });
+    const discountRate = discountConfig?.discounts?.get(passengerCategory) || 0;
+
+    // Calculate final amounts for each pricing rule
+    const pricingWithCalculations = pricing.map((rule) => {
+      const discountAmount = rule.baseAmount * (discountRate / 100);
+      const finalAmount = Math.max(0, rule.baseAmount - discountAmount);
+
+      return {
+        ...rule.toObject(),
+        discountRate,
+        discountAmount: Math.round(discountAmount * 100) / 100,
+        finalAmount: Math.round(finalAmount * 100) / 100,
+        passengerCategory,
+      };
+    });
+
+    res.json({
+      success: true,
+      data: pricingWithCalculations,
+      discountConfig: discountConfig
+        ? {
+            discounts: Object.fromEntries(discountConfig.discounts),
+            updatedAt: discountConfig.updatedAt,
+          }
+        : null,
+    });
   } catch (error) {
     console.error("Error fetching pricing rules:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Get pricing for specific route with hierarchy consideration
+// Get pricing for specific route with hierarchy consideration and discounts
 export const getPricingForRoute = async (req, res) => {
   try {
-    const { fromZone, toZone } = req.query;
+    const { fromZone, toZone, passengerCategory = "regular" } = req.query;
 
     if (!fromZone || !toZone) {
       return res.status(400).json({
@@ -123,7 +155,8 @@ export const getPricingForRoute = async (req, res) => {
     const pricing = await Pricing.findPricingWithHierarchy(
       fromZone,
       toZone,
-      "bao-bao"
+      "bao-bao",
+      passengerCategory
     );
 
     if (!pricing) {
@@ -151,7 +184,7 @@ export const updatePricing = async (req, res) => {
     const {
       fromZone,
       toZone,
-      amount,
+      baseAmount,
       vehicleType,
       isActive,
       pricingType,
@@ -195,7 +228,10 @@ export const updatePricing = async (req, res) => {
       {
         fromZone: fromZone || pricing.fromZone,
         toZone: toZone || pricing.toZone,
-        amount: amount !== undefined ? parseFloat(amount) : pricing.amount,
+        baseAmount:
+          baseAmount !== undefined
+            ? parseFloat(baseAmount)
+            : pricing.baseAmount,
         vehicleType: vehicleType || pricing.vehicleType,
         isActive: isActive !== undefined ? isActive : pricing.isActive,
         pricingType: pricingType || pricing.pricingType,

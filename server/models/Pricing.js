@@ -12,9 +12,10 @@ const pricingSchema = new mongoose.Schema(
       ref: "Zone",
       required: true,
     },
-    amount: {
+    baseAmount: {
       type: Number,
       required: true,
+      description: "Base fare amount for regular passengers",
     },
     pricingType: {
       type: String,
@@ -27,15 +28,6 @@ const pricingSchema = new mongoose.Schema(
     priority: {
       type: Number,
       default: 1, // Higher number = higher priority for pricing selection
-    },
-    pricePerKm: {
-      type: Number,
-      default: 0,
-    },
-    surgeMultiplier: {
-      type: Number,
-      default: 1.0,
-      min: 1.0,
     },
     vehicleType: {
       type: String,
@@ -58,11 +50,25 @@ pricingSchema.index(
 pricingSchema.index({ priority: -1 });
 pricingSchema.index({ pricingType: 1 });
 
+// Add method to calculate fare with discounts
+pricingSchema.methods.calculateFare = function (passengerCategory = "regular") {
+  const DiscountConfig = mongoose.model("DiscountConfig");
+
+  return DiscountConfig.findOne({ isActive: true }).then((config) => {
+    if (!config) return this.baseAmount;
+
+    const discountRate = config.discounts.get(passengerCategory) || 0;
+    const discountAmount = this.baseAmount * (discountRate / 100);
+    return Math.max(0, this.baseAmount - discountAmount);
+  });
+};
+
 // Static method to find pricing with hierarchy consideration
 pricingSchema.statics.findPricingWithHierarchy = async function (
   fromZoneId,
   toZoneId,
-  vehicleType = "bao-bao"
+  vehicleType = "bao-bao",
+  passengerCategory = "regular"
 ) {
   // First, try to find exact zone-to-zone pricing
   let pricing = await this.findOne({
@@ -73,7 +79,13 @@ pricingSchema.statics.findPricingWithHierarchy = async function (
   }).populate("fromZone toZone");
 
   if (pricing) {
-    return pricing;
+    const finalAmount = await pricing.calculateFare(passengerCategory);
+    return {
+      ...pricing.toObject(),
+      finalAmount,
+      originalAmount: pricing.baseAmount,
+      passengerCategory,
+    };
   }
 
   // If no exact match, check if both zones are in the same barangay

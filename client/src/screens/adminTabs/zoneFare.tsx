@@ -40,7 +40,7 @@ interface Pricing {
   _id: string;
   fromZone: string | Zone;
   toZone: string | Zone;
-  amount: number;
+  baseAmount: number;
   pricingType: 'fixed' | 'minimum' | 'special';
   vehicleType: string;
   description?: string;
@@ -52,6 +52,27 @@ interface CoordinateValidation {
   isValid: boolean;
   error?: string;
   coordinates: number[][][]; // Remove the optional operator
+}
+
+interface DiscountConfig {
+  _id?: string;
+  name?: string;
+  discounts: {
+    regular: number;
+    student: number;
+    senior: number;
+    student_child: number;
+  };
+  ageBasedRules?: {
+    studentChildMaxAge: number;
+    enableAgeBasedDiscounts: boolean;
+  };
+  description?: string;
+  isActive?: boolean;
+  validFrom?: Date;
+  validUntil?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const ZoneFareCalculator = () => {
@@ -106,6 +127,49 @@ const ZoneFareCalculator = () => {
     useState<string>('all');
   const [selectedParentZoneFilter, setSelectedParentZoneFilter] =
     useState<string>('all');
+
+  const [discountConfig, setDiscountConfig] = useState<DiscountConfig | null>(
+    null,
+  );
+  const [isDiscountModalVisible, setIsDiscountModalVisible] = useState(false);
+  const [studentDiscount, setStudentDiscount] = useState('20');
+  const [seniorDiscount, setSeniorDiscount] = useState('20');
+  const [studentChildDiscount, setStudentChildDiscount] = useState('50');
+  const [studentChildMaxAge, setStudentChildMaxAge] = useState('12');
+  const [discountDescription, setDiscountDescription] = useState('');
+  const [enableAgeBasedDiscounts, setEnableAgeBasedDiscounts] = useState(true);
+
+  // Helper function to extract coordinates
+  const extractCoordinates = (coords: any): number[][][] => {
+    if (!coords) return [];
+
+    // If it's a GeoJSON object, extract the coordinates
+    if (coords.type === 'Polygon' && coords.coordinates) {
+      return coords.coordinates; // This is already [[[lng, lat], ...]]
+    }
+
+    // If it's already a raw coordinates array
+    if (Array.isArray(coords)) {
+      // Check if we have the right nesting level
+      // We want [[[lng, lat], [lng, lat], ...]] (3 levels)
+      if (
+        coords.length > 0 &&
+        Array.isArray(coords[0]) &&
+        Array.isArray(coords[0][0])
+      ) {
+        // If coords[0][0] is an array of numbers, we have the right format
+        if (typeof coords[0][0][0] === 'number') {
+          return coords; // Format: [[[lng, lat], ...]]
+        }
+        // If coords[0][0][0] is an array, we have too much nesting
+        if (Array.isArray(coords[0][0][0])) {
+          return coords[0]; // Remove one level: [[[[lng, lat], ...]]] -> [[[lng, lat], ...]]
+        }
+      }
+    }
+
+    return [];
+  };
 
   const requestLocationPermission = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
@@ -166,14 +230,18 @@ const ZoneFareCalculator = () => {
       setRefreshing(true);
       const token = await AsyncStorage.getItem('userToken');
 
-      const [zonesResponse, pricingResponse] = await Promise.all([
-        axios.get(`${BACKEND_URL}/api/zones`, {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-        axios.get(`${BACKEND_URL}/api/pricing`, {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-      ]);
+      const [zonesResponse, pricingResponse, discountResponse] =
+        await Promise.all([
+          axios.get(`${BACKEND_URL}/api/zones`, {
+            headers: {Authorization: `Bearer ${token}`},
+          }),
+          axios.get(`${BACKEND_URL}/api/pricing`, {
+            headers: {Authorization: `Bearer ${token}`},
+          }),
+          axios.get(`${BACKEND_URL}/api/discounts`, {
+            headers: {Authorization: `Bearer ${token}`},
+          }),
+        ]);
 
       // Normalize zone coordinates to always be raw arrays
       const normalizedZones = zonesResponse.data.zones.map((zone: any) => ({
@@ -186,17 +254,91 @@ const ZoneFareCalculator = () => {
         normalizedZones.filter((zone: Zone) => zone.zoneType === 'barangay'),
       );
 
-      // It might be pricingResponse.data directly or pricingResponse.data.data
+      // Handle pricing data structure
       const pricingData =
-        pricingResponse.data.pricing ||
         pricingResponse.data.data ||
+        pricingResponse.data.pricing ||
         pricingResponse.data ||
         [];
-
       setPricing(pricingData);
+
+      // Handle discount config
+      if (discountResponse.data.success && discountResponse.data.data) {
+        const config = discountResponse.data.data;
+        console.log('Discount config received:', config);
+
+        // Ensure discounts object exists and has the expected structure
+        const normalizedConfig: DiscountConfig = {
+          ...config,
+          discounts: config.discounts || {
+            regular: 0,
+            student: 20,
+            senior: 20,
+            student_child: 50,
+          },
+          ageBasedRules: config.ageBasedRules || {
+            studentChildMaxAge: 12,
+            enableAgeBasedDiscounts: true,
+          },
+        };
+
+        setDiscountConfig(normalizedConfig);
+
+        // Use the normalized config for setting form values
+        setStudentDiscount(
+          normalizedConfig.discounts.student?.toString() || '20',
+        );
+        setSeniorDiscount(
+          normalizedConfig.discounts.senior?.toString() || '20',
+        );
+        setStudentChildDiscount(
+          normalizedConfig.discounts.student_child?.toString() || '50',
+        );
+        setStudentChildMaxAge(
+          normalizedConfig.ageBasedRules?.studentChildMaxAge?.toString() ||
+            '12',
+        );
+        setEnableAgeBasedDiscounts(
+          normalizedConfig.ageBasedRules?.enableAgeBasedDiscounts ?? true,
+        );
+        setDiscountDescription(normalizedConfig.description || '');
+      } else {
+        // Set default values if no config found
+        const defaultConfig: DiscountConfig = {
+          discounts: {regular: 0, student: 20, senior: 20, student_child: 50},
+          ageBasedRules: {
+            studentChildMaxAge: 12,
+            enableAgeBasedDiscounts: true,
+          },
+          description: 'Default discount configuration',
+          isActive: true,
+          name: 'Default Discount Configuration',
+        };
+        setDiscountConfig(defaultConfig);
+        setStudentDiscount('20');
+        setSeniorDiscount('20');
+        setStudentChildDiscount('50');
+        setStudentChildMaxAge('12');
+        setEnableAgeBasedDiscounts(true);
+        setDiscountDescription('Default discount configuration');
+      }
     } catch (error: any) {
       console.error('Error fetching data:', error);
+      console.error('Error details:', error.response?.data); // Additional debug info
       Alert.alert('Error', 'Failed to fetch zones and pricing data');
+
+      // Set default discount config on error
+      const defaultConfig = {
+        discounts: {regular: 0, student: 20, senior: 20, student_child: 50},
+        ageBasedRules: {studentChildMaxAge: 12, enableAgeBasedDiscounts: true},
+        description: 'Default discount configuration',
+        isActive: true,
+        name: 'Default Discount Configuration',
+      };
+      setDiscountConfig(defaultConfig);
+      setStudentDiscount('20');
+      setSeniorDiscount('20');
+      setDiscountDescription('Default discount configuration');
     } finally {
       setRefreshing(false);
     }
@@ -272,6 +414,20 @@ const ZoneFareCalculator = () => {
     } catch (error) {
       return {isValid: false, error: 'Invalid JSON format', coordinates: []};
     }
+  };
+
+  // helper function to get discount values
+  const getDiscountValue = (
+    key: 'regular' | 'student' | 'senior' | 'student_child',
+  ): number => {
+    if (!discountConfig?.discounts) {
+      // Return default values if discounts object is missing
+      const defaults = {regular: 0, student: 20, senior: 20, student_child: 50};
+      return defaults[key];
+    }
+
+    // Simply access the property directly since discounts is a plain object
+    return discountConfig.discounts[key] ?? 0;
   };
 
   const handleAddZone = async () => {
@@ -437,7 +593,7 @@ const ZoneFareCalculator = () => {
       interface PricingPayload {
         fromZone: string;
         toZone: string;
-        amount: number;
+        baseAmount: number;
         pricingType: 'fixed' | 'minimum' | 'special';
         vehicleType: string;
         description: string;
@@ -447,7 +603,7 @@ const ZoneFareCalculator = () => {
       const payload: PricingPayload = {
         fromZone,
         toZone,
-        amount: parseFloat(fareAmount),
+        baseAmount: parseFloat(fareAmount),
         pricingType,
         vehicleType: 'bao-bao',
         description: pricingDescription,
@@ -492,7 +648,7 @@ const ZoneFareCalculator = () => {
       interface PricingUpdatePayload {
         fromZone: string;
         toZone: string;
-        amount: number;
+        baseAmount: number;
         pricingType: 'fixed' | 'minimum' | 'special';
         vehicleType: string;
         description: string;
@@ -502,7 +658,7 @@ const ZoneFareCalculator = () => {
       const payload: PricingUpdatePayload = {
         fromZone,
         toZone,
-        amount: parseFloat(fareAmount),
+        baseAmount: parseFloat(fareAmount),
         pricingType,
         vehicleType: 'bao-bao',
         description: pricingDescription,
@@ -561,35 +717,106 @@ const ZoneFareCalculator = () => {
     );
   };
 
-  const extractCoordinates = (coords: any): number[][][] => {
-    if (!coords) return [];
+  const handleUpdateDiscountConfig = async () => {
+    const studentDiscountNum = parseFloat(studentDiscount);
+    const seniorDiscountNum = parseFloat(seniorDiscount);
+    const studentChildDiscountNum = parseFloat(studentChildDiscount);
+    const maxAge = parseInt(studentChildMaxAge);
 
-    // If it's a GeoJSON object, extract the coordinates
-    if (coords.type === 'Polygon' && coords.coordinates) {
-      return coords.coordinates; // This is already [[[lng, lat], ...]]
+    // Validation
+    if (
+      isNaN(studentDiscountNum) ||
+      isNaN(seniorDiscountNum) ||
+      isNaN(studentChildDiscountNum)
+    ) {
+      Alert.alert('Error', 'Please enter valid discount percentages');
+      return;
     }
 
-    // If it's already a raw coordinates array
-    if (Array.isArray(coords)) {
-      // Check if we have the right nesting level
-      // We want [[[lng, lat], [lng, lat], ...]] (3 levels)
-      if (
-        coords.length > 0 &&
-        Array.isArray(coords[0]) &&
-        Array.isArray(coords[0][0])
-      ) {
-        // If coords[0][0] is an array of numbers, we have the right format
-        if (typeof coords[0][0][0] === 'number') {
-          return coords; // Format: [[[lng, lat], ...]]
-        }
-        // If coords[0][0][0] is an array, we have too much nesting
-        if (Array.isArray(coords[0][0][0])) {
-          return coords[0]; // Remove one level: [[[[lng, lat], ...]]] -> [[[lng, lat], ...]]
-        }
+    if (isNaN(maxAge) || maxAge < 0 || maxAge > 25) {
+      Alert.alert('Error', 'Student child max age must be between 0 and 25');
+      return;
+    }
+
+    if (
+      [studentDiscountNum, seniorDiscountNum, studentChildDiscountNum].some(
+        val => val < 0 || val > 100,
+      )
+    ) {
+      Alert.alert('Error', 'Discount percentages must be between 0 and 100');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem('userToken');
+
+      const payload = {
+        discounts: {
+          regular: 0,
+          student: studentDiscountNum,
+          senior: seniorDiscountNum,
+          student_child: studentChildDiscountNum,
+        },
+        ageBasedRules: {
+          studentChildMaxAge: maxAge,
+          enableAgeBasedDiscounts: enableAgeBasedDiscounts,
+        },
+        description: discountDescription,
+      };
+
+      console.log('Sending discount update payload:', payload);
+
+      const response = await axios.put(
+        `${BACKEND_URL}/api/discounts`,
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      console.log('Discount update response:', response.data);
+
+      if (response.data.success) {
+        Alert.alert('Success', 'Discount configuration updated successfully');
+        setIsDiscountModalVisible(false);
+        await fetchZonesAndPricing();
+      } else {
+        Alert.alert(
+          'Error',
+          response.data.message || 'Failed to update discount configuration',
+        );
       }
+    } catch (error: any) {
+      console.error('Error updating discount config:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.message ||
+          'Failed to update discount configuration',
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return [];
+  const resetDiscountForm = () => {
+    if (discountConfig) {
+      setStudentDiscount(discountConfig.discounts.student?.toString() || '20');
+      setSeniorDiscount(discountConfig.discounts.senior?.toString() || '20');
+      setStudentChildDiscount(
+        discountConfig.discounts.student_child?.toString() || '50',
+      );
+      setStudentChildMaxAge(
+        discountConfig.ageBasedRules?.studentChildMaxAge?.toString() || '12',
+      );
+      setEnableAgeBasedDiscounts(
+        discountConfig.ageBasedRules?.enableAgeBasedDiscounts ?? true,
+      );
+      setDiscountDescription(discountConfig.description || '');
+    }
   };
 
   const editZone = (zone: Zone) => {
@@ -625,7 +852,7 @@ const ZoneFareCalculator = () => {
     setToZone(
       typeof pricing.toZone === 'string' ? pricing.toZone : pricing.toZone._id,
     );
-    setFareAmount(pricing.amount.toString());
+    setFareAmount(pricing.baseAmount.toString());
     setPricingType(pricing.pricingType);
     setVehicleType(pricing.vehicleType);
     setPricingDescription(pricing.description || '');
@@ -814,6 +1041,8 @@ const ZoneFareCalculator = () => {
         ? item.toZone.name
         : zones.find(z => z._id === item.toZone)?.name || 'Unknown';
 
+    const displayAmount = item.baseAmount || 0;
+
     return (
       <View style={styles.tableRow}>
         <View style={styles.pricingInfoContainer}>
@@ -837,9 +1066,32 @@ const ZoneFareCalculator = () => {
             <Text style={styles.descriptionText}>{item.description}</Text>
           )}
           <Text style={styles.priorityText}>Priority: {item.priority}</Text>
+          {discountConfig && (
+            <View style={styles.discountInfo}>
+              <Text style={styles.discountText}>
+                Regular: ₱{displayAmount.toFixed(2)}
+              </Text>
+              <Text style={styles.discountText}>
+                Student: ₱
+                {(
+                  displayAmount *
+                  (1 - discountConfig.discounts.student / 100)
+                ).toFixed(2)}
+                ({discountConfig.discounts.student}% off)
+              </Text>
+              <Text style={styles.discountText}>
+                Senior: ₱
+                {(
+                  displayAmount *
+                  (1 - discountConfig.discounts.senior / 100)
+                ).toFixed(2)}
+                ({discountConfig.discounts.senior}% off)
+              </Text>
+            </View>
+          )}
         </View>
         <View style={styles.fareTypeContainer}>
-          <Text style={styles.itemText}>₱{item.amount.toFixed(2)}</Text>
+          <Text style={styles.itemText}>₱{displayAmount.toFixed(2)}</Text>
         </View>
         <View style={styles.actionsContainer}>
           <TouchableOpacity
@@ -1114,6 +1366,141 @@ const ZoneFareCalculator = () => {
         </View>
       </Modal>
 
+      {/* Discount Configuration Modal */}
+      <Modal
+        visible={isDiscountModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setIsDiscountModalVisible(false);
+          resetDiscountForm();
+        }}>
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.modalScrollContainer}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>Discount Configuration</Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Student Discount (%)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={studentDiscount}
+                  onChangeText={setStudentDiscount}
+                  keyboardType="numeric"
+                  placeholder="Enter student discount percentage"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Senior Discount (%)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={seniorDiscount}
+                  onChangeText={setSeniorDiscount}
+                  keyboardType="numeric"
+                  placeholder="Enter senior discount percentage"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={discountDescription}
+                  onChangeText={setDiscountDescription}
+                  placeholder="Discount configuration description"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.infoText}>
+                  Regular passengers: No discount (0%)
+                </Text>
+                <Text style={styles.infoText}>
+                  Current student discount:{' '}
+                  {discountConfig?.discounts?.student || 0}%
+                </Text>
+                <Text style={styles.infoText}>
+                  Current senior discount:{' '}
+                  {discountConfig?.discounts?.senior || 0}%
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Enable Age-Based Student Discounts
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    enableAgeBasedDiscounts && styles.toggleButtonActive,
+                  ]}
+                  onPress={() =>
+                    setEnableAgeBasedDiscounts(!enableAgeBasedDiscounts)
+                  }>
+                  <Text
+                    style={[
+                      styles.toggleButtonText,
+                      enableAgeBasedDiscounts && styles.toggleButtonTextActive,
+                    ]}>
+                    {enableAgeBasedDiscounts ? 'Enabled' : 'Disabled'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {enableAgeBasedDiscounts && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Student Child Max Age</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={studentChildMaxAge}
+                      onChangeText={setStudentChildMaxAge}
+                      keyboardType="numeric"
+                      placeholder="Maximum age for child student discount"
+                    />
+                    <Text style={styles.helperText}>
+                      Students aged {studentChildMaxAge} and below will receive
+                      the child discount
+                    </Text>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      Student Child Discount (%)
+                    </Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={studentChildDiscount}
+                      onChangeText={setStudentChildDiscount}
+                      keyboardType="numeric"
+                      placeholder="Enter student child discount percentage"
+                    />
+                  </View>
+                </>
+              )}
+
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleUpdateDiscountConfig}>
+                <Text style={styles.buttonText}>
+                  Update Discount Configuration
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => {
+                  setIsDiscountModalVisible(false);
+                  resetDiscountForm();
+                }}>
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Main Content */}
       <ScrollView
         refreshControl={
@@ -1303,6 +1690,47 @@ const ZoneFareCalculator = () => {
               <Text style={styles.emptyText}>No pricing rules found</Text>
             }
           />
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Passenger Discounts</Text>
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                resetDiscountForm();
+                setIsDiscountModalVisible(true);
+              }}>
+              <Icon name="settings" size={20} color="#fff" />
+              <Text style={styles.addButtonText}>Configure</Text>
+            </TouchableOpacity>
+          </View>
+
+          {discountConfig && (
+            <View style={styles.discountConfigDisplay}>
+              <Text style={styles.configTitle}>Current Configuration:</Text>
+              <Text style={styles.configItem}>
+                Regular: {getDiscountValue('regular')}% discount
+              </Text>
+              <Text style={styles.configItem}>
+                Student: {getDiscountValue('student')}% discount
+              </Text>
+              <Text style={styles.configItem}>
+                Senior: {getDiscountValue('senior')}% discount
+              </Text>
+              {discountConfig.description && (
+                <Text style={styles.configDescription}>
+                  {discountConfig.description}
+                </Text>
+              )}
+              <Text style={styles.configUpdated}>
+                Last updated:{' '}
+                {discountConfig.updatedAt
+                  ? new Date(discountConfig.updatedAt).toLocaleDateString()
+                  : 'N/A'}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

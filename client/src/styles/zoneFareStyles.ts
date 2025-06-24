@@ -301,4 +301,74 @@ export const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  discountInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 4,
+  },
+  discountText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 2,
+  },
+  discountConfigDisplay: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  configTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  configItem: {
+    fontSize: 14,
+    color: '#34495e',
+    marginBottom: 4,
+  },
+  configDescription: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    fontStyle: 'italic',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  configUpdated: {
+    fontSize: 11,
+    color: '#95a5a6',
+    marginTop: 4,
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 4,
+  },
+  toggleButton: {
+    backgroundColor: '#e0e0e0',
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  toggleButtonActive: {
+    backgroundColor: '#3498db',
+  },
+  toggleButtonText: {
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  toggleButtonTextActive: {
+    color: '#fff',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginTop: 4,
+    marginBottom: 4,
+  },
 });
