@@ -10,9 +10,10 @@ import { adminAuth } from "../middleware/adminAuth.js";
 
 const router = express.Router();
 
+// PUBLIC ROUTES (no authentication required)
 router.get("/route", getPricingForRoute);
 
-// All routes require authentication
+// PROTECTED ROUTES (authentication required)
 // This line means: all routes defined after this line will automatically use the adminAuth middleware.
 router.use(adminAuth);
 

@@ -50,25 +50,11 @@ pricingSchema.index(
 pricingSchema.index({ priority: -1 });
 pricingSchema.index({ pricingType: 1 });
 
-// Add method to calculate fare with discounts
-pricingSchema.methods.calculateFare = function (passengerCategory = "regular") {
-  const DiscountConfig = mongoose.model("DiscountConfig");
-
-  return DiscountConfig.findOne({ isActive: true }).then((config) => {
-    if (!config) return this.baseAmount;
-
-    const discountRate = config.discounts.get(passengerCategory) || 0;
-    const discountAmount = this.baseAmount * (discountRate / 100);
-    return Math.max(0, this.baseAmount - discountAmount);
-  });
-};
-
 // Static method to find pricing with hierarchy consideration
 pricingSchema.statics.findPricingWithHierarchy = async function (
   fromZoneId,
   toZoneId,
-  vehicleType = "bao-bao",
-  passengerCategory = "regular"
+  vehicleType = "bao-bao"
 ) {
   // First, try to find exact zone-to-zone pricing
   let pricing = await this.findOne({
@@ -79,13 +65,7 @@ pricingSchema.statics.findPricingWithHierarchy = async function (
   }).populate("fromZone toZone");
 
   if (pricing) {
-    const finalAmount = await pricing.calculateFare(passengerCategory);
-    return {
-      ...pricing.toObject(),
-      finalAmount,
-      originalAmount: pricing.baseAmount,
-      passengerCategory,
-    };
+    return pricing;
   }
 
   // If no exact match, check if both zones are in the same barangay
@@ -130,16 +110,38 @@ pricingSchema.statics.findPricingWithHierarchy = async function (
     if (pricing) {
       return pricing;
     }
+
+    // Try reverse direction as fallback
+    pricing = await this.findOne({
+      fromZone: toBarangay._id,
+      toZone: fromBarangay._id,
+      vehicleType,
+      isActive: true,
+    }).populate("fromZone toZone");
+
+    if (pricing) {
+      return pricing;
+    }
   }
 
-  return null;
+  // Final fallback: this looks for any general pricing rules that might apply
+  // This could include city-wide or regional pricing if the system supports it
+  pricing = await this.findOne({
+    vehicleType,
+    pricingType: "minimum",
+    isActive: true,
+  })
+    .populate("fromZone toZone")
+    .sort({ priority: -1 });
+
+  return pricing;
 };
 
 // Method to get all applicable pricing rules for two locations
 pricingSchema.statics.findAllApplicablePricing = async function (
   fromZoneId,
   toZoneId,
-  vehicleType = "sedan"
+  vehicleType = "bao-bao"
 ) {
   const pricing = await this.find({
     $or: [

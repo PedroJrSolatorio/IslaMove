@@ -1,6 +1,7 @@
 import Pricing from "../models/Pricing.js";
 import DiscountConfig from "../models/DiscountConfig.js";
 import Zone from "../models/Zone.js";
+import User from "../models/User.js";
 
 export const createPricing = async (req, res) => {
   try {
@@ -143,7 +144,14 @@ export const getAllPricing = async (req, res) => {
 // Get pricing for specific route with hierarchy consideration and discounts
 export const getPricingForRoute = async (req, res) => {
   try {
-    const { fromZone, toZone, passengerCategory = "regular" } = req.query;
+    const {
+      fromZone,
+      toZone,
+      distance, // This will be used for future distance-based pricing
+      passengerId,
+      passengerCategory = "regular",
+      passengerAge,
+    } = req.query;
 
     if (!fromZone || !toZone) {
       return res.status(400).json({
@@ -152,6 +160,7 @@ export const getPricingForRoute = async (req, res) => {
       });
     }
 
+    // Get base pricing rule with hierarchy
     const pricing = await Pricing.findPricingWithHierarchy(
       fromZone,
       toZone,
@@ -167,9 +176,96 @@ export const getPricingForRoute = async (req, res) => {
       });
     }
 
+    // Get discount configuration
+    const discountConfig = await DiscountConfig.findOne({ isActive: true });
+
+    let finalPassengerCategory = passengerCategory;
+    let passengerAgeToUse = null;
+
+    // Get passenger details if passengerId is provided
+    if (passengerId) {
+      try {
+        const passenger = await User.findById(passengerId).select(
+          "age passengerCategory"
+        );
+        if (passenger) {
+          finalPassengerCategory =
+            passenger.passengerCategory || passengerCategory;
+          passengerAgeToUse = passenger.age;
+        }
+      } catch (error) {
+        console.warn("Could not fetch passenger info:", error.message);
+      }
+    } else if (passengerAge) {
+      passengerAgeToUse = parseInt(passengerAge);
+    }
+
+    // Calculate discount
+    let discountRate = 0;
+    let appliedDiscountType = finalPassengerCategory;
+
+    if (discountConfig) {
+      if (passengerAgeToUse !== null) {
+        discountRate = discountConfig.getDiscountForPassenger(
+          finalPassengerCategory,
+          passengerAgeToUse
+        );
+
+        // Check if student child discount was applied
+        if (
+          finalPassengerCategory === "student" &&
+          passengerAgeToUse <=
+            (discountConfig.ageBasedRules?.studentChildMaxAge || 12)
+        ) {
+          appliedDiscountType = "student_child";
+        }
+      } else {
+        discountRate = discountConfig.getDiscountValue(finalPassengerCategory);
+      }
+    }
+
+    // Calculate final amounts
+    const baseAmount = pricing.baseAmount || pricing.amount || 0;
+    const discountAmount = baseAmount * (discountRate / 100);
+    const finalAmount = Math.max(0, baseAmount - discountAmount);
+
+    // Note: distance parameter is available for future distance-based pricing calculations
+    // Implement distance-based adjustments here if needed
+
+    // Prepare response data
+    const responseData = {
+      _id: pricing._id,
+      fromZone: pricing.fromZone,
+      toZone: pricing.toZone,
+      baseAmount: baseAmount,
+      amount: finalAmount, // Keep for backward compatibility
+      finalAmount: Math.round(finalAmount * 100) / 100,
+      originalAmount: baseAmount,
+      pricingType: pricing.pricingType,
+      description: pricing.description,
+      priority: pricing.priority,
+      vehicleType: pricing.vehicleType,
+      isActive: pricing.isActive,
+
+      // Discount information
+      discount: {
+        rate: discountRate,
+        amount: Math.round(discountAmount * 100) / 100,
+        type: appliedDiscountType,
+        ageBasedDiscount: appliedDiscountType === "student_child",
+      },
+
+      // Passenger information
+      passenger: {
+        category: finalPassengerCategory,
+        age: passengerAgeToUse,
+        appliedDiscountType: appliedDiscountType,
+      },
+    };
+
     res.json({
       success: true,
-      data: pricing,
+      data: responseData,
     });
   } catch (error) {
     console.error("Error fetching pricing for route:", error);

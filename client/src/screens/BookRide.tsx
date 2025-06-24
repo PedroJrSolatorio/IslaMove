@@ -44,14 +44,25 @@ interface FareInfo {
   _id: string;
   fromZone: Zone;
   toZone: Zone;
-  amount: number;
+  baseAmount: number;
+  finalAmount: number;
+  originalAmount: number;
   pricingType: string;
   description?: string;
   priority: number;
-  pricePerKm: number;
-  surgeMultiplier: number;
   vehicleType: string;
   isActive: boolean;
+  discount: {
+    rate: number;
+    amount: number;
+    type: string;
+    ageBasedDiscount: boolean;
+  };
+  passenger: {
+    category: string;
+    age: number | null;
+    appliedDiscountType: string;
+  };
 }
 
 // Interface for Zone data
@@ -202,16 +213,49 @@ const BookRide = () => {
           },
         });
 
-        if (zoneResponse.data) {
-          setToZone(zoneResponse.data);
+        console.log('Zone response for map selection:', zoneResponse.data);
+
+        let destinationZone = null;
+
+        // FIX: Check if the response has the expected structure
+        if (
+          zoneResponse.data &&
+          zoneResponse.data.success &&
+          zoneResponse.data.data
+        ) {
+          destinationZone = zoneResponse.data.data;
+        } else if (zoneResponse.data && zoneResponse.data._id) {
+          // If the API returns the zone object directly
+          destinationZone = zoneResponse.data;
         } else {
+          console.error(
+            'Unexpected zone response structure:',
+            zoneResponse.data,
+          );
           Alert.alert(
             'Zone Not Found',
             'Service is not available in this destination area',
           );
+          setShowDestinationConfirmation(false);
+          setTempSelectedLocation(null);
+          return;
         }
+
+        // Set the zone first
+        setToZone(destinationZone);
+
+        // Calculate route if current location exists
+        if (currentLocation) {
+          await calculateRoute(currentLocation, tempSelectedLocation);
+        }
+
+        // The fetchFareEstimate will be triggered by the useEffect when toZone is set
       } catch (error) {
         console.error('Error getting zone info:', error);
+        Alert.alert(
+          'Error',
+          'Failed to get zone information for selected location',
+        );
       }
 
       setShowDestinationConfirmation(false);
@@ -223,54 +267,69 @@ const BookRide = () => {
     }
   };
 
-  const calculateFinalFare = (
-    baseFare: number,
-    passengerCategory: string,
-    age: number,
-  ): number => {
-    let discount = 0;
+  const calculateRoute = async (pickup: Location, dest: Location) => {
+    try {
+      // Calculate route using Google Directions API or your preferred service
+      const response = await api.get('/api/google/directions', {
+        params: {
+          origin: `${pickup.coordinates[1]},${pickup.coordinates[0]}`,
+          destination: `${dest.coordinates[1]},${dest.coordinates[0]}`,
+        },
+      });
 
-    // 50% discount for children 12 and below
-    if (age <= 12) {
-      discount = 0.5;
-    }
-    // 20% discount for students and seniors
-    else if (
-      passengerCategory === 'student' ||
-      passengerCategory === 'senior'
-    ) {
-      discount = 0.2;
-    }
+      if (
+        response.data &&
+        response.data.routes &&
+        response.data.routes.length > 0
+      ) {
+        const route = response.data.routes[0];
+        const leg = route.legs[0];
 
-    return baseFare * (1 - discount);
+        // Set distance and duration
+        setEstimatedDistance(leg.distance.value / 1000); // Convert to km
+        setEstimatedDuration(Math.ceil(leg.duration.value / 60)); // Convert to minutes
+
+        // Decode polyline for route display
+        if (route.overview_polyline?.points) {
+          const decodedCoords = decode(route.overview_polyline.points);
+          const routeCoords = decodedCoords.map(([lat, lng]) => ({
+            latitude: lat,
+            longitude: lng,
+          }));
+          setRouteCoordinates(routeCoords);
+        }
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+    }
   };
 
-  const getDiscountLabel = (passengerCategory: string, age: number): string => {
-    if (age <= 12) {
+  const getDiscountLabel = (
+    discountType: string,
+    ageBasedDiscount: boolean,
+  ): string => {
+    if (ageBasedDiscount && discountType === 'student_child') {
       return 'Child Discount (50% off)';
-    } else if (passengerCategory === 'student') {
+    } else if (discountType === 'student') {
       return 'Student Discount (20% off)';
-    } else if (passengerCategory === 'senior') {
+    } else if (discountType === 'senior') {
       return 'Senior Citizen Discount (20% off)';
     }
     return 'Regular Fare';
   };
 
-  const getFareCalculationData = () => {
-    const baseFare = fareEstimate?.amount || 0;
-    const passengerAge = passengerProfile?.age || 0;
-    const category = passengerProfile?.passengerCategory || 'regular';
-    const finalFare = calculateFinalFare(baseFare, category, passengerAge);
-    const discountLabel = getDiscountLabel(category, passengerAge);
-
-    return {
-      baseFare,
-      passengerAge,
-      category,
-      finalFare,
-      discountLabel,
-      discountApplied: baseFare - finalFare,
-    };
+  const getPassengerTypeLabel = (
+    discountType: string,
+    ageBasedDiscount: boolean,
+  ): string => {
+    if (ageBasedDiscount && discountType === 'student_child') {
+      return 'Child';
+    } else if (discountType === 'student') {
+      return 'Student';
+    } else if (discountType === 'senior') {
+      return 'Senior Citizen';
+    }
+    return 'Regular';
   };
 
   // Getting user's current location
@@ -313,8 +372,31 @@ const BookRide = () => {
               params: {longitude, latitude},
             });
 
-            if (zoneResponse.data) {
+            console.log(
+              'Zone response for current location:',
+              zoneResponse.data,
+            );
+
+            // Check if the response has the expected structure
+            if (
+              zoneResponse.data &&
+              zoneResponse.data.success &&
+              zoneResponse.data.data
+            ) {
+              // If the API returns {success: true, data: {zone object}}
+              setFromZone(zoneResponse.data.data);
+            } else if (zoneResponse.data && zoneResponse.data._id) {
+              // If the API returns the zone object directly
               setFromZone(zoneResponse.data);
+            } else {
+              console.error(
+                'Unexpected zone response structure:',
+                zoneResponse.data,
+              );
+              Alert.alert(
+                'Zone Not Found',
+                'Service is not available in your current location area',
+              );
             }
 
             setLoading(false);
@@ -406,6 +488,21 @@ const BookRide = () => {
       SocketService.off('ride_status_update');
     };
   }, [userToken, currentRideId, rideStatus]);
+
+  useEffect(() => {
+    if (fromZone && toZone) {
+      // Add a small delay to ensure state is stable
+      const timeoutId = setTimeout(() => {
+        if (estimatedDistance > 0) {
+          fetchFareEstimate(estimatedDistance);
+        } else {
+          fetchFareEstimate();
+        }
+      }, 100); // 100ms delay
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [fromZone, toZone, estimatedDistance]);
 
   // Handle map region changes based on selected locations
   useEffect(() => {
@@ -515,23 +612,82 @@ const BookRide = () => {
     }
   };
 
-  // Fetch fare estimate based on zones and distance
-  const fetchFareEstimate = async (distance: number) => {
-    if (!fromZone || !toZone) return;
+  const validateZoneData = (zone: Zone | null, zoneName: string): boolean => {
+    if (!zone) {
+      console.error(`${zoneName} is null`);
+      return false;
+    }
+
+    if (!zone._id) {
+      console.error(`${zoneName} has no _id:`, zone);
+      return false;
+    }
+
+    // Basic MongoDB ObjectId format check (24 hex characters)
+    const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+    if (!objectIdRegex.test(zone._id)) {
+      console.error(`${zoneName} has invalid _id format:`, zone._id);
+      return false;
+    }
+
+    return true;
+  };
+
+  // Fetch fare estimate based on zones
+  const fetchFareEstimate = async (distance?: number) => {
+    if (!passengerProfile) {
+      console.error('No passenger profile available');
+      return;
+    }
+
+    if (!fromZone || !toZone) {
+      console.log('Zones not yet available, skipping fare estimation');
+      return;
+    }
+
+    // Validate zones only when we're sure they should be available
+    if (
+      !validateZoneData(fromZone, 'fromZone') ||
+      !validateZoneData(toZone, 'toZone')
+    ) {
+      Alert.alert(
+        'Error',
+        'Invalid zone data. Please try selecting locations again.',
+      );
+      return;
+    }
 
     try {
-      const response = await api.get('/api/pricing/getPricingForRoute', {
-        params: {fromZone: fromZone._id, toZone: toZone._id, distance},
-      });
+      // Prepare request parameters
+      const params: any = {
+        fromZone: fromZone._id,
+        toZone: toZone._id,
+        passengerId: passengerProfile._id,
+        passengerCategory: passengerProfile.passengerCategory,
+        passengerAge: passengerProfile.age,
+      };
+
+      if (distance && distance > 0) {
+        params.distance = distance;
+      }
+
+      console.log('Fetching fare with params:', params); // Debug log
+
+      const response = await api.get('/api/pricing/route', {params});
+
+      console.log('Fare response:', response.data); // Debug log
 
       if (response.data.success && response.data.data) {
-        // Store the pricing data returned from the API
         setFareEstimate(response.data.data);
       } else {
         Alert.alert('Error', 'No pricing information available for this route');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching fare estimate:', error);
+      if (error.response) {
+        console.error('Error response:', error.response.data);
+        console.error('Error status:', error.response.status);
+      }
       Alert.alert('Error', 'Failed to calculate fare estimate');
     }
   };
@@ -549,28 +705,74 @@ const BookRide = () => {
         },
       });
 
-      if (zoneResponse.data) {
-        setToZone(zoneResponse.data);
+      console.log('Zone response for destination:', zoneResponse.data);
+      let destinationZone = null;
+
+      // Check if the response has the expected structure
+      if (
+        zoneResponse.data &&
+        zoneResponse.data.success &&
+        zoneResponse.data.data
+      ) {
+        destinationZone = zoneResponse.data.data;
+      } else if (zoneResponse.data && zoneResponse.data._id) {
+        // If the API returns the zone object directly
+        destinationZone = zoneResponse.data;
       } else {
+        console.error('Unexpected zone response structure:', zoneResponse.data);
         Alert.alert(
           'Zone Not Found',
           'Service is not available in this destination area',
         );
+        setShowLocationModal(false);
+        return; // Don't proceed if no valid zone
       }
+
+      // Set the zone
+      setToZone(destinationZone);
     } catch (error) {
       console.error('Error getting zone info:', error);
+      Alert.alert('Error', 'Failed to get zone information');
     }
 
     setShowLocationModal(false);
 
-    if (currentLocation && destination) {
+    if (currentLocation && location) {
       setRideStatus('selecting_location');
     }
   };
 
+  // cleanup effect to prevent multiple calls
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    // Debounce the fare estimation calls
+    if (fromZone && toZone) {
+      timeoutId = setTimeout(() => {
+        if (estimatedDistance > 0) {
+          fetchFareEstimate(estimatedDistance);
+        } else {
+          fetchFareEstimate();
+        }
+      }, 300); // 300ms debounce
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [fromZone?._id, toZone?._id, estimatedDistance]);
+
   // Request a ride
   const requestRide = async () => {
-    if (!currentLocation || !destination || !fromZone || !toZone) {
+    if (
+      !currentLocation ||
+      !destination ||
+      !fromZone ||
+      !toZone ||
+      !fareEstimate
+    ) {
       Alert.alert(
         'Error',
         'Please select both pickup and destination locations',
@@ -581,8 +783,6 @@ const BookRide = () => {
     setRideStatus('searching_driver');
 
     try {
-      const fareData = getFareCalculationData();
-
       const rideData = {
         pickupLocation: currentLocation,
         destinationLocation: destination,
@@ -590,11 +790,13 @@ const BookRide = () => {
         toZone: toZone._id,
         estimatedDistance,
         estimatedDuration,
-        passengerType: fareData.category,
-        price: fareData.finalFare,
-        baseFare: fareData.baseFare,
-        discountApplied: fareData.discountApplied,
-        passengerAge: fareData.passengerAge,
+        passengerType: fareEstimate.passenger.category,
+        price: fareEstimate.finalAmount,
+        baseFare: fareEstimate.baseAmount,
+        discountApplied: fareEstimate.discount.amount,
+        discountRate: fareEstimate.discount.rate,
+        discountType: fareEstimate.discount.type,
+        passengerAge: fareEstimate.passenger.age,
       };
 
       const response = await api.post(`/api/rides/request`, rideData);
@@ -726,7 +928,16 @@ const BookRide = () => {
         );
 
       case 'confirming_booking':
-        const fareData = getFareCalculationData();
+        if (!fareEstimate) {
+          return (
+            <Card style={styles.confirmBookingCard}>
+              <Card.Content>
+                <ActivityIndicator animating={true} />
+                <Text>Calculating fare...</Text>
+              </Card.Content>
+            </Card>
+          );
+        }
 
         return (
           <Card style={styles.confirmBookingCard}>
@@ -778,20 +989,22 @@ const BookRide = () => {
                     <View style={styles.fareRow}>
                       <Text style={styles.fareLabel}>Base Fare:</Text>
                       <Text style={styles.fareAmount}>
-                        ₱{fareData.baseFare.toFixed(2)}
+                        ₱{fareEstimate.baseAmount.toFixed(2)}
                       </Text>
                     </View>
 
-                    {(fareData.category === 'student' ||
-                      fareData.category === 'senior' ||
-                      fareData.passengerAge <= 12) && (
+                    {fareEstimate.discount.rate > 0 && (
                       <>
                         <View style={styles.fareRow}>
                           <Text style={styles.discountLabel}>
-                            {fareData.discountLabel}:
+                            {getDiscountLabel(
+                              fareEstimate.discount.type,
+                              fareEstimate.discount.ageBasedDiscount,
+                            )}
+                            :
                           </Text>
                           <Text style={styles.discountAmount}>
-                            -₱{fareData.discountApplied.toFixed(2)}
+                            -₱{fareEstimate.discount.amount.toFixed(2)}
                           </Text>
                         </View>
                         <Divider style={styles.fareDivider} />
@@ -801,7 +1014,7 @@ const BookRide = () => {
                     <View style={styles.fareRow}>
                       <Text style={styles.totalFareLabel}>Total Fare:</Text>
                       <Text style={styles.totalFareAmount}>
-                        ₱{fareData.finalFare.toFixed(2)}
+                        ₱{fareEstimate.finalAmount.toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -809,11 +1022,11 @@ const BookRide = () => {
                   <View style={styles.passengerTypeInfo}>
                     <Icon
                       name={
-                        fareData.passengerAge <= 12
+                        fareEstimate.discount.ageBasedDiscount
                           ? 'account-child'
-                          : fareData.category === 'student'
+                          : fareEstimate.passenger.category === 'student'
                           ? 'school'
-                          : fareData.category === 'senior'
+                          : fareEstimate.passenger.category === 'senior'
                           ? 'account-supervisor'
                           : 'account'
                       }
@@ -821,13 +1034,10 @@ const BookRide = () => {
                       color="#3498db"
                     />
                     <Text style={styles.passengerTypeText}>
-                      {fareData.passengerAge <= 12
-                        ? 'Child'
-                        : fareData.category === 'student'
-                        ? 'Student'
-                        : fareData.category === 'senior'
-                        ? 'Senior Citizen'
-                        : 'Regular'}{' '}
+                      {getPassengerTypeLabel(
+                        fareEstimate.discount.type,
+                        fareEstimate.discount.ageBasedDiscount,
+                      )}{' '}
                       Passenger
                     </Text>
                   </View>
