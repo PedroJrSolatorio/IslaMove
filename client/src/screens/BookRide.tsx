@@ -144,6 +144,7 @@ const BookRide = () => {
     useState(false);
   const [tempSelectedLocation, setTempSelectedLocation] =
     useState<Location | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -451,6 +452,11 @@ const BookRide = () => {
           if (data.rideId === currentRideId) {
             switch (data.status) {
               case 'accepted':
+                // Clear the search timeout since driver was found
+                if (searchTimeoutRef.current) {
+                  clearTimeout(searchTimeoutRef.current);
+                  searchTimeoutRef.current = null;
+                }
                 setRideStatus('driver_found');
                 setAssignedDriver(data.driver);
                 break;
@@ -532,6 +538,11 @@ const BookRide = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Clear search timeout on component unmount
+      if (searchTimeoutRef.current) {
+        console.log('Clearing search timeout on unmount');
+        clearTimeout(searchTimeoutRef.current);
+      }
       // Disconnect the socket service when component unmounts
       SocketService.disconnect();
     };
@@ -782,6 +793,11 @@ const BookRide = () => {
 
     setRideStatus('searching_driver');
 
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+
     try {
       const rideData = {
         pickupLocation: currentLocation,
@@ -804,19 +820,41 @@ const BookRide = () => {
       setCurrentRideId(response.data._id);
 
       // Set timeout for driver search (can be cancelled by socket event)
-      const searchTimeout = setTimeout(() => {
-        if (rideStatus === 'searching_driver') {
-          Alert.alert(
-            'No Drivers Available',
-            'No drivers accepted your ride request. Please try again later.',
-          );
-          setRideStatus('idle');
-        }
-      }, 60000); // 1 minute timeout
+      searchTimeoutRef.current = setTimeout(() => {
+        console.log('Search timeout triggered');
+        console.log('Current ride status at timeout:', rideStatus);
 
-      return () => clearTimeout(searchTimeout);
+        // Set timeout for driver search
+        setRideStatus(currentStatus => {
+          console.log('Status check in timeout:', currentStatus);
+          if (currentStatus === 'searching_driver') {
+            console.log('No driver found - showing alert and resetting');
+            Alert.alert(
+              'No Drivers Available',
+              'No drivers accepted your ride request. Please try again later.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    resetRide();
+                  },
+                },
+              ],
+            );
+            return 'idle';
+          }
+          return currentStatus;
+        });
+
+        searchTimeoutRef.current = null;
+      }, 60000); // 1 minute timeout
     } catch (error) {
       console.error('Error requesting ride:', error);
+      // Clear timeout on error
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
       Alert.alert('Error', 'Failed to request ride. Please try again.');
       setRideStatus('confirming_booking');
     }
@@ -839,6 +877,7 @@ const BookRide = () => {
   // Reset ride state
   const resetRide = () => {
     setDestination(null);
+    setToZone(null);
     setRideStatus('idle');
     setFareEstimate(null);
     setRouteCoordinates([]);
@@ -846,11 +885,63 @@ const BookRide = () => {
     setEstimatedDuration(0);
     setAssignedDriver(null);
     setCurrentRideId(null);
+    setDriverEta(0);
+    setTempSelectedLocation(null);
+    setShowDestinationConfirmation(false);
   };
 
   // Cancel ride
   const cancelRide = async () => {
-    if (!currentRideId) return;
+    // Clear the search timeout if it exists
+    if (searchTimeoutRef.current) {
+      console.log('Clearing search timeout');
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+
+    // If we're just searching for a driver, we can cancel immediately
+    if (rideStatus === 'searching_driver') {
+      console.log('Cancelling during driver search');
+
+      Alert.alert('Cancel Ride', 'Are you sure you want to cancel this ride?', [
+        {text: 'No', style: 'cancel'},
+        {
+          text: 'Yes',
+          onPress: async () => {
+            try {
+              // If we have a ride ID, try to cancel it on the server
+              if (currentRideId) {
+                console.log('Making cancel request for ride:', currentRideId);
+
+                const response = await api.post(
+                  `/api/rides/${currentRideId}/cancel`,
+                  {
+                    reason: 'Cancelled by passenger',
+                  },
+                );
+
+                console.log('Cancel response:', response.data);
+              }
+              resetRide();
+              Alert.alert('Success', 'Ride cancelled successfully');
+            } catch (error) {
+              console.error('Error canceling ride:', error);
+              resetRide();
+              Alert.alert(
+                'Warning',
+                'Ride cancelled locally. There may have been an issue with the server.',
+              );
+            }
+          },
+        },
+      ]);
+      return;
+    }
+
+    if (!currentRideId) {
+      console.log('No currentRideId found'); // Add this line
+      return;
+    }
 
     Alert.alert('Cancel Ride', 'Are you sure you want to cancel this ride?', [
       {text: 'No', style: 'cancel'},
@@ -858,11 +949,14 @@ const BookRide = () => {
         text: 'Yes',
         onPress: async () => {
           try {
-            await api.post(`/api/rides/${currentRideId}/cancel`, {
-              reason: 'Cancelled by passenger',
-            });
-
+            const response = await api.post(
+              `/api/rides/${currentRideId}/cancel`,
+              {
+                reason: 'Cancelled by passenger',
+              },
+            );
             resetRide();
+            Alert.alert('Success', 'Ride cancelled successfully');
           } catch (error) {
             console.error('Error canceling ride:', error);
             Alert.alert('Error', 'Failed to cancel ride. Please try again.');

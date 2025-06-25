@@ -17,6 +17,70 @@ export const updateRide = async (req, res) => {
   }
 };
 
+// Cancel a ride
+export const cancelRide = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const userId = req.user.id;
+
+    // Find the ride and check if it exists
+    const ride = await Ride.findById(id);
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        message: "Ride not found",
+      });
+    }
+
+    // Check if the user is authorized to cancel this ride
+    const isPassenger = ride.passenger.toString() === userId;
+    const isDriver = ride.driver && ride.driver.toString() === userId;
+
+    if (!isPassenger && !isDriver) {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to cancel this ride",
+      });
+    }
+
+    // Check if ride can be cancelled
+    if (ride.status === "completed" || ride.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: `Ride is already ${ride.status}`,
+      });
+    }
+
+    // Update ride with cancellation details
+    const updatedRide = await Ride.findByIdAndUpdate(
+      id,
+      {
+        status: "cancelled",
+        cancellationReason: reason || "No reason provided",
+        cancellationInitiator: isPassenger ? "passenger" : "driver",
+        cancellationTime: new Date(),
+      },
+      { new: true }
+    )
+      .populate("fromZone", "name")
+      .populate("toZone", "name");
+
+    res.json({
+      success: true,
+      message: "Ride cancelled successfully",
+      data: updatedRide,
+    });
+  } catch (error) {
+    console.error("Cancel ride error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error cancelling ride",
+      error: error.message,
+    });
+  }
+};
+
 // Delete a ride
 export const deleteRide = async (req, res) => {
   try {
