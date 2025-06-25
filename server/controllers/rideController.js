@@ -29,95 +29,72 @@ export const deleteRide = async (req, res) => {
 
 export const createRideRequest = async (req, res) => {
   try {
-    const { pickupLocation, destinationLocation, vehicleType, paymentMethod } =
-      req.body;
+    const {
+      pickupLocation,
+      destinationLocation,
+      fromZone,
+      toZone,
+      estimatedDistance,
+      estimatedDuration,
+      price,
+      baseFare,
+      discountApplied,
+      discountRate,
+      discountType,
+      passengerType,
+      passengerAge,
+      paymentMethod = "cash", // default payment method
+    } = req.body;
+
     const passengerId = req.user.id;
 
-    // Find zones for pickup and destination
-    const pickupZone = await Zone.findOne({
-      coordinates: {
-        $geoIntersects: {
-          $geometry: {
-            type: "Point",
-            coordinates: pickupLocation.coordinates,
-          },
-        },
-      },
-    });
-
-    const destinationZone = await Zone.findOne({
-      coordinates: {
-        $geoIntersects: {
-          $geometry: {
-            type: "Point",
-            coordinates: destinationLocation.coordinates,
-          },
-        },
-      },
-    });
-
-    if (!pickupZone || !destinationZone) {
-      return res
-        .status(400)
-        .json({ message: "Service not available in this area" });
-    }
-
-    // Get route details using Google Maps API
-    const route = await axios.get(
-      "https://maps.googleapis.com/maps/api/directions/json",
-      {
-        params: {
-          origin: `${pickupLocation.coordinates[1]},${pickupLocation.coordinates[0]}`,
-          destination: `${destinationLocation.coordinates[1]},${destinationLocation.coordinates[0]}`,
-          key: process.env.GOOGLE_MAPS_API_KEY,
-        },
-      }
-    );
-
-    if (!route.data.routes.length) {
-      return res.status(400).json({ message: "Could not calculate route" });
-    }
-
-    const leg = route.data.routes[0].legs[0];
-    const distanceInKm = leg.distance.value / 1000;
-    const durationInMinutes = Math.ceil(leg.duration.value / 60);
-
-    // Calculate fare based on zones and distance
-    let finalPrice;
-
-    // First, check if there's a fixed fare rule for these zones
-    const fareRule = await Fare.findOne({
-      sourceZone: pickupZone.name,
-      destinationZone: destinationZone.name,
-      isActive: true,
-    });
-
-    if (fareRule) {
-      if (fareRule.isFixedFare) {
-        // Use fixed fare amount
-        finalPrice = fareRule.fixedFare;
-      } else {
-        // Use distance-based calculation from the fare rule
-        finalPrice = fareRule.baseFare + distanceInKm * fareRule.perKmRate;
-      }
-    } else {
-      // Fallback to pricing model if no fare rule exists
-      const pricing = await Pricing.findOne({
-        fromZone: pickupZone._id,
-        toZone: destinationZone._id,
-        vehicleType,
-        isActive: true,
+    // Validate required fields
+    if (!pickupLocation || !destinationLocation || !fromZone || !toZone) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required location or zone information",
       });
+    }
 
-      if (!pricing) {
-        return res
-          .status(404)
-          .json({ message: "Pricing not available for this route" });
+    // Verify zones exist
+    const pickupZoneExists = await Zone.findById(fromZone);
+    const destinationZoneExists = await Zone.findById(toZone);
+
+    if (!pickupZoneExists || !destinationZoneExists) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid zone information",
+      });
+    }
+
+    // If no route details provided, calculate them
+    let finalDistance = estimatedDistance;
+    let finalDuration = estimatedDuration;
+    let routePath = null;
+
+    if (!estimatedDistance || !estimatedDuration) {
+      try {
+        const route = await axios.get(
+          "https://maps.googleapis.com/maps/api/directions/json",
+          {
+            params: {
+              origin: `${pickupLocation.coordinates[1]},${pickupLocation.coordinates[0]}`,
+              destination: `${destinationLocation.coordinates[1]},${destinationLocation.coordinates[0]}`,
+              key: process.env.GOOGLE_MAPS_API_KEY,
+            },
+          }
+        );
+
+        if (route.data.routes && route.data.routes.length > 0) {
+          const leg = route.data.routes[0].legs[0];
+          finalDistance = leg.distance.value / 1000; // Convert to km
+          finalDuration = Math.ceil(leg.duration.value / 60); // Convert to minutes
+          routePath = route.data.routes[0].overview_polyline.points;
+        }
+      } catch (error) {
+        console.error("Error calculating route:", error);
+        // Continue with provided values or defaults
       }
-
-      // Calculate using pricing model
-      const fare = pricing.basePrice + pricing.pricePerKm * distanceInKm;
-      finalPrice = Math.ceil(fare * pricing.surgeMultiplier);
     }
 
     // Create new ride
@@ -125,29 +102,43 @@ export const createRideRequest = async (req, res) => {
       passenger: passengerId,
       pickupLocation,
       destinationLocation,
-      fromZone: pickupZone._id,
-      toZone: destinationZone._id,
-      estimatedDistance: distanceInKm,
-      estimatedDuration: durationInMinutes,
-      price: Math.ceil(finalPrice), // Round up to nearest whole number
+      fromZone,
+      toZone,
+      estimatedDistance: finalDistance,
+      estimatedDuration: finalDuration,
+      price: Math.ceil(price), // Round up to nearest whole number
       status: "requested",
       paymentMethod,
-      routePath: route.data.routes[0].overview_polyline.points,
-      vehicleType,
+      routePath: routePath ? [routePath] : [],
+      // Store additional pricing information for reference
+      pricingDetails: {
+        baseFare,
+        discountApplied,
+        discountRate,
+        discountType,
+        passengerType,
+        passengerAge,
+      },
     });
 
     await newRide.save();
 
+    // Populate zone information for response
+    const populatedRide = await Ride.findById(newRide._id)
+      .populate("fromZone", "name")
+      .populate("toZone", "name");
+
     res.status(201).json({
       success: true,
-      data: {
-        ...newRide.toObject(),
-        fromZoneName: pickupZone.name,
-        toZoneName: destinationZone.name,
-      },
+      message: "Ride request created successfully",
+      data: populatedRide,
     });
   } catch (error) {
     console.error("Create ride error:", error);
-    res.status(500).json({ message: "Failed to create ride request" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to create ride request",
+      error: error.message,
+    });
   }
 };

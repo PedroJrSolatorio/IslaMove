@@ -78,6 +78,19 @@ const rideSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    pricingDetails: {
+      baseFare: Number,
+      discountApplied: Number,
+      discountRate: Number,
+      discountType: String,
+      passengerType: String,
+      passengerAge: Number,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ["cash"],
+      default: "cash",
+    },
     requestTime: {
       type: Date,
       default: Date.now,
@@ -121,7 +134,7 @@ const rideSchema = new mongoose.Schema(
       type: Date,
     },
     routePath: {
-      type: [locationSchema], // Array of coordinates representing the route
+      type: [String], // Array of encoded polyline strings
     },
     driverLocationUpdates: {
       type: [
@@ -135,6 +148,10 @@ const rideSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Index for geospatial queries
+rideSchema.index({ pickupLocation: "2dsphere" });
+rideSchema.index({ destinationLocation: "2dsphere" });
 
 const Ride = mongoose.model("Ride", rideSchema);
 
