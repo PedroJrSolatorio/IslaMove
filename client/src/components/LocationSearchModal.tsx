@@ -403,7 +403,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           )}
           style={styles.chooseOnMapButton}
           onPress={handleChooseOnMap}>
-          Choose on Map
+          Tap on the Map
         </Button>
       </View>
     </Modal>

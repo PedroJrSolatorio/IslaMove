@@ -471,12 +471,26 @@ const BookRide = () => {
                 setShowRatingModal(true);
                 break;
               case 'cancelled':
-                setRideStatus('idle');
+                // Show alert with options when driver cancels
                 Alert.alert(
                   'Ride Cancelled',
-                  data.reason || 'The ride has been cancelled',
+                  data.reason || 'The driver has cancelled the ride',
+                  [
+                    {
+                      text: 'Find Another Driver',
+                      onPress: () => {
+                        resetRideKeepDestination(); // Preserve destination for rebooking
+                      },
+                    },
+                    {
+                      text: 'Change Destination',
+                      onPress: () => {
+                        resetRide(); // Full reset if user wants to change destination
+                      },
+                      style: 'cancel',
+                    },
+                  ],
                 );
-                resetRide();
                 break;
             }
           }
@@ -828,20 +842,29 @@ const BookRide = () => {
         setRideStatus(currentStatus => {
           console.log('Status check in timeout:', currentStatus);
           if (currentStatus === 'searching_driver') {
-            console.log('No driver found - showing alert and resetting');
+            console.log(
+              'No driver found - showing alert and preserving destination',
+            );
             Alert.alert(
               'No Drivers Available',
-              'No drivers accepted your ride request. Please try again later.',
+              'No drivers accepted your ride request. You can try booking again or select a different destination.',
               [
                 {
-                  text: 'OK',
+                  text: 'Try Again',
                   onPress: () => {
-                    resetRide();
+                    resetRideKeepDestination(); // Use the new function that preserves destination
                   },
+                },
+                {
+                  text: 'Change Destination',
+                  onPress: () => {
+                    resetRide(); // Use full reset if user wants to change destination
+                  },
+                  style: 'cancel',
                 },
               ],
             );
-            return 'idle';
+            return 'confirming_booking'; // Go back to confirmation screen
           }
           return currentStatus;
         });
@@ -857,6 +880,22 @@ const BookRide = () => {
       }
       Alert.alert('Error', 'Failed to request ride. Please try again.');
       setRideStatus('confirming_booking');
+    }
+  };
+
+  const resetRideKeepDestination = () => {
+    // Keep destination, toZone, and related route information. Only reset ride-specific states
+    setRideStatus('confirming_booking');
+    setFareEstimate(null); // Will be recalculated below
+    setAssignedDriver(null);
+    setCurrentRideId(null);
+    setDriverEta(0);
+    setTempSelectedLocation(null);
+    setShowDestinationConfirmation(false);
+
+    // Recalculate fare estimate since we're keeping the zones
+    if (fromZone && toZone && estimatedDistance > 0) {
+      fetchFareEstimate(estimatedDistance);
     }
   };
 
@@ -899,39 +938,22 @@ const BookRide = () => {
       searchTimeoutRef.current = null;
     }
 
-    // If we're just searching for a driver, we can cancel immediately
+    // If we're just searching for a driver, offer to preserve destination
     if (rideStatus === 'searching_driver') {
       console.log('Cancelling during driver search');
 
-      Alert.alert('Cancel Ride', 'Are you sure you want to cancel this ride?', [
-        {text: 'No', style: 'cancel'},
+      Alert.alert('Cancel Ride', 'What would you like to do?', [
+        {text: 'Keep Searching', style: 'cancel'},
         {
-          text: 'Yes',
-          onPress: async () => {
-            try {
-              // If we have a ride ID, try to cancel it on the server
-              if (currentRideId) {
-                console.log('Making cancel request for ride:', currentRideId);
-
-                const response = await api.post(
-                  `/api/rides/${currentRideId}/cancel`,
-                  {
-                    reason: 'Cancelled by passenger',
-                  },
-                );
-
-                console.log('Cancel response:', response.data);
-              }
-              resetRide();
-              Alert.alert('Success', 'Ride cancelled successfully');
-            } catch (error) {
-              console.error('Error canceling ride:', error);
-              resetRide();
-              Alert.alert(
-                'Warning',
-                'Ride cancelled locally. There may have been an issue with the server.',
-              );
-            }
+          text: 'Try Again Later',
+          onPress: () => {
+            resetRideKeepDestination(); // Preserve destination
+          },
+        },
+        {
+          text: 'Change Destination',
+          onPress: () => {
+            resetRide(); // Full reset
           },
         },
       ]);
@@ -955,6 +977,7 @@ const BookRide = () => {
                 reason: 'Cancelled by passenger',
               },
             );
+            // For active rides, do full reset since the trip is completely cancelled
             resetRide();
             Alert.alert('Success', 'Ride cancelled successfully');
           } catch (error) {
