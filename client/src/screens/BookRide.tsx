@@ -805,6 +805,38 @@ const BookRide = () => {
       return;
     }
 
+    // zone validation
+    if (
+      !validateZoneData(fromZone, 'fromZone') ||
+      !validateZoneData(toZone, 'toZone')
+    ) {
+      Alert.alert(
+        'Error',
+        'Invalid zone data. Please try selecting locations again.',
+      );
+      return;
+    }
+
+    // passenger profile validation
+    if (!passengerProfile?._id) {
+      Alert.alert(
+        'Error',
+        'Passenger profile not found. Please refresh the app.',
+      );
+      return;
+    }
+
+    console.log('Requesting ride with data:', {
+      fromZone: fromZone._id,
+      toZone: toZone._id,
+      passenger: passengerProfile._id,
+      estimatedDistance,
+      estimatedDuration,
+      fareEstimate: fareEstimate.finalAmount,
+      baseAmount: fareEstimate.baseAmount,
+      discountAmount: fareEstimate.discount.amount,
+    });
+
     setRideStatus('searching_driver');
 
     if (searchTimeoutRef.current) {
@@ -814,24 +846,63 @@ const BookRide = () => {
 
     try {
       const rideData = {
-        pickupLocation: currentLocation,
-        destinationLocation: destination,
+        pickupLocation: {
+          type: 'Point',
+          coordinates: currentLocation.coordinates,
+          address: currentLocation.address,
+        },
+        destinationLocation: {
+          type: 'Point',
+          coordinates: destination.coordinates,
+          address: destination.address,
+        },
         fromZone: fromZone._id,
         toZone: toZone._id,
-        estimatedDistance,
-        estimatedDuration,
-        passengerType: fareEstimate.passenger.category,
+        estimatedDistance: estimatedDistance || 0,
+        estimatedDuration: estimatedDuration || 0,
         price: fareEstimate.finalAmount,
+        // Add all the pricing details that the backend expects
         baseFare: fareEstimate.baseAmount,
         discountApplied: fareEstimate.discount.amount,
         discountRate: fareEstimate.discount.rate,
         discountType: fareEstimate.discount.type,
+        passengerType: fareEstimate.passenger.category,
         passengerAge: fareEstimate.passenger.age,
+        paymentMethod: 'cash',
       };
+
+      console.log('=== FRONTEND RIDE DATA ===');
+      console.log('From Zone:', fromZone);
+      console.log('To Zone:', toZone);
+      console.log('Current Location:', currentLocation);
+      console.log('Destination:', destination);
+      console.log('Fare Estimate:', fareEstimate);
+      console.log('Final ride data:', JSON.stringify(rideData, null, 2));
+
+      // Validation before sending
+      if (!currentLocation?.coordinates || !destination?.coordinates) {
+        Alert.alert('Error', 'Invalid location coordinates');
+        return;
+      }
+
+      if (!fromZone?._id || !toZone?._id) {
+        Alert.alert('Error', 'Invalid zone information');
+        return;
+      }
+
+      if (!fareEstimate?.finalAmount) {
+        Alert.alert('Error', 'Invalid fare information');
+        return;
+      }
 
       const response = await api.post(`/api/rides/request`, rideData);
 
-      setCurrentRideId(response.data._id);
+      console.log('Ride request successful:', response.data);
+
+      // Make sure to get the ride ID from response
+      const rideId = response.data._id || response.data.data?._id;
+      console.log('Setting current ride ID:', rideId);
+      setCurrentRideId(rideId);
 
       // Set timeout for driver search (can be cancelled by socket event)
       searchTimeoutRef.current = setTimeout(() => {
@@ -871,14 +942,51 @@ const BookRide = () => {
 
         searchTimeoutRef.current = null;
       }, 60000); // 1 minute timeout
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error requesting ride:', error);
+
+      if (error.response) {
+        console.error('Error response data:', error.response.data);
+        console.error('Error response status:', error.response.status);
+
+        // Check if it's the "no drivers available" error from backend
+        if (
+          error.response.status === 400 &&
+          error.response.data?.message?.includes('No drivers available')
+        ) {
+          // Handle this gracefully - don't show error, just let timeout handle it
+          console.log(
+            'Backend says no drivers available, letting frontend timeout handle it',
+          );
+
+          // Still set the ride ID if one was created
+          const rideId = error.response.data?.rideId;
+          if (rideId) {
+            setCurrentRideId(rideId);
+          }
+
+          // Keep searching status and let timeout handle it
+          return;
+        }
+
+        // Show other error messages
+        const errorMessage =
+          error.response.data?.message ||
+          'Failed to request ride. Please try again.';
+        Alert.alert('Error', errorMessage);
+      } else if (error.request) {
+        console.error('Error request:', error.request);
+        Alert.alert('Error', 'Network error. Please check your connection.');
+      } else {
+        console.error('Error message:', error.message);
+        Alert.alert('Error', 'An unexpected error occurred.');
+      }
+
       // Clear timeout on error
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
-      Alert.alert('Error', 'Failed to request ride. Please try again.');
       setRideStatus('confirming_booking');
     }
   };
