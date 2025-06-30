@@ -775,9 +775,6 @@ const RegisterPassengerScreen = () => {
         return (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 2: Home Address</Text>
-            <Text style={styles.stepInstructions}>
-              This will be used as your default pickup location.
-            </Text>
             <TextInput
               style={styles.input}
               placeholder="Street Address"

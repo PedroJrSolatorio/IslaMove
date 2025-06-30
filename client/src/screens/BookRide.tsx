@@ -557,8 +557,8 @@ const BookRide = () => {
         console.log('Clearing search timeout on unmount');
         clearTimeout(searchTimeoutRef.current);
       }
-      // Disconnect the socket service when component unmounts
-      SocketService.disconnect();
+      // // Disconnect the socket service when component unmounts
+      // SocketService.disconnect();
     };
   }, []);
 

@@ -55,7 +55,6 @@ const userSchema = new mongoose.Schema(
       zipCode: { type: String },
       coordinates: {
         type: [Number], // [longitude, latitude]
-        index: "2dsphere",
       },
     },
 

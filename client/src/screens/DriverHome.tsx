@@ -105,6 +105,21 @@ const DriverHome = () => {
   const [routeCoordinates, setRouteCoordinates] = useState<{
     [key: string]: any[];
   }>({});
+  const [socketConnected, setSocketConnected] = useState(false);
+
+  const driverStatusRef = useRef(driverStatus);
+  const activeRidesRef = useRef(activeRides);
+  const requestTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    driverStatusRef.current = driverStatus;
+  }, [driverStatus]);
+  useEffect(() => {
+    activeRidesRef.current = activeRides;
+  }, [activeRides]);
+  useEffect(() => {
+    requestTimerRef.current = requestTimer;
+  }, [requestTimer]);
 
   // Constants
   const MAX_PASSENGERS = 5;
@@ -169,6 +184,38 @@ const DriverHome = () => {
     });
   };
 
+  // Verify authentication and profile access
+  useEffect(() => {
+    const verifyAuth = async () => {
+      if (!userToken) {
+        console.error('No userToken available');
+        Alert.alert('Authentication Error', 'Please log in again to continue.');
+        logout();
+        return;
+      }
+
+      console.log('Token available:', userToken.substring(0, 20) + '...');
+
+      // First check if we have profile data from context
+      if (profileData) {
+        console.log('Profile data available from context:', {
+          id: profileData._id,
+          name: profileData.firstName + ' ' + profileData.lastName,
+          role: profileData.role,
+          // driverStatus: profileData.driverStatus
+        });
+        return;
+      }
+
+      // If no profile data, check if it's being loaded
+      console.log(
+        'No profile data available from context - may still be loading',
+      );
+    };
+
+    verifyAuth();
+  }, [userToken, profileData]);
+
   // Initialize location and socket
   useEffect(() => {
     const initializeDriver = async () => {
@@ -188,8 +235,19 @@ const DriverHome = () => {
 
         // Setup socket connection
         if (userToken) {
+          console.log(
+            'Connecting with token:',
+            userToken.substring(0, 20) + '...',
+          ); // Log first 20 chars for debugging
           await SocketService.connect(userToken);
           setupSocketListeners();
+        } else {
+          console.error('No user token available for socket connection');
+          Alert.alert(
+            'Authentication Error',
+            'Please log in again to continue.',
+          );
+          return;
         }
 
         setLoading(false);
@@ -214,11 +272,38 @@ const DriverHome = () => {
 
   // Setup socket event listeners
   const setupSocketListeners = () => {
+    SocketService.on('connect', () => {
+      console.log('Socket connected successfully');
+      setSocketConnected(true);
+    });
+
+    SocketService.on('disconnect', () => {
+      console.log('Socket disconnected');
+      setSocketConnected(false);
+    });
+
+    SocketService.on('error', (error: any) => {
+      console.error('Socket error:', error);
+      Alert.alert(
+        'Connection Error',
+        'Failed to connect to server. Please check your internet connection.',
+      );
+    });
+
     SocketService.on('ride_request', (request: RideRequest) => {
-      if (driverStatus === 'available' && activeRides.length < MAX_PASSENGERS) {
+      console.log('Received new ride request:', request);
+      if (
+        driverStatusRef.current === 'available' &&
+        activeRidesRef.current.length < MAX_PASSENGERS
+      ) {
         setPendingRequest(request);
         setShowRequestModal(true);
         setRequestTimeRemaining(REQUEST_TIMEOUT);
+
+        // Clear any existing timer
+        if (requestTimerRef.current) {
+          clearTimeout(requestTimerRef.current);
+        }
 
         // Start countdown timer
         const timer = setInterval(() => {
@@ -233,6 +318,13 @@ const DriverHome = () => {
         }, 1000);
 
         setRequestTimer(timer);
+        requestTimerRef.current = timer;
+      } else {
+        console.log('Driver not available for new rides:', {
+          driverStatus: driverStatusRef.current,
+          activeRidesCount: activeRidesRef.current.length,
+          maxPassengers: MAX_PASSENGERS,
+        });
       }
     });
 
@@ -253,6 +345,25 @@ const DriverHome = () => {
         setSelectedRideForRating(completedRide);
         setShowRatingModal(true);
         setActiveRides(prev => prev.filter(ride => ride._id !== data.rideId));
+      }
+    });
+
+    // Add listener for ride acceptance confirmation
+    SocketService.on('ride_accept_confirmed', (data: {rideId: string}) => {
+      console.log('Ride acceptance confirmed:', data);
+      // Handle successful ride acceptance
+    });
+
+    // Add listener for when ride is taken by another driver
+    SocketService.on('ride_taken', (data: {rideId: string}) => {
+      console.log('Ride taken by another driver:', data);
+      // Clear any pending request if it matches
+      if (pendingRequest?._id === data.rideId) {
+        setPendingRequest(null);
+        setShowRequestModal(false);
+        if (requestTimer) {
+          clearTimeout(requestTimer);
+        }
       }
     });
   };
@@ -292,7 +403,11 @@ const DriverHome = () => {
       }
 
       try {
-        await api.post('/api/drivers/status', {status: 'offline'});
+        await api.post('/api/drivers/status', {
+          status: 'offline',
+          isOnline: false,
+          isAvailable: false,
+        });
         setDriverStatus('offline');
         stopLocationUpdates();
         Alert.alert('Status Updated', 'You are now offline.');
@@ -362,6 +477,9 @@ const DriverHome = () => {
         clearTimeout(requestTimer);
         setRequestTimer(null);
       }
+
+      // Update driver status to busy
+      setDriverStatus('busy');
 
       // Calculate route to pickup location
       calculateRoute(
@@ -455,6 +573,16 @@ const DriverHome = () => {
             'Ride Completed',
             'Ride has been completed successfully!',
           );
+          // Check if there are more active rides, if not set status to available
+          const remainingRides = activeRides.filter(r => r._id !== rideId);
+          if (remainingRides.length === 0) {
+            setDriverStatus('available');
+            // Update server status
+            await api.post('/api/drivers/status', {
+              driverStatus: 'available',
+              isAvailable: true,
+            });
+          }
           break;
       }
     } catch (error) {
@@ -816,7 +944,7 @@ const DriverHome = () => {
           selectedRideForRating
             ? getFullName(selectedRideForRating.passenger)
             : 'passenger'
-        } // Changed from driverName
+        }
       />
     </View>
   );

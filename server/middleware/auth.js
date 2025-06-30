@@ -4,7 +4,7 @@ import User from "../models/User.js";
 export const auth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log("🔑 Auth Header:", authHeader);
+    // console.log("🔑 Auth Header:", authHeader);
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.error("❌ No token or incorrect format:", authHeader);
@@ -12,7 +12,7 @@ export const auth = async (req, res, next) => {
     }
 
     const token = authHeader.split(" ")[1];
-    console.log("🎫 Token:", token);
+    // console.log("🎫 Token:", token);
 
     if (!token) {
       return res.status(401).json({ message: "Authentication required" });
@@ -20,16 +20,16 @@ export const auth = async (req, res, next) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(
-      "Decoded userId:",
-      decoded.userId,
-      "Type:",
-      typeof decoded.userId
-    );
+    // console.log(
+    //   "Decoded userId:",
+    //   decoded.userId,
+    //   "Type:",
+    //   typeof decoded.userId
+    // );
 
     // Find user
     const user = await User.findById(decoded.userId).select("-password");
-    console.log("User found in auth with user info:", user);
+    // console.log("User found in auth with user info:", user);
 
     if (!user) {
       console.error(

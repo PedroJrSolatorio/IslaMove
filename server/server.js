@@ -1,12 +1,12 @@
 //use import if using ES Module. Stick with ES Modules since using React Native (modern JavaScript) and Node.js (backend)
 import express from "express";
 import { createServer } from "http";
-import { Server } from "socket.io";
 import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./config/db.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import { initializeSocket } from "./socket/socketManager.js";
 
 //use require if not using ES Module
 // const express = require("express");
@@ -17,43 +17,42 @@ import { fileURLToPath } from "url";
 dotenv.config();
 const app = express();
 
-const allowedOrigins = [process.env.CLIENT_URL, process.env.LOCAL_CLIENT_URL];
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  process.env.LOCAL_CLIENT_URL,
+].filter(Boolean);
 
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
-});
 
-// Socket.IO connection handling
-io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+const io = initializeSocket(httpServer);
+// The io variable serves as a reference in case needs it later.
 
-  // Handle joining ride room
-  socket.on("joinRide", (rideId) => {
-    socket.join(`ride_${rideId}`);
-  });
+// // Socket.IO connection handling
+// io.on("connection", (socket) => {
+//   console.log("Client connected:", socket.id);
 
-  // Handle driver location updates
-  socket.on("updateDriverLocation", (data) => {
-    io.to(`ride_${data.rideId}`).emit("driverLocationUpdated", {
-      location: data.location,
-      rideId: data.rideId,
-    });
-  });
+//   // Handle joining ride room
+//   socket.on("joinRide", (rideId) => {
+//     socket.join(`ride_${rideId}`);
+//   });
 
-  // Handle ride status updates
-  socket.on("updateRideStatus", (data) => {
-    io.to(`ride_${data.rideId}`).emit("rideStatusUpdated", data);
-  });
+//   // Handle driver location updates
+//   socket.on("updateDriverLocation", (data) => {
+//     io.to(`ride_${data.rideId}`).emit("driverLocationUpdated", {
+//       location: data.location,
+//       rideId: data.rideId,
+//     });
+//   });
 
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
-  });
-});
+//   // Handle ride status updates
+//   socket.on("updateRideStatus", (data) => {
+//     io.to(`ride_${data.rideId}`).emit("rideStatusUpdated", data);
+//   });
+
+//   socket.on("disconnect", () => {
+//     console.log("Client disconnected:", socket.id);
+//   });
+// });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,8 +70,6 @@ app.use(
   })
 );
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-
-// Use Expo Go URL (with 19000 in .env) if you want to restrict access to allow only your Expo Go device
 
 // Connect to MongoDB
 connectDB();
@@ -107,13 +104,13 @@ app.use("/api/discounts", discountRoutes);
 app.use("/api/drivers", driverRoutes);
 
 // this will log any unmatched routes so you can confirm if the route path is incorrect
-app.use((req, res, next) => {
+app.use((req, res) => {
   console.log(`🔥 Route not found: ${req.method} ${req.url}`);
-  next();
+  res.status(404).json({ error: "Route not found" });
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+app.use((err, res) => {
   console.error("Server error:", err);
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
     return res.status(400).json({ error: "Invalid JSON payload" });
