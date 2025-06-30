@@ -218,6 +218,7 @@ export const styles = StyleSheet.create({
   },
   callButton: {
     marginTop: 16,
+    marginBottom: 6,
   },
   fareDetailsCard: {
     marginTop: 10,

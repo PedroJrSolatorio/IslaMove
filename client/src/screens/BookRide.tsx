@@ -495,6 +495,23 @@ const BookRide = () => {
             }
           }
         });
+
+        SocketService.on('ride_accepted', (data: any) => {
+          // Only handle if this is the current ride
+          if (
+            data.ride &&
+            (data.ride._id === currentRideId || data.rideId === currentRideId)
+          ) {
+            // Set driver info and update status
+            setAssignedDriver(data.driver || data.ride.driver);
+            setRideStatus('driver_found');
+            // Optionally clear the search timeout
+            if (searchTimeoutRef.current) {
+              clearTimeout(searchTimeoutRef.current);
+              searchTimeoutRef.current = null;
+            }
+          }
+        });
       } catch (error) {
         console.error('Socket connection error:', error);
       }
@@ -506,6 +523,7 @@ const BookRide = () => {
     return () => {
       SocketService.off('driver_location_update');
       SocketService.off('ride_status_update');
+      SocketService.off('ride_accepted');
     };
   }, [userToken, currentRideId, rideStatus]);
 
@@ -1405,7 +1423,7 @@ const BookRide = () => {
                 </View>
               </View>
 
-              <Button
+              {/* <Button
                 mode="contained"
                 icon="phone"
                 style={styles.callButton}
@@ -1413,7 +1431,7 @@ const BookRide = () => {
                   // Implement call functionality
                 }}>
                 Call Driver
-              </Button>
+              </Button> */}
 
               {rideStatus !== 'in_progress' && (
                 <Button
@@ -1468,38 +1486,55 @@ const BookRide = () => {
               }
             : undefined
         }>
-        {currentLocation && (
-          <Marker
-            coordinate={{
-              latitude: currentLocation.coordinates[1],
-              longitude: currentLocation.coordinates[0],
-            }}
-            title="Pickup"
-            pinColor="#3498db"
-          />
-        )}
+        {currentLocation &&
+          Array.isArray(currentLocation.coordinates) &&
+          currentLocation.coordinates.length === 2 && (
+            <Marker
+              coordinate={{
+                latitude: currentLocation.coordinates[1],
+                longitude: currentLocation.coordinates[0],
+              }}
+              title="Pickup"
+              pinColor="#3498db"
+            />
+          )}
 
-        {destination && (
-          <Marker
-            coordinate={{
-              latitude: destination.coordinates[1],
-              longitude: destination.coordinates[0],
-            }}
-            title="Destination"
-            pinColor="#e74c3c"
-          />
-        )}
+        {destination &&
+          Array.isArray(destination.coordinates) &&
+          destination.coordinates.length === 2 && (
+            <Marker
+              coordinate={{
+                latitude: destination.coordinates[1],
+                longitude: destination.coordinates[0],
+              }}
+              title="Destination"
+              pinColor="#e74c3c"
+            />
+          )}
 
-        {assignedDriver && rideStatus !== 'completed' && (
-          <Marker
-            coordinate={{
-              latitude: assignedDriver.currentLocation.coordinates[1],
-              longitude: assignedDriver.currentLocation.coordinates[0],
-            }}
-            title={`Driver: ${assignedDriver.fullName}`}>
-            <Icon name="car" size={30} color="#27ae60" />
-          </Marker>
-        )}
+        {assignedDriver &&
+          assignedDriver.currentLocation &&
+          Array.isArray(assignedDriver.currentLocation.coordinates) &&
+          assignedDriver.currentLocation.coordinates.length === 2 &&
+          rideStatus !== 'completed' && (
+            <Marker
+              coordinate={{
+                latitude: assignedDriver.currentLocation.coordinates[1],
+                longitude: assignedDriver.currentLocation.coordinates[0],
+              }}
+              title={`Driver: ${assignedDriver.fullName}`}>
+              <Icon
+                name="car"
+                size={30}
+                color="#00e676"
+                style={{
+                  textShadowColor: '#000',
+                  textShadowOffset: {width: 1, height: 1},
+                  textShadowRadius: 2,
+                }}
+              />
+            </Marker>
+          )}
 
         {routeCoordinates.length > 0 && (
           <Polyline

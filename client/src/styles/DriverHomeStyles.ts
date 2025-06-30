@@ -148,11 +148,13 @@ export const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   requestModal: {
     margin: 20,
     elevation: 5,
     borderRadius: 15,
+    width: '100%',
   },
   requestHeader: {
     flexDirection: 'row',

@@ -150,6 +150,7 @@ export const acceptRide = async (req, res) => {
         phoneNumber: driver.phoneNumber,
         rating: driver.rating,
         vehicle: driver.vehicle,
+        currentLocation: driver.currentLocation,
       },
     });
 
