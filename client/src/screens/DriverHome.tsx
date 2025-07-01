@@ -1,9 +1,8 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   Text,
   Alert,
-  TouchableOpacity,
   ScrollView,
   Modal,
   ActivityIndicator,
@@ -28,9 +27,11 @@ import {useAuth} from '../context/AuthContext';
 import {useProfile} from '../context/ProfileContext';
 import SocketService from '../services/SocketService';
 import {GlobalStyles} from '../styles/GlobalStyles';
+import {TabsStyles} from '../styles/TabsStyles';
 import api from '../../utils/api';
 import DriverRatingModal from '../components/DriverRatingModal';
 import {styles} from '../styles/DriverHomeStyles';
+import {useFocusEffect} from '@react-navigation/native';
 
 // Driver status type
 type DriverStatus = 'offline' | 'available' | 'busy';
@@ -82,9 +83,10 @@ interface RideRequest {
 }
 
 const DriverHome = () => {
-  const {logout, userToken} = useAuth();
+  const {logout, userToken, userRole} = useAuth();
   const {profileData} = useProfile();
   const mapRef = useRef<MapView | null>(null);
+  const [mapKey, setMapKey] = useState(0);
 
   // States
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('offline');
@@ -105,7 +107,6 @@ const DriverHome = () => {
   const [routeCoordinates, setRouteCoordinates] = useState<{
     [key: string]: any[];
   }>({});
-  const [socketConnected, setSocketConnected] = useState(false);
 
   const driverStatusRef = useRef(driverStatus);
   const activeRidesRef = useRef(activeRides);
@@ -270,16 +271,21 @@ const DriverHome = () => {
     };
   }, [userToken]);
 
+  useFocusEffect(
+    useCallback(() => {
+      // Force MapView to re-mount
+      setMapKey(prev => prev + 1);
+    }, []),
+  );
+
   // Setup socket event listeners
   const setupSocketListeners = () => {
+    // can just remove these lines for connect and disconnect, but it can also be used if want to show a connection indicator in UI
     SocketService.on('connect', () => {
       console.log('Socket connected successfully');
-      setSocketConnected(true);
     });
-
     SocketService.on('disconnect', () => {
       console.log('Socket disconnected');
-      setSocketConnected(false);
     });
 
     SocketService.on('error', (error: any) => {
@@ -795,32 +801,29 @@ const DriverHome = () => {
     return (
       <View style={GlobalStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#3498db" />
-        <Text style={styles.loadingText}>Setting up driver mode...</Text>
+        <Text style={styles.loadingText}>Loading profile...</Text>
       </View>
     );
   }
 
+  if (!userToken || userRole !== 'driver') {
+    logout();
+    return null;
+  }
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Driver Dashboard</Text>
-          <Text style={styles.headerSubtitle}>
-            {profileData
-              ? `${profileData.firstName} ${profileData.lastName}`
-              : 'Driver'}
-          </Text>
-        </View>
-        <TouchableOpacity onPress={logout} style={styles.logoutButton}>
-          <Icon name="logout" size={24} color="white" />
-        </TouchableOpacity>
+    <>
+      <View style={GlobalStyles.header}>
+        <Text style={GlobalStyles.headerTitle}>
+          Welcome back, {profileData?.firstName?.split(' ')[0] || 'Passenger'}!
+        </Text>
+        <View style={{height: 46}} />
       </View>
 
       {/* Status Card */}
-      <Card style={styles.statusCard}>
+      <Card style={TabsStyles.rideCard}>
         <Card.Content>
-          <View style={styles.statusRow}>
+          <View style={TabsStyles.rideCardRow}>
             <View>
               <Title>Driver Status</Title>
               <Text style={styles.statusText}>
@@ -852,10 +855,11 @@ const DriverHome = () => {
       {currentLocation && (
         <View style={styles.mapContainer}>
           <MapView
+            key={mapKey}
             ref={mapRef}
             provider={PROVIDER_GOOGLE}
             style={styles.map}
-            initialRegion={{
+            region={{
               latitude: currentLocation.coordinates[1],
               longitude: currentLocation.coordinates[0],
               latitudeDelta: 0.01,
@@ -946,7 +950,7 @@ const DriverHome = () => {
             : 'passenger'
         }
       />
-    </View>
+    </>
   );
 };
 

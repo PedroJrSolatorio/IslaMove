@@ -26,7 +26,6 @@ const PassengerHome = () => {
 
   // Use this effect just once when component mounts
   React.useEffect(() => {
-    // If profile data is already loaded, don't show loading indicator
     if (profileData && profileData._id) {
       setInitialLoad(false);
     }
@@ -94,18 +93,20 @@ const PassengerHome = () => {
         <View style={{height: 46}} />
       </View>
       <ScrollView style={GlobalStyles.container}>
-        <Card style={TabsStyles.bookRideCard}>
-          <Card.Content>
-            <Title>Book a Ride</Title>
-            <Paragraph>Where are you going today?</Paragraph>
-          </Card.Content>
-          <Card.Actions>
-            <Button
-              mode="contained"
-              onPress={() => navigation.navigate('BookRide' as never)}>
-              Book Now
-            </Button>
-          </Card.Actions>
+        <Card style={TabsStyles.rideCard}>
+          <View style={[TabsStyles.rideCardRow, {paddingVertical: 16}]}>
+            <Card.Content>
+              <Title>Book a Ride</Title>
+              <Paragraph>Where are you going?</Paragraph>
+            </Card.Content>
+            <Card.Actions>
+              <Button
+                mode="contained"
+                onPress={() => navigation.navigate('BookRide' as never)}>
+                Book Now
+              </Button>
+            </Card.Actions>
+          </View>
         </Card>
 
         <Card style={TabsStyles.recentRidesCard}>

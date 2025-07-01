@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useState} from 'react';
 import {
   View,
   ScrollView,
@@ -17,7 +17,6 @@ import {
   List,
   IconButton,
   Portal,
-  Modal,
   Dialog,
   Chip,
 } from 'react-native-paper';
@@ -30,7 +29,6 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isDriverProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {RootStackParamList} from '../navigation/types';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 

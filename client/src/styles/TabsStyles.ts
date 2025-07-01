@@ -123,9 +123,14 @@ export const TabsStyles = StyleSheet.create({
   helpButton: {
     marginBottom: 32,
   },
-  bookRideCard: {
+  rideCard: {
     margin: 16,
     elevation: 4,
+  },
+  rideCardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   resultsCard: {
     marginTop: 8,
@@ -301,7 +306,7 @@ export const TabsStyles = StyleSheet.create({
     backgroundColor: '#3498db',
   },
   editButtonText: {
-    color: '#3498db', // or use your theme color
+    color: '#3498db', // or use theme color
     fontSize: 16,
     fontWeight: 'bold',
   },
