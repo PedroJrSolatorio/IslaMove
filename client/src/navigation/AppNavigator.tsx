@@ -3,6 +3,7 @@ import AdminTabs from '../navigation/AdminTabs';
 import DriverTabs from './DriverTabs';
 import PassengerTabs from '../navigation/PassengerTabs';
 import BookRide from '../screens/BookRide';
+import RideHistory from '../screens/RideHistory';
 import MapLocationPicker from '../components/MapLocationPicker';
 import {useAuth} from '../context/AuthContext';
 
@@ -34,6 +35,7 @@ const AppNavigator = () => {
               presentation: 'modal',
             }}
           />
+          <Stack.Screen name="RideHistory" component={RideHistory} />
         </>
       )}
     </Stack.Navigator>

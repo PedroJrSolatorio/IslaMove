@@ -543,6 +543,59 @@ export const ratePassenger = async (req, res) => {
   }
 };
 
+export const getRecentRides = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const rides = await Ride.find({ passenger: userId })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("fromZone", "name")
+      .populate("toZone", "name")
+      .populate("driver", "firstName lastName profileImage")
+      .exec();
+
+    res.json({ success: true, rides });
+  } catch (error) {
+    console.error("Error fetching recent rides:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch recent rides" });
+  }
+};
+
+export const getRideHistory = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { page = 1, limit = 10, status } = req.query;
+    const query = { passenger: userId };
+    if (status) query.status = status;
+
+    const rides = await Ride.find(query)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .populate("fromZone", "name")
+      .populate("toZone", "name")
+      .populate("driver", "firstName lastName profileImage")
+      .exec();
+
+    const total = await Ride.countDocuments(query);
+
+    res.json({
+      success: true,
+      rides,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / limit),
+    });
+  } catch (error) {
+    console.error("Error fetching ride history:", error);
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch ride history" });
+  }
+};
+
 export const createRideRequest = async (req, res) => {
   console.log("=== RIDE REQUEST DEBUG ===");
   console.log("Request body:", JSON.stringify(req.body, null, 2));

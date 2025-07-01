@@ -14,6 +14,7 @@ import {TabsStyles} from '../styles/TabsStyles';
 import {useAuth} from '../context/AuthContext'; // this or {AuthContext} will work
 // import {AuthContext} from '../context/AuthContext';
 import {useProfile} from '../context/ProfileContext';
+import api from '../../utils/api';
 
 let backPressCount = 0;
 
@@ -23,6 +24,8 @@ const PassengerHome = () => {
   // const {userToken, userRole, logout} = useContext(AuthContext);
   const {profileData, refreshProfile} = useProfile();
   const [initialLoad, setInitialLoad] = useState(true);
+  const [recentRides, setRecentRides] = useState<any[]>([]);
+  const [ridesLoading, setRidesLoading] = useState(true);
 
   // Use this effect just once when component mounts
   React.useEffect(() => {
@@ -42,6 +45,24 @@ const PassengerHome = () => {
         setInitialLoad(false);
       }
       return () => {};
+    }, []),
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const fetchRecentRides = async () => {
+        setRidesLoading(true);
+        try {
+          const res = await api.get('/api/rides/recent');
+          if (res.data.success) {
+            setRecentRides(res.data.rides);
+          }
+        } catch (err) {
+          console.error('Failed to fetch recent rides:', err);
+        }
+        setRidesLoading(false);
+      };
+      fetchRecentRides();
     }, []),
   );
 
@@ -112,36 +133,32 @@ const PassengerHome = () => {
         <Card style={TabsStyles.recentRidesCard}>
           <Card.Content>
             <Title>Recent Rides</Title>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Downtown Mall
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 12, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$12.50</Text>
-            </View>
-
-            <View style={TabsStyles.recentRideItem}>
-              <Avatar.Icon
-                size={30}
-                icon="car"
-                style={TabsStyles.recentRideIcon}
-              />
-              <View style={TabsStyles.recentRideDetails}>
-                <Text style={TabsStyles.recentRideDestination}>
-                  Airport Terminal B
-                </Text>
-                <Text style={TabsStyles.recentRideDate}>March 10, 2025</Text>
-              </View>
-              <Text style={TabsStyles.recentRidePrice}>$34.75</Text>
-            </View>
+            {ridesLoading ? (
+              <ActivityIndicator size="small" color="#6200ee" />
+            ) : recentRides.length === 0 ? (
+              <Text>No recent rides found.</Text>
+            ) : (
+              recentRides.map(ride => (
+                <View key={ride._id} style={TabsStyles.recentRideItem}>
+                  <Avatar.Icon
+                    size={30}
+                    icon="car"
+                    style={TabsStyles.recentRideIcon}
+                  />
+                  <View style={TabsStyles.recentRideDetails}>
+                    <Text style={TabsStyles.recentRideDestination}>
+                      {ride.toZone?.name ||
+                        ride.destinationLocation?.address ||
+                        'Destination'}
+                    </Text>
+                    <Text style={TabsStyles.recentRideDate}>
+                      {new Date(ride.createdAt).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <Text style={TabsStyles.recentRidePrice}>₱{ride.price}</Text>
+                </View>
+              ))
+            )}
           </Card.Content>
           <Card.Actions>
             <Button onPress={() => navigation.navigate('RideHistory' as never)}>

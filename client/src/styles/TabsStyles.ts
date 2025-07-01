@@ -175,6 +175,8 @@ export const TabsStyles = StyleSheet.create({
   recentRideDetails: {
     flex: 1,
     marginLeft: 12,
+    justifyContent: 'center',
+    minWidth: 100,
   },
   recentRideDestination: {
     fontWeight: 'bold',

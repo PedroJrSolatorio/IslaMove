@@ -6,12 +6,16 @@ import {
   cancelRide,
   acceptRide,
   ratePassenger,
+  getRecentRides,
+  getRideHistory,
 } from "../controllers/rideController.js";
 import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
 // Passenger routes
+router.get("/recent", auth, getRecentRides);
+router.get("/history", auth, getRideHistory);
 router.post("/request", auth, createRideRequest);
 router.post("/:id/cancel", auth, cancelRide);
 
