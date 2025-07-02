@@ -142,7 +142,12 @@ export const initializeSocket = (server) => {
       if (socket.userRole === "driver") {
         try {
           // Validate location data
-          if (!data.location || !data.location.lat || !data.location.lng) {
+          if (
+            !data.location ||
+            (!data.location.lat && !data.location.coordinates) ||
+            (!data.location.lng && !data.location.coordinates)
+          ) {
+            console.error("Invalid location data received:", data.location);
             socket.emit("error", { message: "Invalid location data" });
             return;
           }
@@ -151,12 +156,26 @@ export const initializeSocket = (server) => {
           //   return;
           // }
 
+          let coordinates;
+
+          // Handle both coordinate formats
+          if (data.location.coordinates) {
+            // GeoJSON format [lng, lat]
+            coordinates = data.location.coordinates;
+          } else if (data.location.lat && data.location.lng) {
+            // Lat/Lng format
+            coordinates = [data.location.lng, data.location.lat];
+          } else {
+            console.error("Location data missing coordinates:", data.location);
+            socket.emit("error", { message: "Invalid location coordinates" });
+            return;
+          }
+
           // Update driver location in database
           await User.findByIdAndUpdate(socket.userId, {
             currentLocation: {
               type: "Point",
-              coordinates: [data.location.lng, data.location.lat],
-              // coordinates: data.location.coordinates,
+              coordinates: coordinates,
             },
             lastLocationUpdate: new Date(),
           });
@@ -164,7 +183,10 @@ export const initializeSocket = (server) => {
           // Update in-memory driver data
           const driver = activeDrivers.get(socket.userId);
           if (driver) {
-            driver.location = data.location;
+            driver.location = {
+              lat: coordinates[1],
+              lng: coordinates[0],
+            };
             activeDrivers.set(socket.userId, driver);
           }
 
@@ -172,7 +194,10 @@ export const initializeSocket = (server) => {
           if (data.rideId) {
             socket.to(`ride_${data.rideId}`).emit("driver_location_updated", {
               driverId: socket.userId,
-              location: data.location,
+              location: {
+                lat: coordinates[1],
+                lng: coordinates[0],
+              },
               rideId: data.rideId,
               timestamp: new Date(),
             });
@@ -181,7 +206,10 @@ export const initializeSocket = (server) => {
           // Notify admin/dispatch about driver location
           socket.to("admin").emit("driver_location_broadcast", {
             driverId: socket.userId,
-            location: data.location,
+            location: {
+              lat: coordinates[1],
+              lng: coordinates[0],
+            },
             timestamp: new Date(),
           });
         } catch (error) {

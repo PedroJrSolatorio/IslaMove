@@ -155,6 +155,7 @@ const DriverHome = () => {
           try {
             const response = await api.get('/api/google/geocode', {
               params: {latlng: `${latitude},${longitude}`},
+              timeout: 10000,
             });
 
             const address =
@@ -169,6 +170,7 @@ const DriverHome = () => {
             resolve(location);
           } catch (error) {
             console.error('Error getting address:', error);
+            // Still resolve with coordinates even if geocoding fails
             resolve({
               type: 'Point',
               coordinates: [longitude, latitude],
@@ -432,15 +434,37 @@ const DriverHome = () => {
         setCurrentLocation(location);
 
         // Send location update to server
-        await api.post('/api/drivers/location', {location});
+        try {
+          await api.post(
+            '/api/drivers/location',
+            {
+              location: {
+                type: 'Point',
+                coordinates: location.coordinates,
+                address: location.address,
+              },
+            },
+            {
+              timeout: 8000, // 8 second timeout
+            },
+          );
+        } catch (locationError) {
+          console.error('Failed to update location on server:', locationError);
+          // Don't throw - just log the error and continue
+        }
 
         // Update location for active rides
         activeRides.forEach(ride => {
-          SocketService.emit('driver_location_update', {
-            rideId: ride._id,
-            location: location,
-            driverId: profileData?._id,
-          });
+          if (SocketService.isConnected()) {
+            SocketService.emit('driver_location_update', {
+              rideId: ride._id,
+              location: {
+                lat: location.coordinates[1],
+                lng: location.coordinates[0],
+              },
+              driverId: profileData?._id,
+            });
+          }
         });
       } catch (error) {
         console.error('Error updating location:', error);
@@ -570,14 +594,37 @@ const DriverHome = () => {
   // Update ride status
   const updateRideStatus = async (rideId: string, status: RideStatus) => {
     try {
-      await api.put(`/api/rides/${rideId}`, {status});
+      console.log(`Updating ride ${rideId} to status: ${status}`);
+      // First emit via socket for real-time updates
+      if (SocketService.isConnected()) {
+        SocketService.emit('ride_status_update', {
+          rideId,
+          status,
+          driverId: profileData?._id,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Then update via API
+      const response = await api.put(
+        `/api/rides/${rideId}`,
+        {
+          status,
+          updatedAt: new Date().toISOString(),
+          ...(status === 'completed' && {
+            completedAt: new Date().toISOString(),
+          }),
+        },
+        {
+          timeout: 10000, // 10 second timeout
+        },
+      );
+
+      console.log('Ride status update response:', response.data);
 
       setActiveRides(prev =>
         prev.map(ride => (ride._id === rideId ? {...ride, status} : ride)),
       );
-
-      // Emit status update via socket
-      SocketService.emit('ride_status_update', {rideId, status});
 
       // Handle different status updates
       switch (status) {
@@ -604,16 +651,38 @@ const DriverHome = () => {
           if (remainingRides.length < MAX_PASSENGERS) {
             setDriverStatus('available');
             // Update server status
-            await api.post('/api/drivers/status', {
-              driverStatus: 'available',
-              isAvailable: true,
-            });
+            try {
+              await api.post(
+                '/api/drivers/status',
+                {
+                  status: 'available',
+                  isAvailable: true,
+                },
+                {
+                  timeout: 8000,
+                },
+              );
+            } catch (statusError) {
+              console.error('Failed to update driver status:', statusError);
+            }
           }
           break;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating ride status:', error);
-      Alert.alert('Error', 'Failed to update ride status.');
+      // Provide more specific error messages
+      let errorMessage = 'Failed to update ride status.';
+      if (error.response?.status === 400) {
+        errorMessage =
+          'Invalid ride status update. Please check the ride details.';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Ride not found. It may have been cancelled.';
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        errorMessage =
+          'Network error. Please check your connection and try again.';
+      }
+
+      Alert.alert('Error', errorMessage);
     }
   };
 
