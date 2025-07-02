@@ -34,7 +34,7 @@ import LocationSearchModal from '../components/LocationSearchModal';
 import MapTypeSelector from '../components/MapTypeSelector';
 import DriverSearchingModal from '../components/DriverSearchingModal';
 import DriverDetailsModal from '../components/DriverDetailsModal';
-import RatingModal from '../components/RatingModal';
+import PassengerRatingModal from '../components/PassengerRatingModal';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
@@ -1028,7 +1028,10 @@ const BookRide = () => {
   // Submit rating after ride
   const submitRating = async (rating: number, feedback: string) => {
     try {
-      await api.post(`/api/rides/${currentRideId}/rate`, {rating, feedback});
+      await api.post(`/api/rides/${currentRideId}/rate-driver`, {
+        rating,
+        feedback,
+      });
 
       setShowRatingModal(false);
       resetRide();
@@ -1578,7 +1581,7 @@ const BookRide = () => {
         }
       />
 
-      <RatingModal
+      <PassengerRatingModal
         visible={showRatingModal}
         onClose={() => {
           setShowRatingModal(false);

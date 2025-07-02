@@ -3,14 +3,14 @@ import {View, StyleSheet, Modal, TouchableOpacity} from 'react-native';
 import {Text, Button, TextInput} from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-interface RatingModalProps {
+interface PassengerRatingModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (rating: number, feedback: string) => void;
-  driverName: string;
+  driverName: string; // Passenger is rating the driver
 }
 
-const RatingModal: React.FC<RatingModalProps> = ({
+const PassengerRatingModal: React.FC<PassengerRatingModalProps> = ({
   visible,
   onClose,
   onSubmit,
@@ -25,21 +25,27 @@ const RatingModal: React.FC<RatingModalProps> = ({
     setFeedback('');
   };
 
+  const handleClose = () => {
+    setRating(5);
+    setFeedback('');
+    onClose();
+  };
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent={true}
-      onRequestClose={onClose}>
+      onRequestClose={handleClose}>
       <View style={styles.modalBackground}>
         <View style={styles.modalContainer}>
           <View style={styles.header}>
-            <Text style={styles.title}>Rate your ride</Text>
-            <Icon name="check-circle" size={24} color="#27ae60" />
+            <Text style={styles.title}>Rate Your Driver</Text>
+            <Icon name="car-key" size={24} color="#27ae60" />
           </View>
 
           <Text style={styles.subtitle}>
-            How was your experience with {driverName}?
+            How was your ride with {driverName}?
           </Text>
 
           <View style={styles.starsContainer}>
@@ -57,6 +63,14 @@ const RatingModal: React.FC<RatingModalProps> = ({
             ))}
           </View>
 
+          <Text style={styles.ratingText}>
+            {rating === 1 && 'Poor'}
+            {rating === 2 && 'Fair'}
+            {rating === 3 && 'Good'}
+            {rating === 4 && 'Very Good'}
+            {rating === 5 && 'Excellent'}
+          </Text>
+
           <TextInput
             label="Additional feedback (optional)"
             value={feedback}
@@ -64,10 +78,14 @@ const RatingModal: React.FC<RatingModalProps> = ({
             style={styles.feedbackInput}
             multiline
             numberOfLines={3}
+            placeholder="How was the driver's service, driving, punctuality, etc.?"
           />
 
           <View style={styles.buttonContainer}>
-            <Button mode="outlined" onPress={onClose} style={styles.skipButton}>
+            <Button
+              mode="outlined"
+              onPress={handleClose}
+              style={styles.skipButton}>
               Skip
             </Button>
             <Button
@@ -96,6 +114,13 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
     elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   header: {
     flexDirection: 'row',
@@ -106,11 +131,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#2c3e50',
   },
   subtitle: {
     fontSize: 16,
     color: '#555',
-    marginBottom: 16,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   starsContainer: {
     flexDirection: 'row',
@@ -118,7 +145,14 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   starButton: {
-    padding: 4,
+    padding: 8,
+  },
+  ratingText: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#f39c12',
+    marginBottom: 16,
   },
   feedbackInput: {
     marginVertical: 16,
@@ -138,4 +172,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default RatingModal;
+export default PassengerRatingModal;

@@ -549,6 +549,72 @@ export const ratePassenger = async (req, res) => {
   }
 };
 
+// Rate driver (for passengers)
+export const rateDriver = async (req, res) => {
+  try {
+    const { rating, feedback } = req.body;
+    const rideId = req.params.id;
+    const passengerId = req.user.id;
+
+    // Validate rating
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+
+    // Find the ride
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ error: "Ride not found" });
+    }
+
+    // Check if the passenger is authorized to rate this ride
+    if (!ride.passenger || ride.passenger.toString() !== passengerId) {
+      return res
+        .status(403)
+        .json({ error: "Not authorized to rate this driver" });
+    }
+
+    // Check if ride is completed
+    if (ride.status !== "completed") {
+      return res.status(400).json({ error: "Can only rate completed rides" });
+    }
+
+    // Check if already rated
+    if (ride.driverRating) {
+      return res
+        .status(400)
+        .json({ error: "Driver already rated for this ride" });
+    }
+
+    // Update the ride with driver rating
+    await Ride.findByIdAndUpdate(rideId, {
+      driverRating: rating,
+      passengerFeedback: feedback || "",
+    });
+
+    // Update driver's overall rating
+    const driver = await User.findById(ride.driver);
+    if (driver) {
+      const newTotalRatings = driver.totalRatings + 1;
+      const newRating =
+        (driver.rating * driver.totalRatings + rating) / newTotalRatings;
+
+      await User.findByIdAndUpdate(ride.driver, {
+        rating: parseFloat(newRating.toFixed(1)),
+        totalRatings: newTotalRatings,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Driver rated successfully",
+    });
+  } catch (error) {
+    console.error("Error rating driver:", error);
+    res.status(500).json({ error: "Error rating driver" });
+  }
+};
+
 export const getRecentRides = async (req, res) => {
   try {
     const userId = req.user.id;

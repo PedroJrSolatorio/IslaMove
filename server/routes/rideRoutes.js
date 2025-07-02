@@ -6,6 +6,7 @@ import {
   cancelRide,
   acceptRide,
   ratePassenger,
+  rateDriver,
   getRecentRides,
   getRideHistory,
 } from "../controllers/rideController.js";
@@ -18,6 +19,7 @@ router.get("/recent", auth, getRecentRides);
 router.get("/history", auth, getRideHistory);
 router.post("/request", auth, createRideRequest);
 router.post("/:id/cancel", auth, cancelRide);
+router.post("/:id/rate-driver", auth, rateDriver);
 
 // Driver routes
 router.post("/:id/accept", auth, acceptRide);
