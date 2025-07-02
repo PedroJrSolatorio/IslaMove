@@ -472,10 +472,6 @@ const DriverHome = () => {
         `/api/rides/${pendingRequest._id}/accept`,
       );
 
-      setActiveRides(prev => [
-        ...prev,
-        {...pendingRequest, status: 'accepted'},
-      ]);
       setPendingRequest(null);
       setShowRequestModal(false);
 
@@ -486,6 +482,9 @@ const DriverHome = () => {
 
       // Only set to busy if this will reach the max passengers
       setActiveRides(prev => {
+        const alreadyExists = prev.some(r => r._id === pendingRequest!._id);
+        if (alreadyExists) return prev;
+
         const newRides = [
           ...prev,
           {...pendingRequest!, status: 'accepted' as RideStatus},
