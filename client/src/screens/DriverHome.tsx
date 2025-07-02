@@ -280,7 +280,7 @@ const DriverHome = () => {
 
   // Setup socket event listeners
   const setupSocketListeners = () => {
-    // can just remove these lines for connect and disconnect, but it can also be used if want to show a connection indicator in UI
+    // can just remove the lines for connect and disconnect, but it can also be used if want to show a connection indicator in UI
     SocketService.on('connect', () => {
       console.log('Socket connected successfully');
     });
@@ -463,6 +463,10 @@ const DriverHome = () => {
     return `${passenger.firstName} ${passenger.middleInitial}. ${passenger.lastName}`.trim();
   };
 
+  const joinRideRoom = (rideId: string) => {
+    SocketService.emit('join_ride_room', {rideId});
+  };
+
   // Accept ride request
   const handleAcceptRequest = async () => {
     if (!pendingRequest) return;
@@ -479,6 +483,9 @@ const DriverHome = () => {
         clearTimeout(requestTimer);
         setRequestTimer(null);
       }
+
+      // Join the ride room for real-time updates
+      joinRideRoom(pendingRequest._id);
 
       // Only set to busy if this will reach the max passengers
       setActiveRides(prev => {

@@ -10,7 +10,8 @@ const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 // Add rate limiting
 const googleApiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  // max: 100, // limit each IP to 100 requests per windowMs
+  max: 500, // increase for dev
   message: "Too many requests to the Google API proxy, please try again later",
 });
 

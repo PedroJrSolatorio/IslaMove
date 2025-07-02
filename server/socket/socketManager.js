@@ -1,6 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Ride from "../models/Ride.js";
 
 let io;
 
@@ -145,12 +146,17 @@ export const initializeSocket = (server) => {
             socket.emit("error", { message: "Invalid location data" });
             return;
           }
+          // if (!data.location || !data.location.coordinates) {
+          //   socket.emit("error", { message: "Invalid location data" });
+          //   return;
+          // }
 
           // Update driver location in database
           await User.findByIdAndUpdate(socket.userId, {
             currentLocation: {
               type: "Point",
               coordinates: [data.location.lng, data.location.lat],
+              // coordinates: data.location.coordinates,
             },
             lastLocationUpdate: new Date(),
           });
@@ -285,12 +291,45 @@ export const initializeSocket = (server) => {
     });
 
     // Handle ride status updates
-    socket.on("ride_status_update", (data) => {
+    socket.on("ride_status_update", async (data) => {
       try {
-        const ride = activeRides.get(data.rideId);
+        console.log(`Ride status update received:`, data);
+
+        // First check in-memory map
+        let ride = activeRides.get(data.rideId);
+
+        // If not found in memory, check database
         if (!ride) {
-          socket.emit("error", { message: "Ride not found" });
-          return;
+          try {
+            const dbRide = await Ride.findById(data.rideId)
+              .populate("passenger", "firstName lastName _id")
+              .populate("driver", "firstName lastName _id");
+
+            if (!dbRide) {
+              console.error(`Ride ${data.rideId} not found in database`);
+              socket.emit("error", { message: "Ride not found" });
+              return;
+            }
+
+            // Convert database ride to our format
+            ride = {
+              passengerId: dbRide.passenger._id.toString(),
+              driverId: dbRide.driver?._id.toString(),
+              status: dbRide.status,
+              rideId: data.rideId,
+            };
+
+            console.log(`Found ride in database:`, {
+              rideId: data.rideId,
+              passengerId: ride.passengerId,
+              driverId: ride.driverId,
+              status: ride.status,
+            });
+          } catch (dbError) {
+            console.error("Error fetching ride from database:", dbError);
+            socket.emit("error", { message: "Database error" });
+            return;
+          }
         }
 
         // Verify user is part of this ride
@@ -298,16 +337,32 @@ export const initializeSocket = (server) => {
           ride.passengerId !== socket.userId &&
           ride.driverId !== socket.userId
         ) {
+          console.error(
+            `Unauthorized update attempt by ${socket.userId} for ride ${data.rideId}`
+          );
           socket.emit("error", { message: "Unauthorized to update this ride" });
           return;
         }
 
-        // Update ride status
-        ride.status = data.status;
-        activeRides.set(data.rideId, ride);
+        // Update ride status in memory if it exists there
+        if (activeRides.has(data.rideId)) {
+          ride.status = data.status;
+          activeRides.set(data.rideId, ride);
+        }
+
+        console.log(`Broadcasting ride status update for ride ${data.rideId}`);
 
         // Broadcast status update to all ride participants
         socket.to(`ride_${data.rideId}`).emit("ride_status_updated", {
+          rideId: data.rideId,
+          status: data.status,
+          updatedBy: socket.userId,
+          timestamp: new Date(),
+          ...data,
+        });
+
+        // Also send to the user who made the update (confirmation)
+        socket.emit("ride_status_updated", {
           rideId: data.rideId,
           status: data.status,
           updatedBy: socket.userId,
@@ -327,10 +382,19 @@ export const initializeSocket = (server) => {
         if (data.status === "completed" || data.status === "cancelled") {
           activeRides.delete(data.rideId);
         }
+        console.log(
+          `Ride status update completed successfully for ride ${data.rideId}`
+        );
       } catch (error) {
         console.error("Error updating ride status:", error);
         socket.emit("error", { message: "Failed to update ride status" });
       }
+    });
+
+    // Handle joining ride room (for rides accepted via API)
+    socket.on("join_ride_room", (data) => {
+      console.log(`User ${socket.userId} joining ride room: ${data.rideId}`);
+      socket.join(`ride_${data.rideId}`);
     });
 
     // Handle ride decline from driver
