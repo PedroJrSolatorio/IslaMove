@@ -484,8 +484,19 @@ const DriverHome = () => {
         setRequestTimer(null);
       }
 
-      // Update driver status to busy
-      setDriverStatus('busy');
+      // Only set to busy if this will reach the max passengers
+      setActiveRides(prev => {
+        const newRides = [
+          ...prev,
+          {...pendingRequest!, status: 'accepted' as RideStatus},
+        ];
+        if (newRides.length >= MAX_PASSENGERS) {
+          setDriverStatus('busy');
+        } else {
+          setDriverStatus('available');
+        }
+        return newRides;
+      });
 
       // Calculate route to pickup location
       calculateRoute(
@@ -579,9 +590,12 @@ const DriverHome = () => {
             'Ride Completed',
             'Ride has been completed successfully!',
           );
-          // Check if there are more active rides, if not set status to available
+          // Remove the completed ride
           const remainingRides = activeRides.filter(r => r._id !== rideId);
-          if (remainingRides.length === 0) {
+          setActiveRides(remainingRides);
+
+          // Update driver status based on remaining rides
+          if (remainingRides.length < MAX_PASSENGERS) {
             setDriverStatus('available');
             // Update server status
             await api.post('/api/drivers/status', {

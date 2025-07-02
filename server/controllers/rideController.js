@@ -134,8 +134,14 @@ export const acceptRide = async (req, res) => {
       .populate("fromZone", "name")
       .populate("toZone", "name");
 
-    // Update driver status to busy
-    await User.findByIdAndUpdate(driverId, { driverStatus: "busy" });
+    // Count active rides after accepting one
+    const newActiveRides = await Ride.countDocuments({
+      driver: driverId,
+      status: { $in: ["accepted", "arrived", "inProgress"] },
+    });
+
+    const newStatus = newActiveRides >= 5 ? "busy" : "available";
+    await User.findByIdAndUpdate(driverId, { driverStatus: newStatus });
 
     // Notify passenger via socket
     const io = getIO();
