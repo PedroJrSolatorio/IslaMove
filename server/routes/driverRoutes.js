@@ -55,6 +55,27 @@ router.post("/status", auth, ensureDriver, async (req, res) => {
   }
 });
 
+router.post("/increment-totalRides", auth, ensureDriver, async (req, res) => {
+  try {
+    const driverId = req.user.id;
+    const driver = await User.findByIdAndUpdate(
+      driverId,
+      { $inc: { totalRides: 1 } },
+      { new: true }
+    );
+    if (!driver) {
+      return res.status(404).json({ message: "Driver not found" });
+    }
+    res.json({
+      message: "totalRides incremented",
+      totalRides: driver.totalRides,
+    });
+  } catch (error) {
+    console.error("Error incrementing totalRides:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // Update driver location
 router.post("/location", auth, ensureDriver, async (req, res) => {
   try {

@@ -103,7 +103,7 @@ const DriverHome = () => {
   const [locationUpdateInterval, setLocationUpdateInterval] =
     useState<NodeJS.Timeout | null>(null);
   const [requestTimer, setRequestTimer] = useState<NodeJS.Timeout | null>(null);
-  const [requestTimeRemaining, setRequestTimeRemaining] = useState(30);
+  const [requestTimeRemaining, setRequestTimeRemaining] = useState(20);
   const [routeCoordinates, setRouteCoordinates] = useState<{
     [key: string]: any[];
   }>({});
@@ -124,7 +124,7 @@ const DriverHome = () => {
 
   // Constants
   const MAX_PASSENGERS = 5;
-  const REQUEST_TIMEOUT = 30; // seconds
+  const REQUEST_TIMEOUT = 20; // seconds
 
   // Request location permissions
   const requestLocationPermission = async () => {
@@ -644,8 +644,15 @@ const DriverHome = () => {
             'Ride has been completed successfully!',
           );
           // Remove the completed ride
+          const completedRide = activeRides.find(r => r._id === rideId);
           const remainingRides = activeRides.filter(r => r._id !== rideId);
           setActiveRides(remainingRides);
+
+          // Show rating modal for the completed ride
+          if (completedRide) {
+            setSelectedRideForRating(completedRide);
+            setShowRatingModal(true);
+          }
 
           // Update driver status based on remaining rides
           if (remainingRides.length < MAX_PASSENGERS) {
@@ -665,6 +672,12 @@ const DriverHome = () => {
             } catch (statusError) {
               console.error('Failed to update driver status:', statusError);
             }
+          }
+          // Update totalRides on the backend
+          try {
+            await api.post('/api/drivers/increment-totalRides');
+          } catch (err) {
+            console.error('Failed to increment totalRides:', err);
           }
           break;
       }

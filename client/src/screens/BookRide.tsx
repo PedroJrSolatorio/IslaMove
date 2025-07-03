@@ -8,6 +8,7 @@ import {
   PermissionsAndroid,
   Pressable,
   Modal,
+  Vibration,
 } from 'react-native';
 import {
   Text,
@@ -38,6 +39,10 @@ import PassengerRatingModal from '../components/PassengerRatingModal';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
+import Sound from 'react-native-sound';
+
+// Initialize Sound, enable playback in silence mode
+Sound.setCategory('Playback');
 
 // Interface for fare types
 interface FareInfo {
@@ -145,6 +150,9 @@ const BookRide = () => {
   const [tempSelectedLocation, setTempSelectedLocation] =
     useState<Location | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [canCancel, setCanCancel] = useState(true);
+  const [notifiedArrival, setNotifiedArrival] = useState(false);
+  const cancelWindowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -579,6 +587,78 @@ const BookRide = () => {
       // SocketService.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (rideStatus === 'driver_found') {
+      setCanCancel(true);
+      // Clear any previous timeout
+      if (cancelWindowTimeoutRef.current) {
+        clearTimeout(cancelWindowTimeoutRef.current);
+      }
+      // Start 20-second timer
+      cancelWindowTimeoutRef.current = setTimeout(() => {
+        setCanCancel(false);
+        Alert.alert('Notice', 'You can no longer cancel the ride.');
+      }, 20000);
+    } else {
+      // Reset cancel ability when not in driver_found status
+      setCanCancel(true);
+      if (cancelWindowTimeoutRef.current) {
+        clearTimeout(cancelWindowTimeoutRef.current);
+        cancelWindowTimeoutRef.current = null;
+      }
+    }
+    // Cleanup on unmount or status change
+    return () => {
+      if (cancelWindowTimeoutRef.current) {
+        clearTimeout(cancelWindowTimeoutRef.current);
+        cancelWindowTimeoutRef.current = null;
+      }
+    };
+  }, [rideStatus]);
+
+  useEffect(() => {
+    if (
+      rideStatus === 'driver_found' &&
+      driverEta !== null &&
+      driverEta * 60 <= 20 && // driverEta is in minutes, so multiply by 60 for seconds
+      !notifiedArrival
+    ) {
+      setNotifiedArrival(true);
+
+      // Vibrate
+      Vibration.vibrate(1000);
+
+      // Play sound - Updated approach
+      const playDing = () => {
+        const ding = new Sound('ding.mp3', Sound.MAIN_BUNDLE, error => {
+          if (error) {
+            console.log('Failed to load the sound', error);
+            return;
+          }
+
+          ding.play(success => {
+            if (success) {
+              console.log('Successfully finished playing');
+            } else {
+              console.log('Playback failed due to audio decoding errors');
+            }
+            ding.release();
+          });
+        });
+      };
+
+      Alert.alert('Driver is arriving!', 'Driver will arrive in 20 seconds!');
+    }
+    // Reset notification if ETA increases again (e.g., driver stuck in traffic)
+    if (
+      rideStatus === 'driver_found' &&
+      driverEta * 60 > 20 &&
+      notifiedArrival
+    ) {
+      setNotifiedArrival(false);
+    }
+  }, [driverEta, rideStatus, notifiedArrival]);
 
   // Fetch route details between two points
   const fetchRouteDetails = async () => {
@@ -1372,7 +1452,15 @@ const BookRide = () => {
                       <Text style={styles.rideStatusTitle}>
                         Driver is on the way
                       </Text>
-                      <Text>Arriving in {driverEta} minutes</Text>
+                      <Text>
+                        Arriving in {Math.floor(driverEta)} min{' '}
+                        {Math.round((driverEta % 1) * 60)} sec
+                      </Text>
+                      {!canCancel && (
+                        <Text style={{color: 'red', fontWeight: 'bold'}}>
+                          You can no longer cancel the ride.
+                        </Text>
+                      )}
                     </View>
                   </>
                 )}
@@ -1440,7 +1528,8 @@ const BookRide = () => {
                 <Button
                   mode="outlined"
                   style={styles.cancelButton}
-                  onPress={cancelRide}>
+                  onPress={cancelRide}
+                  disabled={!canCancel}>
                   Cancel Ride
                 </Button>
               )}
