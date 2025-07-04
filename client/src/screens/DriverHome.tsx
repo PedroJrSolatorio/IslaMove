@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   PermissionsAndroid,
+  Vibration,
 } from 'react-native';
 import {
   Card,
@@ -32,6 +33,7 @@ import api from '../../utils/api';
 import DriverRatingModal from '../components/DriverRatingModal';
 import {styles} from '../styles/DriverHomeStyles';
 import {useFocusEffect} from '@react-navigation/native';
+import SoundUtils from '../../utils/SoundUtils';
 
 // Driver status type
 type DriverStatus = 'offline' | 'available' | 'busy';
@@ -281,6 +283,13 @@ const DriverHome = () => {
     }, []),
   );
 
+  useEffect(() => {
+    SoundUtils.initializeSounds();
+    return () => {
+      SoundUtils.releaseSounds();
+    };
+  }, []);
+
   // Setup socket event listeners
   const setupSocketListeners = () => {
     // can just remove the lines for connect and disconnect, but it can also be used if want to show a connection indicator in UI
@@ -305,6 +314,8 @@ const DriverHome = () => {
         driverStatusRef.current === 'available' &&
         activeRidesRef.current.length < MAX_PASSENGERS
       ) {
+        Vibration.vibrate(1000);
+        SoundUtils.playDing();
         setPendingRequest(request);
         setShowRequestModal(true);
         setRequestTimeRemaining(REQUEST_TIMEOUT);
