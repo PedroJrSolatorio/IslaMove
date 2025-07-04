@@ -26,6 +26,21 @@ const PassengerHome = () => {
   const [initialLoad, setInitialLoad] = useState(true);
   const [recentRides, setRecentRides] = useState<any[]>([]);
   const [ridesLoading, setRidesLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!profileData || !profileData._id) {
+        refreshProfile()
+          .then(() => setNetworkError(false))
+          .catch(() => setNetworkError(true))
+          .finally(() => setInitialLoad(false));
+      } else {
+        setInitialLoad(false);
+      }
+      return () => {};
+    }, []),
+  );
 
   // Use this effect just once when component mounts
   React.useEffect(() => {
@@ -96,6 +111,21 @@ const PassengerHome = () => {
       <View style={GlobalStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#6200ee" />
         <Text>Loading profile...</Text>
+        {networkError && (
+          <Button
+            mode="contained"
+            style={{marginTop: 16}}
+            onPress={() => {
+              setInitialLoad(true);
+              setNetworkError(false);
+              refreshProfile()
+                .then(() => setNetworkError(false))
+                .catch(() => setNetworkError(true))
+                .finally(() => setInitialLoad(false));
+            }}>
+            Retry
+          </Button>
+        )}
       </View>
     );
   }

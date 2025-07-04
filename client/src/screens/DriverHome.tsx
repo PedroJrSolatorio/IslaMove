@@ -107,10 +107,10 @@ const DriverHome = () => {
   const [routeCoordinates, setRouteCoordinates] = useState<{
     [key: string]: any[];
   }>({});
-
   const driverStatusRef = useRef(driverStatus);
   const activeRidesRef = useRef(activeRides);
   const requestTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [networkError, setNetworkError] = useState(false);
 
   useEffect(() => {
     driverStatusRef.current = driverStatus;
@@ -187,6 +187,61 @@ const DriverHome = () => {
     });
   };
 
+  const initializeDriver = async () => {
+    try {
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Location permission is required to receive ride requests.',
+        );
+        setLoading(false);
+        setNetworkError(true);
+        return;
+      }
+
+      const location = await getCurrentLocation();
+      setCurrentLocation(location);
+
+      // Setup socket connection
+      if (userToken) {
+        console.log(
+          'Connecting with token:',
+          userToken.substring(0, 20) + '...',
+        ); // Log first 20 chars for debugging
+        await SocketService.connect(userToken);
+        setupSocketListeners();
+      } else {
+        console.error('No user token available for socket connection');
+        Alert.alert('Authentication Error', 'Please log in again to continue.');
+        setNetworkError(true);
+        return;
+      }
+
+      setLoading(false);
+      setNetworkError(false);
+    } catch (error) {
+      console.error('Error initializing driver:', error);
+      setLoading(false);
+      setNetworkError(true);
+    }
+  };
+
+  // Initialize location and socket
+  useEffect(() => {
+    initializeDriver();
+
+    return () => {
+      if (locationUpdateInterval) {
+        clearInterval(locationUpdateInterval);
+      }
+      if (requestTimer) {
+        clearTimeout(requestTimer);
+      }
+      SocketService.disconnect();
+    };
+  }, [userToken]);
+
   // Verify authentication and profile access
   useEffect(() => {
     const verifyAuth = async () => {
@@ -218,60 +273,6 @@ const DriverHome = () => {
 
     verifyAuth();
   }, [userToken, profileData]);
-
-  // Initialize location and socket
-  useEffect(() => {
-    const initializeDriver = async () => {
-      try {
-        const hasPermission = await requestLocationPermission();
-        if (!hasPermission) {
-          Alert.alert(
-            'Permission Required',
-            'Location permission is required to receive ride requests.',
-          );
-          setLoading(false);
-          return;
-        }
-
-        const location = await getCurrentLocation();
-        setCurrentLocation(location);
-
-        // Setup socket connection
-        if (userToken) {
-          console.log(
-            'Connecting with token:',
-            userToken.substring(0, 20) + '...',
-          ); // Log first 20 chars for debugging
-          await SocketService.connect(userToken);
-          setupSocketListeners();
-        } else {
-          console.error('No user token available for socket connection');
-          Alert.alert(
-            'Authentication Error',
-            'Please log in again to continue.',
-          );
-          return;
-        }
-
-        setLoading(false);
-      } catch (error) {
-        console.error('Error initializing driver:', error);
-        setLoading(false);
-      }
-    };
-
-    initializeDriver();
-
-    return () => {
-      if (locationUpdateInterval) {
-        clearInterval(locationUpdateInterval);
-      }
-      if (requestTimer) {
-        clearTimeout(requestTimer);
-      }
-      SocketService.disconnect();
-    };
-  }, [userToken]);
 
   useFocusEffect(
     useCallback(() => {
@@ -904,6 +905,18 @@ const DriverHome = () => {
       <View style={GlobalStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={styles.loadingText}>Loading profile...</Text>
+        {networkError && (
+          <Button
+            mode="contained"
+            style={{marginTop: 16}}
+            onPress={() => {
+              setLoading(true);
+              setNetworkError(false);
+              initializeDriver();
+            }}>
+            Retry
+          </Button>
+        )}
       </View>
     );
   }

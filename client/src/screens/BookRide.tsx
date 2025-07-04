@@ -39,10 +39,7 @@ import PassengerRatingModal from '../components/PassengerRatingModal';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
-import Sound from 'react-native-sound';
-
-// Initialize Sound, enable playback in silence mode
-Sound.setCategory('Playback');
+import SoundUtils from '../../utils/SoundUtils';
 
 // Interface for fare types
 interface FareInfo {
@@ -153,6 +150,7 @@ const BookRide = () => {
   const [canCancel, setCanCancel] = useState(true);
   const [notifiedArrival, setNotifiedArrival] = useState(false);
   const cancelWindowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [soundsInitialized, setSoundsInitialized] = useState(false);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -618,38 +616,45 @@ const BookRide = () => {
   }, [rideStatus]);
 
   useEffect(() => {
-    if (
-      rideStatus === 'driver_found' &&
-      driverEta !== null &&
-      driverEta * 60 <= 20 && // driverEta is in minutes, so multiply by 60 for seconds
-      !notifiedArrival
-    ) {
-      setNotifiedArrival(true);
+    const initializeSounds = async () => {
+      try {
+        await SoundUtils.initializeSounds();
+        setSoundsInitialized(true);
+        console.log('Sounds initialized');
+      } catch (error) {
+        console.error('Failed to initialize sounds:', error);
+      }
+    };
 
-      // Vibrate
-      Vibration.vibrate(1000);
+    initializeSounds();
 
-      // Play sound - Updated approach
-      const playDing = () => {
-        const ding = new Sound('ding.mp3', Sound.MAIN_BUNDLE, error => {
-          if (error) {
-            console.log('Failed to load the sound', error);
-            return;
-          }
+    return () => {
+      SoundUtils.releaseSounds();
+    };
+  }, []);
 
-          ding.play(success => {
-            if (success) {
-              console.log('Successfully finished playing');
-            } else {
-              console.log('Playback failed due to audio decoding errors');
-            }
-            ding.release();
-          });
-        });
-      };
+  useEffect(() => {
+    const playNotificationSound = async () => {
+      if (
+        rideStatus === 'driver_found' &&
+        driverEta !== null &&
+        driverEta * 60 <= 20 &&
+        !notifiedArrival &&
+        soundsInitialized
+      ) {
+        setNotifiedArrival(true);
 
-      Alert.alert('Driver is arriving!', 'Driver will arrive in 20 seconds!');
-    }
+        // Vibrate
+        Vibration.vibrate(1000);
+
+        // Play sound
+        await SoundUtils.playDing();
+
+        Alert.alert('Driver is arriving!', 'Driver will arrive in 20 seconds!');
+      }
+    };
+
+    playNotificationSound();
     // Reset notification if ETA increases again (e.g., driver stuck in traffic)
     if (
       rideStatus === 'driver_found' &&
@@ -658,7 +663,7 @@ const BookRide = () => {
     ) {
       setNotifiedArrival(false);
     }
-  }, [driverEta, rideStatus, notifiedArrival]);
+  }, [driverEta, rideStatus, notifiedArrival, soundsInitialized]);
 
   // Fetch route details between two points
   const fetchRouteDetails = async () => {
