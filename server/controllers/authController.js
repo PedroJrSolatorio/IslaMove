@@ -297,8 +297,8 @@ export const registerUser = async (req, res) => {
 
       // Handle driver verification documents
       const documentTypes = [
-        "License",
-        "Registration",
+        "Official Receipt (OR)",
+        "Certificate of Registration (CR)",
         "MODA Certificate",
         "Vehicle Photo",
       ];

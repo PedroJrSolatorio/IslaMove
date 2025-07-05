@@ -133,14 +133,14 @@ const RegisterDriverScreen = () => {
 
   const [documents, setDocuments] = useState<DocumentInfo[]>([
     {
-      documentType: 'License',
+      documentType: 'Official Receipt (OR)',
       fileURL: '',
       mimeType: '',
       verified: false,
       uploadDate: new Date(),
     },
     {
-      documentType: 'Registration',
+      documentType: 'Certificate of Registration (CR)',
       fileURL: '',
       mimeType: '',
       verified: false,

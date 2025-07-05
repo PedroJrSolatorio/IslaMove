@@ -55,8 +55,8 @@ const upload = multer({
 const uploadFields = upload.fields([
   { name: "profileImage", maxCount: 1 },
   { name: "idDocumentImage", maxCount: 1 },
-  { name: "document_License", maxCount: 1 },
-  { name: "document_Registration", maxCount: 1 },
+  { name: "document_OfficialReceipt(OR)", maxCount: 1 },
+  { name: "document_CertificateofRegistration(CR)", maxCount: 1 },
   { name: "document_MODACertificate", maxCount: 1 },
   { name: "document_VehiclePhoto", maxCount: 1 },
 ]);
