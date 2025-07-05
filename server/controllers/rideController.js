@@ -603,6 +603,14 @@ export const rateDriver = async (req, res) => {
         rating: parseFloat(newRating.toFixed(1)),
         totalRatings: newTotalRatings,
       });
+      // Emit socket event to driver for real-time update
+      const io = getIO();
+      if (io && driver) {
+        io.to(`user_${driver._id}`).emit("driver_rated", {
+          rating: parseFloat(newRating.toFixed(1)),
+          totalRatings: newTotalRatings,
+        });
+      }
     }
 
     res.json({

@@ -474,7 +474,15 @@ const BookRide = () => {
                 break;
               case 'completed':
                 setRideStatus('completed');
-                setShowRatingModal(true);
+                // Show completion alert first
+                Alert.alert(
+                  'Ride Completed',
+                  'Ride has been completed successfully!',
+                );
+                // Show rating modal after 2 seconds
+                setTimeout(() => {
+                  setShowRatingModal(true);
+                }, 2000); // 2000 ms = 2 seconds delay
                 break;
               case 'cancelled':
                 // Show alert with options when driver cancels

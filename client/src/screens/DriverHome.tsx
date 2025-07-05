@@ -86,7 +86,7 @@ interface RideRequest {
 
 const DriverHome = () => {
   const {logout, userToken, userRole} = useAuth();
-  const {profileData} = useProfile();
+  const {profileData, refreshProfile} = useProfile();
   const mapRef = useRef<MapView | null>(null);
   const [mapKey, setMapKey] = useState(0);
 
@@ -289,6 +289,21 @@ const DriverHome = () => {
       SoundUtils.releaseSounds();
     };
   }, []);
+
+  useEffect(() => {
+    if (!SocketService) return;
+    SocketService.on(
+      'driver_rated',
+      (data: {rating: number; totalRatings: number}) => {
+        // Optionally show a toast or alert
+        // Example: Alert.alert('You were rated!', `New rating: ${data.rating}`);
+        refreshProfile();
+      },
+    );
+    return () => {
+      SocketService.off('driver_rated');
+    };
+  }, [refreshProfile]);
 
   // Setup socket event listeners
   const setupSocketListeners = () => {
@@ -662,8 +677,10 @@ const DriverHome = () => {
 
           // Show rating modal for the completed ride
           if (completedRide) {
-            setSelectedRideForRating(completedRide);
-            setShowRatingModal(true);
+            setTimeout(() => {
+              setSelectedRideForRating(completedRide);
+              setShowRatingModal(true);
+            }, 2000); // 2000 ms = 2 seconds delay before rating modal shows
           }
 
           // Update driver status based on remaining rides
@@ -691,6 +708,7 @@ const DriverHome = () => {
           } catch (err) {
             console.error('Failed to increment totalRides:', err);
           }
+          refreshProfile();
           break;
       }
     } catch (error: any) {
