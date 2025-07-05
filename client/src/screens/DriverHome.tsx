@@ -9,6 +9,7 @@ import {
   Platform,
   PermissionsAndroid,
   Vibration,
+  TextInput,
 } from 'react-native';
 import {
   Card,
@@ -34,6 +35,7 @@ import DriverRatingModal from '../components/DriverRatingModal';
 import {styles} from '../styles/DriverHomeStyles';
 import {useFocusEffect} from '@react-navigation/native';
 import SoundUtils from '../../utils/SoundUtils';
+import Toast from 'react-native-toast-message';
 
 // Driver status type
 type DriverStatus = 'offline' | 'available' | 'busy';
@@ -113,6 +115,9 @@ const DriverHome = () => {
   const activeRidesRef = useRef(activeRides);
   const requestTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [networkError, setNetworkError] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelRideId, setCancelRideId] = useState<string | null>(null);
 
   useEffect(() => {
     driverStatusRef.current = driverStatus;
@@ -367,10 +372,13 @@ const DriverHome = () => {
       'ride_cancelled',
       (data: {rideId: string; reason: string}) => {
         setActiveRides(prev => prev.filter(ride => ride._id !== data.rideId));
-        Alert.alert(
-          'Ride Cancelled',
-          `Passenger cancelled the ride: ${data.reason}`,
-        );
+
+        Toast.show({
+          type: 'info', // or 'info', 'error'
+          text1: 'Ride Cancelled',
+          text2: `Passenger cancelled the ride: ${data.reason}`,
+          visibilityTime: 4000, // 4 seconds
+        });
       },
     );
 
@@ -420,10 +428,12 @@ const DriverHome = () => {
 
         setDriverStatus('available');
         startLocationUpdates();
-        Alert.alert(
-          'Status Updated',
-          'You are now online and can receive ride requests!',
-        );
+        Toast.show({
+          type: 'success', // or 'info', 'error'
+          text1: 'Status Updated',
+          text2: 'You’re online and available for trips.',
+          visibilityTime: 4000, // 4 seconds
+        });
       } catch (error) {
         console.error('Error updating status:', error);
         Alert.alert('Error', 'Failed to update status. Please try again.');
@@ -445,7 +455,12 @@ const DriverHome = () => {
         });
         setDriverStatus('offline');
         stopLocationUpdates();
-        Alert.alert('Status Updated', 'You are now offline.');
+        Toast.show({
+          type: 'success', // or 'info', 'error'
+          text1: 'Status Updated',
+          text2: 'You are now offline.',
+          visibilityTime: 4000, // 4 seconds
+        });
       } catch (error) {
         console.error('Error updating status:', error);
         Alert.alert('Error', 'Failed to update status. Please try again.');
@@ -562,7 +577,12 @@ const DriverHome = () => {
         pendingRequest.pickupLocation,
       );
 
-      Alert.alert('Ride Accepted', 'Navigate to the pickup location!');
+      Toast.show({
+        type: 'success', // or 'info', 'error'
+        text1: 'You’re On It!',
+        text2: 'Navigate to the pickup location!',
+        visibilityTime: 4000, // 4 seconds
+      });
     } catch (error) {
       console.error('Error accepting ride:', error);
       Alert.alert('Error', 'Failed to accept ride. Please try again.');
@@ -656,20 +676,33 @@ const DriverHome = () => {
       // Handle different status updates
       switch (status) {
         case 'arrived':
-          Alert.alert('Arrived', 'You have arrived at the pickup location!');
+          Toast.show({
+            type: 'success', // or 'info', 'error'
+            text1: 'Arrived',
+            text2: 'You have arrived at the pickup location!',
+            visibilityTime: 4000, // 4 seconds
+          });
           break;
         case 'inProgress':
-          Alert.alert('Ride Started', 'Ride is now in progress!');
+          Toast.show({
+            type: 'success', // or 'info', 'error'
+            text1: 'Ride Started',
+            text2: 'Ride is now in progress!',
+            visibilityTime: 4000, // 4 seconds
+          });
           const ride = activeRides.find(r => r._id === rideId);
           if (ride) {
             calculateRoute(rideId, currentLocation!, ride.destinationLocation);
           }
           break;
         case 'completed':
-          Alert.alert(
-            'Ride Completed',
-            'Ride has been completed successfully!',
-          );
+          // Show a toast
+          Toast.show({
+            type: 'success', // or 'info', 'error'
+            text1: 'Ride Completed',
+            text2: 'Ride has been completed successfully!',
+            visibilityTime: 4000, // 4 seconds
+          });
           // Remove the completed ride
           const completedRide = activeRides.find(r => r._id === rideId);
           const remainingRides = activeRides.filter(r => r._id !== rideId);
@@ -704,7 +737,7 @@ const DriverHome = () => {
           }
           // Update totalRides on the backend
           try {
-            await api.post('/api/drivers/increment-totalRides');
+            await api.post('/api/rides/increment-totalRides');
           } catch (err) {
             console.error('Failed to increment totalRides:', err);
           }
@@ -741,7 +774,12 @@ const DriverHome = () => {
 
       setShowRatingModal(false);
       setSelectedRideForRating(null);
-      Alert.alert('Rating Submitted', 'Thank you for your feedback!');
+      Toast.show({
+        type: 'success', // or 'info', 'error'
+        text1: 'Rating Submitted',
+        text2: 'Thank you for your feedback!',
+        visibilityTime: 4000, // 4 seconds
+      });
     } catch (error) {
       console.error('Error submitting rating:', error);
       Alert.alert('Error', 'Failed to submit rating.');
@@ -890,11 +928,22 @@ const DriverHome = () => {
 
         <View style={styles.rideActions}>
           {ride.status === 'accepted' && (
-            <Button
-              mode="contained"
-              onPress={() => updateRideStatus(ride._id, 'arrived')}>
-              Mark as Arrived
-            </Button>
+            <>
+              <Button
+                mode="contained"
+                onPress={() => updateRideStatus(ride._id, 'arrived')}>
+                Mark as Arrived
+              </Button>
+              <Button
+                mode="outlined"
+                style={{marginTop: 8}}
+                onPress={() => {
+                  setCancelRideId(ride._id);
+                  setShowCancelModal(true);
+                }}>
+                Cancel Ride
+              </Button>
+            </>
           )}
           {ride.status === 'arrived' && (
             <Button
@@ -1094,6 +1143,55 @@ const DriverHome = () => {
             : 'passenger'
         }
       />
+
+      <Modal visible={showCancelModal} transparent animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#00000088',
+          }}>
+          <Card style={{width: 300, padding: 16}}>
+            <Title>Cancel Ride</Title>
+            <TextInput
+              placeholder="Reason for cancellation"
+              value={cancelReason}
+              onChangeText={setCancelReason}
+            />
+            <Button
+              mode="contained"
+              onPress={async () => {
+                if (!cancelReason.trim()) {
+                  Alert.alert('Error', 'Reason is required.');
+                  return;
+                }
+                try {
+                  await api.post(`/api/rides/${cancelRideId}/cancel`, {
+                    reason: cancelReason,
+                  });
+                  setActiveRides(prev =>
+                    prev.filter(r => r._id !== cancelRideId),
+                  );
+                  Toast.show({
+                    type: 'success',
+                    text1: 'Ride Cancelled',
+                    text2: 'You have cancelled the ride.',
+                    visibilityTime: 4000,
+                  });
+                  setShowCancelModal(false);
+                  setCancelReason('');
+                  setCancelRideId(null);
+                } catch (error) {
+                  Alert.alert('Error', 'Failed to cancel ride.');
+                }
+              }}>
+              Submit
+            </Button>
+            <Button onPress={() => setShowCancelModal(false)}>Cancel</Button>
+          </Card>
+        </View>
+      </Modal>
     </>
   );
 };

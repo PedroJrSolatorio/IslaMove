@@ -119,18 +119,6 @@ const DriverProfileScreen = () => {
       : {label: 'Unknown', color: '#95a5a6'};
   };
 
-  // Helper function to get driver status display
-  const getDriverStatusDisplay = (status: string) => {
-    const statusMap = {
-      available: {label: 'Available', color: '#27ae60'},
-      busy: {label: 'Busy', color: '#f39c12'},
-      offline: {label: 'Offline', color: '#95a5a6'},
-    } as const;
-    return status in statusMap
-      ? statusMap[status as keyof typeof statusMap]
-      : {label: 'Unknown', color: '#95a5a6'};
-  };
-
   // Check if profile image upload is pending
   const isProfileImagePending = () => {
     return (
@@ -526,23 +514,8 @@ const DriverProfileScreen = () => {
           <>
             <Card style={TabsStyles.sectionCard}>
               <Card.Content>
-                <Title>Driver Status</Title>
+                <Title>Driver Overview</Title>
                 <Divider style={TabsStyles.divider} />
-
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Current Status</Text>
-                  <Chip
-                    mode="flat"
-                    style={{
-                      backgroundColor: getDriverStatusDisplay(
-                        driverProfile.driverStatus,
-                      ).color,
-                      alignSelf: 'flex-start',
-                    }}
-                    textStyle={{color: 'white', fontSize: 12}}>
-                    {getDriverStatusDisplay(driverProfile.driverStatus).label}
-                  </Chip>
-                </View>
 
                 <View style={TabsStyles.infoRow}>
                   <Text style={TabsStyles.infoLabel}>Rating</Text>

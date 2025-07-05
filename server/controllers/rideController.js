@@ -76,6 +76,27 @@ export const updateRide = async (req, res) => {
   }
 };
 
+export const addRide = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $inc: { totalRides: 1 } },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json({
+      message: "totalRides incremented",
+      totalRides: user.totalRides,
+    });
+  } catch (error) {
+    console.error("Error incrementing totalRides:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Accept ride request (for drivers)
 export const acceptRide = async (req, res) => {
   try {

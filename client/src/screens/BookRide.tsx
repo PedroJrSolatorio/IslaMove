@@ -40,6 +40,7 @@ import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
 import SoundUtils from '../../utils/SoundUtils';
+import Toast from 'react-native-toast-message';
 
 // Interface for fare types
 interface FareInfo {
@@ -454,7 +455,7 @@ const BookRide = () => {
           }
         });
 
-        SocketService.on('ride_status_update', (data: any) => {
+        SocketService.on('ride_status_update', async (data: any) => {
           if (data.rideId === currentRideId) {
             switch (data.status) {
               case 'accepted':
@@ -474,37 +475,24 @@ const BookRide = () => {
                 break;
               case 'completed':
                 setRideStatus('completed');
-                // Show completion alert first
-                Alert.alert(
-                  'Ride Completed',
-                  'Ride has been completed successfully!',
-                );
+                // Show a toast
+                Toast.show({
+                  type: 'success', // or 'info', 'error'
+                  text1: 'Ride Completed',
+                  text2: 'Ride has been completed successfully!',
+                  visibilityTime: 4000, // 4 seconds
+                });
+
+                // Increment totalRides for the driver
+                try {
+                  await api.post('/api/rides/increment-totalRides');
+                } catch (err) {
+                  console.error('Failed to increment totalRides:', err);
+                }
                 // Show rating modal after 2 seconds
                 setTimeout(() => {
                   setShowRatingModal(true);
                 }, 2000); // 2000 ms = 2 seconds delay
-                break;
-              case 'cancelled':
-                // Show alert with options when driver cancels
-                Alert.alert(
-                  'Ride Cancelled',
-                  data.reason || 'The driver has cancelled the ride',
-                  [
-                    {
-                      text: 'Find Another Driver',
-                      onPress: () => {
-                        resetRideKeepDestination(); // Preserve destination for rebooking
-                      },
-                    },
-                    {
-                      text: 'Change Destination',
-                      onPress: () => {
-                        resetRide(); // Full reset if user wants to change destination
-                      },
-                      style: 'cancel',
-                    },
-                  ],
-                );
                 break;
             }
           }
@@ -526,6 +514,30 @@ const BookRide = () => {
             }
           }
         });
+
+        SocketService.on('ride_cancelled', (data: any) => {
+          if (data.rideId === currentRideId) {
+            Alert.alert(
+              'Ride Cancelled',
+              data.reason || 'The driver has cancelled the ride',
+              [
+                {
+                  text: 'Find Another Driver',
+                  onPress: () => {
+                    resetRideKeepDestination();
+                  },
+                },
+                {
+                  text: 'Change Destination',
+                  onPress: () => {
+                    resetRide();
+                  },
+                  style: 'cancel',
+                },
+              ],
+            );
+          }
+        });
       } catch (error) {
         console.error('Socket connection error:', error);
       }
@@ -538,6 +550,7 @@ const BookRide = () => {
       SocketService.off('driver_location_update');
       SocketService.off('ride_status_update');
       SocketService.off('ride_accepted');
+      SocketService.off('ride_cancelled');
     };
   }, [userToken, currentRideId, rideStatus]);
 
@@ -596,6 +609,13 @@ const BookRide = () => {
 
   useEffect(() => {
     if (rideStatus === 'driver_found') {
+      Toast.show({
+        type: 'info',
+        text1: 'Ride Accepted',
+        text2: 'Driver is on the way.',
+        visibilityTime: 4000,
+      });
+
       setCanCancel(true);
       // Clear any previous timeout
       if (cancelWindowTimeoutRef.current) {
@@ -604,7 +624,12 @@ const BookRide = () => {
       // Start 20-second timer
       cancelWindowTimeoutRef.current = setTimeout(() => {
         setCanCancel(false);
-        Alert.alert('Notice', 'You can no longer cancel the ride.');
+        Toast.show({
+          type: 'info', // or 'info', 'error'
+          text1: 'Notice',
+          text2: 'You can no longer cancel the ride.',
+          visibilityTime: 4000, // 4 seconds
+        });
       }, 20000);
     } else {
       // Reset cancel ability when not in driver_found status
@@ -658,7 +683,13 @@ const BookRide = () => {
         // Play sound
         await SoundUtils.playDing();
 
-        Alert.alert('Driver is arriving!', 'Driver will arrive in 20 seconds!');
+        // Alert.alert('Driver is arriving!', 'Driver will arrive in 20 seconds!');
+        Toast.show({
+          type: 'info', // or 'info', 'error'
+          text1: 'Driver is arriving!',
+          text2: 'Driver will arrive in 20 seconds!',
+          visibilityTime: 4000, // 4 seconds
+        });
       }
     };
 
@@ -1128,7 +1159,12 @@ const BookRide = () => {
 
       setShowRatingModal(false);
       resetRide();
-      Alert.alert('Thank You', 'Your rating has been submitted!');
+      Toast.show({
+        type: 'success', // or 'info', 'error'
+        text1: 'Rating Submitted',
+        text2: 'Thank you for your feedback!',
+        visibilityTime: 4000, // 4 seconds
+      });
     } catch (error) {
       console.error('Error submitting rating:', error);
       Alert.alert('Error', 'Failed to submit rating. Please try again.');
@@ -1201,7 +1237,12 @@ const BookRide = () => {
             );
             // For active rides, do full reset since the trip is completely cancelled
             resetRide();
-            Alert.alert('Success', 'Ride cancelled successfully');
+            Toast.show({
+              type: 'success', // or 'info', 'error'
+              text1: 'Success',
+              text2: 'Ride cancelled successfully!',
+              visibilityTime: 4000, // 4 seconds
+            });
           } catch (error) {
             console.error('Error canceling ride:', error);
             Alert.alert('Error', 'Failed to cancel ride. Please try again.');
@@ -1537,7 +1578,9 @@ const BookRide = () => {
                 Call Driver
               </Button> */}
 
-              {rideStatus !== 'in_progress' && (
+              {!['driver_arrived', 'in_progress', 'completed'].includes(
+                rideStatus,
+              ) && (
                 <Button
                   mode="outlined"
                   style={styles.cancelButton}

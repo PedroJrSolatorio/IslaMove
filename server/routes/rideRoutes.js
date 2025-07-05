@@ -9,6 +9,7 @@ import {
   rateDriver,
   getRecentRides,
   getRideHistory,
+  addRide,
 } from "../controllers/rideController.js";
 import { auth } from "../middleware/auth.js";
 
@@ -27,6 +28,7 @@ router.post("/:id/rate-passenger", auth, ratePassenger);
 
 // General routes
 router.put("/:id", auth, updateRide);
+router.post("/increment-totalRides", auth, addRide);
 router.delete("/:id", auth, deleteRide);
 
 export default router;

@@ -773,6 +773,28 @@ const PassengerProfileScreen = () => {
           <>
             <Card style={TabsStyles.sectionCard}>
               <Card.Content>
+                <Title>Passenger Overview</Title>
+                <Divider style={TabsStyles.divider} />
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Rating</Text>
+                  <Text style={TabsStyles.infoValue}>
+                    {profileData.rating.toFixed(1)} ⭐ (
+                    {profileData.totalRatings} ratings)
+                  </Text>
+                </View>
+
+                <View style={TabsStyles.infoRow}>
+                  <Text style={TabsStyles.infoLabel}>Total Rides</Text>
+                  <Text style={TabsStyles.infoValue}>
+                    {profileData.totalRides}
+                  </Text>
+                </View>
+              </Card.Content>
+            </Card>
+
+            <Card style={TabsStyles.sectionCard}>
+              <Card.Content>
                 <Title>Personal Information</Title>
                 <Divider style={TabsStyles.divider} />
 
