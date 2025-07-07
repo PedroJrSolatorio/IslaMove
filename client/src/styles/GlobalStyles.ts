@@ -101,4 +101,31 @@ export const GlobalStyles = StyleSheet.create({
     color: Colors.lightBlue,
     textDecorationLine: 'underline',
   },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  dividerText: {
+    marginHorizontal: 15,
+    fontSize: Fonts.size.medium,
+    color: Colors.lightText,
+  },
+  googleButton: {
+    width: '100%',
+    height: 48,
+    marginBottom: 10,
+  },
+  loadingText: {
+    textAlign: 'center',
+    color: Colors.lightText,
+    fontSize: Fonts.size.small,
+    marginTop: 5,
+    marginBottom: 10,
+  },
 });
