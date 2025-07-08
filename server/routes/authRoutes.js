@@ -9,6 +9,7 @@ import {
   validateToken,
   refreshAuthToken,
   checkUser,
+  googleLogin,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -65,6 +66,7 @@ router.post("/check-user", checkUser);
 router.post("/login", loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
+router.post("/google-login", googleLogin);
 
 // Register route with proper file upload handling
 router.post("/register", (req, res, next) => {

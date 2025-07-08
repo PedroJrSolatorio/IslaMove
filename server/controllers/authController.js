@@ -3,6 +3,9 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import fs from "fs";
 import path from "path";
+import { OAuth2Client } from "google-auth-library";
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Helper function to save a base64 image
 const saveBase64Image = (base64Data, folder) => {
@@ -493,5 +496,65 @@ export const refreshAuthToken = async (req, res) => {
   } catch (error) {
     console.error("Refresh token error:", error);
     res.status(403).json({ message: "Invalid or expired refresh token" });
+  }
+};
+
+export const googleLogin = async (req, res) => {
+  try {
+    const { idToken, email, name } = req.body;
+
+    // Verify Google ID token directly with Google
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID, // Your web client ID
+    });
+
+    const payload = ticket.getPayload();
+    const googleId = payload["sub"];
+
+    // Verify the token is valid
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid Google token" });
+    }
+
+    // Find or create user in your database
+    let user = await User.findOne({
+      $or: [{ email: payload.email }, { googleId: googleId }],
+    });
+
+    if (!user) {
+      user = await User.create({
+        email: payload.email,
+        name: payload.name,
+        googleId: googleId,
+        role: "passenger", // Default role or determine based on your logic
+        profilePicture: payload.picture,
+        isGoogleUser: true,
+      });
+    }
+
+    // Generate your app's JWT token
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    const refreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      refreshToken,
+      userId: user._id,
+      firstName: user.name.split(" ")[0],
+      username: user.email,
+    });
+  } catch (error) {
+    console.error("Google login error:", error);
+    res.status(401).json({ message: "Google authentication failed" });
   }
 };

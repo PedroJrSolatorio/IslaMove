@@ -101,9 +101,11 @@ android {
     }
     buildTypes {
         debug {
+            applicationIdSuffix ".IslaMove"
             signingConfig signingConfigs.debug
         }
         release {
+            applicationIdSuffix ".IslaMove"
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
@@ -122,5 +124,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
-    implementation 'com.google.android.gms:play-services-location:21.0.1'
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.android.gms:play-services-auth:20.7.0")
 }
