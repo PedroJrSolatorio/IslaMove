@@ -1,4 +1,4 @@
-package com.client;
+package com.IslaMove;
 
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.NativeModule;

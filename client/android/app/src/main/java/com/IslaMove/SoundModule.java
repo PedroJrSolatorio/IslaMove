@@ -1,4 +1,4 @@
-package com.client;
+package com.IslaMove;
 
 import android.media.MediaPlayer;
 import android.media.RingtoneManager;

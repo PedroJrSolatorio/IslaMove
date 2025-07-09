@@ -1,4 +1,4 @@
-package com.client
+package com.IslaMove
 
 import android.app.Application
 import com.facebook.react.PackageList
@@ -11,7 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
-import com.client.SoundPackage
+import com.IslaMove.SoundPackage
 
 class MainApplication : Application(), ReactApplication {
 
