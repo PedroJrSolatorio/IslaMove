@@ -20,17 +20,63 @@ const locationSchema = new mongoose.Schema(
 
 const vehicleSchema = new mongoose.Schema(
   {
-    make: { type: String, required: true },
-    series: { type: String, required: true },
-    yearModel: { type: Number, required: true },
-    color: { type: String, required: true },
+    make: {
+      type: String,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
+    series: {
+      type: String,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
+    yearModel: {
+      type: Number,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
+    color: {
+      type: String,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
     type: {
       type: String,
       enum: ["bao-bao"],
-      required: true,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
     },
-    plateNumber: { type: String, required: true },
-    bodyNumber: { type: String, required: true },
+    plateNumber: {
+      type: String,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
+    bodyNumber: {
+      type: String,
+      required: function () {
+        return (
+          this.parent().role === "driver" && this.parent().isProfileComplete
+        );
+      },
+    },
   },
   { _id: false }
 );
@@ -39,13 +85,64 @@ const userSchema = new mongoose.Schema(
   {
     lastName: { type: String, required: true },
     firstName: { type: String, required: true },
-    middleInitial: { type: String, required: true },
-    birthdate: { type: Date, required: true }, // Non-editable (viewable)
-    age: { type: Number, required: true }, // Non-editable (viewable)
-    username: { type: String, unique: true, required: true },
+    middleInitial: {
+      type: String,
+      required: function () {
+        return this.isProfileComplete;
+      },
+    },
+    birthdate: {
+      type: Date,
+      required: function () {
+        return this.isProfileComplete;
+      },
+    },
+    age: {
+      type: Number,
+      required: function () {
+        return this.isProfileComplete;
+      },
+    },
+    username: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values but ensures uniqueness when present
+      required: function () {
+        return this.isProfileComplete;
+      },
+    },
     email: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
-    phone: { type: String, unique: true, required: true },
+    password: {
+      type: String,
+      required: function () {
+        return !this.isGoogleUser && this.isProfileComplete;
+      },
+    },
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values but ensures uniqueness when present
+      required: function () {
+        return this.isProfileComplete;
+      },
+    },
+
+    // Google authentication fields
+    isGoogleUser: {
+      type: Boolean,
+      default: false,
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values but ensures uniqueness when present
+    },
+    isProfileComplete: {
+      type: Boolean,
+      default: function () {
+        return !this.isGoogleUser; // Regular users start with complete profiles
+      },
+    },
 
     // Only for drivers and passengers (not admin)
     homeAddress: {
@@ -155,6 +252,9 @@ const userSchema = new mongoose.Schema(
     // Driver-only fields
     licenseNumber: {
       type: String,
+      required: function () {
+        return this.role === "driver" && this.isProfileComplete;
+      },
       validate: {
         validator: function (value) {
           return this.role === "driver" || !value;
@@ -165,7 +265,6 @@ const userSchema = new mongoose.Schema(
     driverStatus: {
       type: String,
       enum: ["available", "busy", "offline"],
-      // default: "offline", //commented this default so that it will not be added as empty string for other user role
       validate: {
         validator: function (value) {
           return this.role === "driver" || value === undefined;
@@ -175,6 +274,9 @@ const userSchema = new mongoose.Schema(
     },
     vehicle: {
       type: vehicleSchema,
+      required: function () {
+        return this.role === "driver" && this.isProfileComplete;
+      },
       validate: {
         validator: function (value) {
           return this.role === "driver" || value === undefined;
@@ -206,7 +308,7 @@ const userSchema = new mongoose.Schema(
         message: "Only drivers can upload verification documents.",
       },
       default: function () {
-        return this.role === "driver" ? [] : undefined; //set this with undefined so that it will not be added as empty string for other user role
+        return this.role === "driver" ? [] : undefined;
       },
     },
 
@@ -215,7 +317,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["regular", "student", "senior"],
       required: function () {
-        return this.userType === "passenger";
+        return this.role === "passenger" && this.isProfileComplete;
       },
     },
     savedAddresses: {
@@ -252,6 +354,41 @@ userSchema.pre("save", function (next) {
     }
     if (this.idDocument && Object.keys(this.idDocument).length > 0) {
       return next(new Error("Admin users cannot have ID document"));
+    }
+  }
+
+  // For regular (non-Google) users, set profile as complete immediately
+  if (!this.isGoogleUser && this.isNew) {
+    this.isProfileComplete = true;
+  }
+
+  // For Google users, check if profile should be marked complete
+  if (this.isGoogleUser && this.isModified()) {
+    const hasBasicInfo =
+      this.lastName &&
+      this.firstName &&
+      this.middleInitial &&
+      this.birthdate &&
+      this.age &&
+      this.username &&
+      this.phone;
+
+    if (this.role === "driver") {
+      const hasDriverInfo =
+        this.licenseNumber &&
+        this.homeAddress &&
+        this.homeAddress.street &&
+        this.vehicle &&
+        this.vehicle.make &&
+        this.vehicle.plateNumber &&
+        this.vehicle.bodyNumber;
+      this.isProfileComplete = hasBasicInfo && hasDriverInfo;
+    } else if (this.role === "passenger") {
+      const hasPassengerInfo =
+        this.passengerCategory && this.homeAddress && this.homeAddress.street;
+      this.isProfileComplete = hasBasicInfo && hasPassengerInfo;
+    } else {
+      this.isProfileComplete = hasBasicInfo;
     }
   }
 

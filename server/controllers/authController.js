@@ -499,6 +499,392 @@ export const refreshAuthToken = async (req, res) => {
   }
 };
 
+export const googleSignup = async (req, res) => {
+  try {
+    const { idToken, email, name, role } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ message: "ID token is required" });
+    }
+
+    // Verify Google ID token directly with Google
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid Google token" });
+    }
+
+    const googleId = payload["sub"];
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email: payload.email }, { googleId: googleId }],
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "User already exists with this email or Google account",
+        field: "email",
+      });
+    }
+
+    // Create new user with Google info (minimal required fields only)
+    const user = await User.create({
+      email: payload.email,
+      firstName: payload.given_name || payload.name.split(" ")[0],
+      lastName:
+        payload.family_name || payload.name.split(" ").slice(1).join(" "),
+      googleId: googleId,
+      role: role || "passenger",
+      profileImage: payload.picture || "",
+      isGoogleUser: true,
+      isProfileComplete: false, // This will be the default for Google users
+
+      // Initialize empty homeAddress object
+      homeAddress: {},
+
+      // Initialize role-specific fields as empty
+      ...(role === "driver" && {
+        documents: [],
+      }),
+
+      ...(role === "passenger" && {
+        savedAddresses: [],
+      }),
+    });
+
+    // Generate temporary token for registration completion
+    const tempToken = jwt.sign(
+      { userId: user._id, role: user.role, isTemp: true },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" } // Shorter expiry for temp token
+    );
+
+    res.json({
+      message: "Google signup successful. Please complete your profile.",
+      tempToken,
+      userId: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      isProfileComplete: false,
+    });
+  } catch (error) {
+    console.error("Google signup error:", error);
+
+    // Handle specific validation errors
+    if (error.name === "ValidationError") {
+      const errorMessages = Object.values(error.errors).map(
+        (err) => err.message
+      );
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: errorMessages,
+      });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(409).json({
+        message: `${field} already exists`,
+        field: field,
+      });
+    }
+
+    res.status(500).json({ message: "Google authentication failed" });
+  }
+};
+
+export const completeGoogleRegistration = async (req, res) => {
+  try {
+    const {
+      lastName,
+      firstName,
+      middleInitial,
+      birthdate,
+      age,
+      email,
+      phone,
+      role,
+      licenseNumber,
+      homeAddress,
+      passengerCategory,
+    } = req.body;
+
+    // Get the base URL for file paths
+    const baseUrl =
+      process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
+
+    // Parse vehicle data if provided
+    let vehicle = null;
+    if (req.body.vehicle) {
+      if (typeof req.body.vehicle === "string") {
+        vehicle = JSON.parse(req.body.vehicle);
+      } else {
+        vehicle = req.body.vehicle;
+      }
+    }
+
+    // Parse homeAddress if provided as string
+    let parsedHomeAddress = null;
+    if (homeAddress) {
+      if (typeof homeAddress === "string") {
+        parsedHomeAddress = JSON.parse(homeAddress);
+      } else {
+        parsedHomeAddress = homeAddress;
+      }
+    }
+
+    // Parse idDocument if provided
+    let idDocument = null;
+    if (req.body.idDocument) {
+      if (typeof req.body.idDocument === "string") {
+        idDocument = JSON.parse(req.body.idDocument);
+      } else {
+        idDocument = req.body.idDocument;
+      }
+    }
+
+    // Find the existing Google user
+    const existingUser = await User.findOne({
+      email: email,
+      isGoogleUser: true, // Assuming you have this field in your schema
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "Google user not found" });
+    }
+
+    // Check required fields for all users
+    if (
+      !lastName ||
+      !firstName ||
+      !middleInitial ||
+      !birthdate ||
+      !age ||
+      !email ||
+      !phone ||
+      !role
+    ) {
+      console.error("🚨 Missing required fields:", req.body);
+      return res
+        .status(400)
+        .json({ error: "All required fields must be provided" });
+    }
+
+    // Check if phone number is already used by another user
+    const phoneCheck = await User.findOne({
+      phone: phone,
+      _id: { $ne: existingUser._id },
+    });
+
+    if (phoneCheck) {
+      return res.status(400).json({ error: "Phone number already registered" });
+    }
+
+    // Role-specific validation
+    if (role === "driver") {
+      if (!licenseNumber) {
+        return res.status(400).json({
+          error: "License number is required for drivers",
+        });
+      }
+
+      if (
+        !parsedHomeAddress ||
+        !parsedHomeAddress.street ||
+        !parsedHomeAddress.city ||
+        !parsedHomeAddress.state ||
+        !parsedHomeAddress.zipCode
+      ) {
+        return res.status(400).json({
+          error: "Complete home address is required for drivers",
+        });
+      }
+
+      if (
+        !vehicle ||
+        !vehicle.make ||
+        !vehicle.series ||
+        !vehicle.yearModel ||
+        !vehicle.color ||
+        !vehicle.type ||
+        !vehicle.plateNumber ||
+        !vehicle.bodyNumber
+      ) {
+        return res.status(400).json({
+          error: "Complete vehicle information is required for drivers",
+        });
+      }
+
+      // Validate vehicle type
+      if (vehicle.type !== "bao-bao") {
+        return res.status(400).json({
+          error: "Invalid vehicle type. Only 'bao-bao' is allowed",
+        });
+      }
+    }
+
+    if (role === "passenger") {
+      if (
+        !passengerCategory ||
+        !["regular", "student", "senior"].includes(passengerCategory)
+      ) {
+        return res.status(400).json({
+          error: "Valid passenger category is required for passengers",
+        });
+      }
+
+      if (
+        !parsedHomeAddress ||
+        !parsedHomeAddress.street ||
+        !parsedHomeAddress.city ||
+        !parsedHomeAddress.state ||
+        !parsedHomeAddress.zipCode
+      ) {
+        return res.status(400).json({
+          error: "Complete home address is required for passengers",
+        });
+      }
+    }
+
+    // Update existing user with complete information
+    existingUser.lastName = lastName;
+    existingUser.firstName = firstName;
+    existingUser.middleInitial = middleInitial;
+    existingUser.birthdate = new Date(birthdate);
+    existingUser.age = parseInt(age);
+    existingUser.phone = phone;
+    existingUser.role = role;
+
+    // Add home address for drivers and passengers (not admin)
+    if (role !== "admin" && parsedHomeAddress) {
+      existingUser.homeAddress = {
+        street: parsedHomeAddress.street,
+        city: parsedHomeAddress.city,
+        state: parsedHomeAddress.state,
+        zipCode: parsedHomeAddress.zipCode,
+        // coordinates can be added later when implementing geocoding
+      };
+    }
+
+    // Process profile image if provided
+    if (req.files && req.files.profileImage) {
+      const profileImageFile = req.files.profileImage[0];
+      existingUser.profileImage = `${baseUrl}/uploads/profiles/${profileImageFile.filename}`;
+    }
+
+    // Add role-specific fields
+    if (role === "driver") {
+      existingUser.licenseNumber = licenseNumber;
+      existingUser.vehicle = {
+        make: vehicle.make,
+        series: vehicle.series,
+        yearModel: parseInt(vehicle.yearModel),
+        color: vehicle.color,
+        type: vehicle.type,
+        plateNumber: vehicle.plateNumber,
+        bodyNumber: vehicle.bodyNumber,
+      };
+      existingUser.driverStatus = "offline";
+      existingUser.isVerified = false;
+      existingUser.verificationStatus = "pending";
+
+      // Handle ID document
+      if (idDocument && req.files && req.files.idDocumentImage) {
+        const idDocumentFile = req.files.idDocumentImage[0];
+        existingUser.idDocument = {
+          type: idDocument.type,
+          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
+          uploadedAt: new Date(),
+          verified: false,
+        };
+      }
+
+      // Handle driver verification documents
+      const documentTypes = [
+        "Official Receipt (OR)",
+        "Certificate of Registration (CR)",
+        "MODA Certificate",
+        "Vehicle Photo",
+      ];
+      existingUser.documents = [];
+
+      documentTypes.forEach((docType) => {
+        const fieldName = `document_${docType.replace(/\s+/g, "")}`;
+        if (req.files && req.files[fieldName]) {
+          const docFile = req.files[fieldName][0];
+          existingUser.documents.push({
+            documentType: docType,
+            fileURL: `${baseUrl}/uploads/documents/${docFile.filename}`,
+            verified: false,
+            uploadDate: new Date(),
+          });
+        }
+      });
+    } else if (role === "passenger") {
+      existingUser.passengerCategory = passengerCategory;
+      existingUser.savedAddresses = [];
+
+      // Handle ID document for passengers too
+      if (idDocument && req.files && req.files.idDocumentImage) {
+        const idDocumentFile = req.files.idDocumentImage[0];
+        existingUser.idDocument = {
+          type: idDocument.type,
+          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
+          uploadedAt: new Date(),
+          verified: false,
+        };
+      }
+    }
+
+    // Mark profile as complete
+    existingUser.isProfileComplete = true;
+
+    // Save the updated user
+    await existingUser.save();
+
+    // Remove password from response (even though Google users don't have passwords)
+    const userResponse = existingUser.toObject();
+    delete userResponse.password;
+
+    res.status(200).json({
+      message: "Google registration completed successfully",
+      user: userResponse,
+    });
+  } catch (error) {
+    console.error("Complete Google registration error:", error);
+
+    // Send more specific error messages for validation errors
+    if (error.name === "ValidationError") {
+      const errorMessage = Object.values(error.errors)
+        .map((err) => err.message)
+        .join(", ");
+
+      return res.status(400).json({ error: errorMessage });
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({
+        error: `${
+          field.charAt(0).toUpperCase() + field.slice(1)
+        } already exists`,
+      });
+    }
+
+    res.status(500).json({ error: "Error completing Google registration" });
+  }
+};
+
 export const googleLogin = async (req, res) => {
   try {
     const { idToken, email, name } = req.body;

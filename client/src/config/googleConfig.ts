@@ -27,3 +27,11 @@ export const GOOGLE_CONFIG_PROD = {
 export const getGoogleConfig = () => {
   return __DEV__ ? GOOGLE_CONFIG_DEV : GOOGLE_CONFIG_PROD;
 };
+
+// Debug function to check config
+export const debugGoogleConfig = () => {
+  console.log('=== Google Config Debug ===');
+  console.log('Web Client ID:', GOOGLE_WEB_CLIENT_ID);
+  console.log('Config:', GOOGLE_CONFIG);
+  console.log('========================');
+};

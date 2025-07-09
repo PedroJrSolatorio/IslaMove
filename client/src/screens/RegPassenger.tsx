@@ -1,4 +1,4 @@
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,6 @@ import {Button, ProgressBar, List} from 'react-native-paper';
 import {
   launchImageLibrary,
   launchCamera,
-  ImagePickerResponse,
-  Asset,
   PhotoQuality,
   ImageLibraryOptions,
 } from 'react-native-image-picker';
@@ -27,6 +25,14 @@ import ImageResizer from 'react-native-image-resizer';
 import api from '../../utils/api';
 import {styles} from '../styles/RegistrationStyles';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {jwtDecode} from 'jwt-decode';
+
+interface CustomJwtPayload {
+  isTemp?: boolean;
+  // Add other fields you might expect from the token
+  [key: string]: any;
+}
 
 interface HomeAddress {
   street: string;
@@ -71,11 +77,56 @@ const compressImage = async (uri: string, quality: number, maxSize: number) => {
 const RegisterPassengerScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const scrollViewRef = useRef<ScrollView>(null);
-
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [googleUserData, setGoogleUserData] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Check if user came from Google Sign-Up
+  useEffect(() => {
+    const checkGoogleUser = async () => {
+      try {
+        // Check if there's a temp token from Google signup
+        const tempToken = await AsyncStorage.getItem('tempToken');
+        if (tempToken) {
+          const decoded = jwtDecode<CustomJwtPayload>(tempToken);
+          if (decoded && decoded.isTemp) {
+            setIsGoogleUser(true);
+            // Pre-populate with Google data
+            const userData = await AsyncStorage.getItem('googleUserData');
+            if (userData) {
+              const parsedData = JSON.parse(userData);
+              setGoogleUserData(parsedData);
+              // Pre-populate personal info with Google data
+              setPersonalInfo(prev => ({
+                ...prev,
+                firstName: parsedData.firstName || parsedData.given_name || '',
+                lastName: parsedData.lastName || parsedData.family_name || '',
+                email: parsedData.email || '',
+                // Keep other fields empty as they need to be filled by user
+                middleInitial: '',
+                birthdate: '',
+                phone: '',
+                licenseNumber: '',
+              }));
+
+              // Profile image from Google (if available)
+              if (parsedData.picture || parsedData.profileImage) {
+                setProfileImage(parsedData.picture || parsedData.profileImage);
+                setProfileImageMime('image/jpeg'); // Default mime type for Google images
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error checking Google user:', error);
+      }
+    };
+
+    checkGoogleUser();
+  }, []);
 
   const [personalInfo, setPersonalInfo] = useState({
     lastName: '',
@@ -602,12 +653,20 @@ const RegisterPassengerScreen = () => {
       formData.append('middleInitial', personalInfo.middleInitial);
       formData.append('birthdate', personalInfo.birthdate);
       formData.append('age', age.toString());
-      formData.append('username', credentials.username);
       formData.append('email', personalInfo.email);
       formData.append('phone', personalInfo.phone);
-      formData.append('password', credentials.password);
       formData.append('role', 'passenger');
       formData.append('passengerCategory', personalInfo.passengerCategory);
+
+      // Handle Google vs regular users
+      if (isGoogleUser) {
+        formData.append('isGoogleUser', 'true');
+        // Don't include username/password for Google users
+      } else {
+        formData.append('username', credentials.username);
+        formData.append('password', credentials.password);
+        formData.append('isGoogleUser', 'false');
+      }
 
       // Add home address
       formData.append('homeAddress', JSON.stringify(homeAddress));
@@ -649,11 +708,20 @@ const RegisterPassengerScreen = () => {
         } as any);
       }
 
-      const response = await api.postForm('/api/auth/register', formData);
+      const endpoint = isGoogleUser
+        ? '/api/auth/complete-google-registration'
+        : '/api/auth/register';
+
+      const response = await api.postForm(endpoint, formData);
 
       setIsLoading(false);
 
       if (response.status >= 200 && response.status < 300) {
+        if (isGoogleUser) {
+          // Clear temp token and redirect to login
+          await AsyncStorage.removeItem('tempToken');
+          await AsyncStorage.removeItem('googleUserData');
+        }
         Alert.alert(
           'Registration Successful',
           'Your account has been created successfully. You can now log in and start booking rides!',
@@ -947,6 +1015,52 @@ const RegisterPassengerScreen = () => {
           </View>
         );
       case 4:
+        // Skip credentials step for Google users
+        if (isGoogleUser) {
+          return (
+            <View style={styles.stepContainer}>
+              <Text style={styles.stepTitle}>
+                Step 6: Complete Registration
+              </Text>
+              <Text style={styles.stepInstructions}>
+                You're signing up with Google, so no password is needed.
+              </Text>
+
+              <View style={styles.infoContainer}>
+                <Text style={styles.infoTitle}>What happens next?</Text>
+                <Text style={styles.infoText}>
+                  1. Your application will be reviewed by our team
+                  {'\n'}2. We'll verify all your documents
+                  {'\n'}3. You'll receive an email notification once approved
+                  {'\n'}4. After approval, you can log in with Google and start
+                  accepting rides
+                </Text>
+                <Text style={styles.infoNote}>
+                  The verification process typically takes 1-3 business days.
+                </Text>
+              </View>
+
+              <View style={styles.buttonRow}>
+                <Button
+                  mode="outlined"
+                  style={styles.halfButton}
+                  onPress={prevStep}>
+                  Back
+                </Button>
+                <Button
+                  mode="contained"
+                  style={styles.halfButton}
+                  onPress={handleSubmit}
+                  loading={isLoading}
+                  disabled={isLoading}>
+                  {isLoading ? 'Submitting...' : 'Submit'}
+                </Button>
+              </View>
+            </View>
+          );
+        }
+
+        // Regular credentials step for non-Google users
         return (
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 4: Create Account</Text>

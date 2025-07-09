@@ -8,8 +8,9 @@ interface ApiErrorResponse {
   error?: string;
 }
 
-interface CustomAxiosRequestConfig extends AxiosRequestConfig {
+export interface CustomAxiosRequestConfig extends AxiosRequestConfig {
   _retry?: boolean;
+  skipAuthInterceptor?: boolean;
 }
 
 // Create a separate axios instance for token refresh to avoid interceptor loops
@@ -41,6 +42,12 @@ const api = axios.create({
 // Add request interceptor to add auth token
 api.interceptors.request.use(
   async config => {
+    const customConfig = config as CustomAxiosRequestConfig;
+
+    if (customConfig.skipAuthInterceptor) {
+      return config; // Skip attaching Authorization header
+    }
+
     const token = await AsyncStorage.getItem('userToken');
     if (token) {
       config.headers = config.headers || {};

@@ -22,7 +22,7 @@ import {
   GoogleSigninButton,
   statusCodes,
 } from '@react-native-google-signin/google-signin';
-import {GOOGLE_CONFIG} from '../config/googleConfig';
+import {GOOGLE_CONFIG, debugGoogleConfig} from '../config/googleConfig';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -70,6 +70,28 @@ const LoginScreen = ({navigation}: Props) => {
     if (userToken && userRole) {
       navigateBasedOnRole(userRole);
     }
+  }, []);
+
+  useEffect(() => {
+    const initializeGoogleSignIn = async () => {
+      try {
+        // Debug configuration
+        debugGoogleConfig();
+
+        // Configure Google Sign-In
+        await GoogleSignin.configure(GOOGLE_CONFIG);
+        console.log('✅ Google Sign-In configured successfully');
+
+        // Check Play Services
+        const hasPlayServices = await GoogleSignin.hasPlayServices();
+        console.log('✅ Google Play Services available:', hasPlayServices);
+      } catch (error) {
+        console.error('❌ Google Sign-In initialization error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+      }
+    };
+
+    initializeGoogleSignIn();
   }, []);
 
   const navigateBasedOnRole = (role: string) => {

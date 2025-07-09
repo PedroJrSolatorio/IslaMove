@@ -9,6 +9,8 @@ import {
   validateToken,
   refreshAuthToken,
   checkUser,
+  googleSignup,
+  completeGoogleRegistration,
   googleLogin,
 } from "../controllers/authController.js";
 
@@ -66,6 +68,8 @@ router.post("/check-user", checkUser);
 router.post("/login", loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
+router.post("/google-signup", googleSignup);
+router.post("/complete-google-registration", completeGoogleRegistration);
 router.post("/google-login", googleLogin);
 
 // Register route with proper file upload handling
