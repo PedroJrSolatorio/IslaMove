@@ -42,41 +42,71 @@ export const checkUser = async (req, res) => {
   try {
     const { email, phone, username } = req.body;
 
-    // Check email
-    if (email) {
-      const emailExists = await User.findOne({ email });
-      if (emailExists) {
-        return res
-          .status(409)
-          .json({ error: "Email already registered", field: "email" });
+    // Default assumptions
+    let isGoogleUserCompleting = false;
+    let googleUserId = null;
+
+    // Decode token if available
+    const tempToken = req.headers.authorization?.split(" ")[1];
+    if (tempToken) {
+      try {
+        const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+        if (decoded?.isTemp && decoded?.email) {
+          isGoogleUserCompleting = true;
+          googleUserId = decoded.sub || decoded.id || decoded._id;
+        }
+      } catch (err) {
+        console.warn("JWT decode failed:", err.message);
+        // Proceed as non-Google user
       }
     }
 
-    // Check phone
-    if (phone) {
-      const phoneExists = await User.findOne({ phone });
-      if (phoneExists) {
-        return res
-          .status(409)
-          .json({ error: "Phone already registered", field: "phone" });
+    // Build conflict check query
+    const conflictQuery = {
+      $or: [
+        email ? { email } : null,
+        phone ? { phone } : null,
+        username ? { username } : null,
+      ].filter(Boolean),
+    };
+
+    const existingUsers = await User.find(conflictQuery);
+
+    for (const user of existingUsers) {
+      const isSelf =
+        isGoogleUserCompleting && user._id.toString() === googleUserId;
+
+      if (!isSelf) {
+        if (user.email === email) {
+          return res.status(409).json({
+            message: "This email address is already registered",
+            field: "email",
+          });
+        }
+        if (user.username === username) {
+          return res.status(409).json({
+            message: "This username is already taken",
+            field: "username",
+          });
+        }
+        if (user.phone === phone) {
+          return res.status(409).json({
+            message: "This phone number is already registered",
+            field: "phone",
+          });
+        }
       }
     }
 
-    // Check username
-    if (username) {
-      const usernameExists = await User.findOne({ username });
-      if (usernameExists) {
-        return res
-          .status(409)
-          .json({ error: "Username already taken", field: "username" });
-      }
-    }
-
-    // No conflicts found
-    return res.status(200).json({ message: "User information available" });
+    return res.status(200).json({
+      message: "User details are available",
+      available: true,
+    });
   } catch (error) {
-    console.error("Check user error:", error);
-    return res.status(500).json({ error: "Server error" });
+    console.error("Error checking user:", error);
+    return res.status(500).json({
+      message: "Server error while checking user details",
+    });
   }
 };
 
@@ -501,7 +531,7 @@ export const refreshAuthToken = async (req, res) => {
 
 export const googleSignup = async (req, res) => {
   try {
-    const { idToken, email, name, role } = req.body;
+    const { idToken, role } = req.body;
 
     if (!idToken) {
       return res.status(400).json({ message: "ID token is required" });
@@ -522,16 +552,85 @@ export const googleSignup = async (req, res) => {
     const googleId = payload["sub"];
 
     // Check if user already exists
-    const existingUser = await User.findOne({
+    let existingUser = await User.findOne({
       $or: [{ email: payload.email }, { googleId: googleId }],
     });
 
     if (existingUser) {
-      return res.status(409).json({
-        message: "User already exists with this email or Google account",
-        field: "email",
+      // If user exists, log them in instead of trying to sign them up again
+      // This is crucial for preventing duplicate accounts and for a smooth UX
+      // (Similar to your googleLogin logic)
+      const token = jwt.sign(
+        {
+          userId: existingUser._id,
+          role: existingUser.role,
+          isProfileComplete: existingUser.isProfileComplete,
+          isTemp: true,
+          email: user.email,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+      const refreshToken = jwt.sign(
+        { userId: existingUser._id },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      console.log(
+        `Existing Google user (${existingUser.email}) found. Logging in.`
+      );
+      return res.status(200).json({
+        message: "Logged in successfully with existing Google account",
+        token,
+        refreshToken,
+        userId: existingUser._id,
+        firstName: existingUser.firstName,
+        lastName: existingUser.lastName,
+        username: existingUser.username,
+        isProfileComplete: existingUser.isProfileComplete,
+        email: existingUser.email,
       });
     }
+
+    // --- NEW LOGIC: Auto-generate a unique username for new Google users ---
+    let generatedUsername;
+    let counter = 0;
+    let isUnique = false;
+    const emailPrefix = payload.email
+      .split("@")[0]
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .slice(0, 15); // Max 15 chars from email
+
+    while (!isUnique) {
+      const baseUsername = `${emailPrefix}_g_${Math.random()
+        .toString(36)
+        .substring(2, 8)}`;
+      const testUsername =
+        counter > 0 ? `${baseUsername}_${counter}` : baseUsername;
+      const userWithSameUsername = await User.findOne({
+        username: testUsername,
+      });
+      if (!userWithSameUsername) {
+        generatedUsername = testUsername;
+        isUnique = true;
+      } else {
+        counter++;
+        if (counter > 100) {
+          // Safety break
+          console.error(
+            "Failed to generate a unique username after many attempts."
+          );
+          return res
+            .status(500)
+            .json({ error: "Failed to generate unique username." });
+        }
+      }
+    }
+    console.log(
+      `Auto-generated username for new Google signup: ${generatedUsername}`
+    );
+    // --- END NEW LOGIC ---
 
     // Create new user with Google info (minimal required fields only)
     const user = await User.create({
@@ -544,218 +643,126 @@ export const googleSignup = async (req, res) => {
       profileImage: payload.picture || "",
       isGoogleUser: true,
       isProfileComplete: false, // This will be the default for Google users
-
-      // Initialize empty homeAddress object
       homeAddress: {},
-
-      // Initialize role-specific fields as empty
+      username: generatedUsername,
       ...(role === "driver" && {
         documents: [],
       }),
-
       ...(role === "passenger" && {
         savedAddresses: [],
       }),
     });
 
-    // Generate temporary token for registration completion
-    const tempToken = jwt.sign(
-      { userId: user._id, role: user.role, isTemp: true },
+    // Generate app-specific tokens
+    const token = jwt.sign(
+      {
+        userId: user._id,
+        role: user.role,
+        isProfileComplete: user.isProfileComplete,
+        isTemp: true,
+        email: user.email,
+      },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" } // Shorter expiry for temp token
+      { expiresIn: "24h" }
+    );
+    const refreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: "7d" }
     );
 
     res.json({
       message: "Google signup successful. Please complete your profile.",
-      tempToken,
+      token,
+      refreshToken,
       userId: user._id,
       firstName: user.firstName,
       lastName: user.lastName,
-      email: user.email,
+      username: user.username,
+      isProfileComplete: user.isProfileComplete,
       role: user.role,
-      isProfileComplete: false,
+      email: user.email,
     });
   } catch (error) {
     console.error("Google signup error:", error);
-
-    // Handle specific validation errors
-    if (error.name === "ValidationError") {
-      const errorMessages = Object.values(error.errors).map(
-        (err) => err.message
-      );
-      return res.status(400).json({
-        message: "Validation failed",
-        errors: errorMessages,
-      });
-    }
-
-    // Handle duplicate key errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyValue)[0];
+      // Handle duplicate email if for some reason it wasn't caught by findOne first
       return res.status(409).json({
-        message: `${field} already exists`,
-        field: field,
+        message: "Account with this email or Google ID already exists.",
       });
     }
-
-    res.status(500).json({ message: "Google authentication failed" });
+    res.status(500).json({ message: "Failed to sign up with Google." });
   }
 };
 
 export const completeGoogleRegistration = async (req, res) => {
   try {
+    // 1. Verify temp JWT from header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "No valid token provided" });
+    }
+
+    const tempToken = authHeader.split(" ")[1];
+    const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
+
+    if (!decoded.isTemp || !decoded.email) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+
+    // 2. Find the Google user
+    const existingUser = await User.findOne({
+      _id: decoded.userId,
+      isGoogleUser: true,
+      isProfileComplete: false,
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({
+        error: "Google user not found or already completed registration",
+      });
+    }
+
+    // 3. Parse and validate inputs
     const {
       lastName,
       firstName,
       middleInitial,
       birthdate,
       age,
-      email,
       phone,
       role,
       licenseNumber,
-      homeAddress,
       passengerCategory,
+      homeAddress,
+      vehicle,
+      idDocument,
     } = req.body;
 
-    // Get the base URL for file paths
-    const baseUrl =
-      process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
-
-    // Parse vehicle data if provided
-    let vehicle = null;
-    if (req.body.vehicle) {
-      if (typeof req.body.vehicle === "string") {
-        vehicle = JSON.parse(req.body.vehicle);
-      } else {
-        vehicle = req.body.vehicle;
-      }
+    // Required fields check
+    if (!lastName || !firstName || !birthdate || !age || !phone || !role) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // Parse homeAddress if provided as string
-    let parsedHomeAddress = null;
-    if (homeAddress) {
-      if (typeof homeAddress === "string") {
-        parsedHomeAddress = JSON.parse(homeAddress);
-      } else {
-        parsedHomeAddress = homeAddress;
-      }
-    }
+    const parsedHomeAddress =
+      typeof homeAddress === "string" ? JSON.parse(homeAddress) : homeAddress;
 
-    // Parse idDocument if provided
-    let idDocument = null;
-    if (req.body.idDocument) {
-      if (typeof req.body.idDocument === "string") {
-        idDocument = JSON.parse(req.body.idDocument);
-      } else {
-        idDocument = req.body.idDocument;
-      }
-    }
+    const parsedVehicle =
+      typeof vehicle === "string" ? JSON.parse(vehicle) : vehicle;
 
-    // Find the existing Google user
-    const existingUser = await User.findOne({
-      email: email,
-      isGoogleUser: true, // Assuming you have this field in your schema
-    });
+    const parsedIdDoc =
+      typeof idDocument === "string" ? JSON.parse(idDocument) : idDocument;
 
-    if (!existingUser) {
-      return res.status(404).json({ error: "Google user not found" });
-    }
-
-    // Check required fields for all users
-    if (
-      !lastName ||
-      !firstName ||
-      !middleInitial ||
-      !birthdate ||
-      !age ||
-      !email ||
-      !phone ||
-      !role
-    ) {
-      console.error("🚨 Missing required fields:", req.body);
-      return res
-        .status(400)
-        .json({ error: "All required fields must be provided" });
-    }
-
-    // Check if phone number is already used by another user
-    const phoneCheck = await User.findOne({
-      phone: phone,
+    // 4. Phone conflict check
+    const phoneConflict = await User.findOne({
+      phone,
       _id: { $ne: existingUser._id },
     });
-
-    if (phoneCheck) {
+    if (phoneConflict) {
       return res.status(400).json({ error: "Phone number already registered" });
     }
 
-    // Role-specific validation
-    if (role === "driver") {
-      if (!licenseNumber) {
-        return res.status(400).json({
-          error: "License number is required for drivers",
-        });
-      }
-
-      if (
-        !parsedHomeAddress ||
-        !parsedHomeAddress.street ||
-        !parsedHomeAddress.city ||
-        !parsedHomeAddress.state ||
-        !parsedHomeAddress.zipCode
-      ) {
-        return res.status(400).json({
-          error: "Complete home address is required for drivers",
-        });
-      }
-
-      if (
-        !vehicle ||
-        !vehicle.make ||
-        !vehicle.series ||
-        !vehicle.yearModel ||
-        !vehicle.color ||
-        !vehicle.type ||
-        !vehicle.plateNumber ||
-        !vehicle.bodyNumber
-      ) {
-        return res.status(400).json({
-          error: "Complete vehicle information is required for drivers",
-        });
-      }
-
-      // Validate vehicle type
-      if (vehicle.type !== "bao-bao") {
-        return res.status(400).json({
-          error: "Invalid vehicle type. Only 'bao-bao' is allowed",
-        });
-      }
-    }
-
-    if (role === "passenger") {
-      if (
-        !passengerCategory ||
-        !["regular", "student", "senior"].includes(passengerCategory)
-      ) {
-        return res.status(400).json({
-          error: "Valid passenger category is required for passengers",
-        });
-      }
-
-      if (
-        !parsedHomeAddress ||
-        !parsedHomeAddress.street ||
-        !parsedHomeAddress.city ||
-        !parsedHomeAddress.state ||
-        !parsedHomeAddress.zipCode
-      ) {
-        return res.status(400).json({
-          error: "Complete home address is required for passengers",
-        });
-      }
-    }
-
-    // Update existing user with complete information
+    // 5. Update common fields
     existingUser.lastName = lastName;
     existingUser.firstName = firstName;
     existingUser.middleInitial = middleInitial;
@@ -764,52 +771,74 @@ export const completeGoogleRegistration = async (req, res) => {
     existingUser.phone = phone;
     existingUser.role = role;
 
-    // Add home address for drivers and passengers (not admin)
-    if (role !== "admin" && parsedHomeAddress) {
+    if (parsedHomeAddress) {
       existingUser.homeAddress = {
         street: parsedHomeAddress.street,
         city: parsedHomeAddress.city,
         state: parsedHomeAddress.state,
         zipCode: parsedHomeAddress.zipCode,
-        // coordinates can be added later when implementing geocoding
       };
     }
 
-    // Process profile image if provided
-    if (req.files && req.files.profileImage) {
-      const profileImageFile = req.files.profileImage[0];
-      existingUser.profileImage = `${baseUrl}/uploads/profiles/${profileImageFile.filename}`;
-    }
-
-    // Add role-specific fields
+    // 6. Role-specific fields
     if (role === "driver") {
+      if (!licenseNumber || !parsedVehicle) {
+        return res
+          .status(400)
+          .json({ error: "Driver license/vehicle required" });
+      }
+
+      if (parsedVehicle.type !== "bao-bao") {
+        return res
+          .status(400)
+          .json({ error: "Only 'bao-bao' vehicles allowed" });
+      }
+
       existingUser.licenseNumber = licenseNumber;
       existingUser.vehicle = {
-        make: vehicle.make,
-        series: vehicle.series,
-        yearModel: parseInt(vehicle.yearModel),
-        color: vehicle.color,
-        type: vehicle.type,
-        plateNumber: vehicle.plateNumber,
-        bodyNumber: vehicle.bodyNumber,
+        make: parsedVehicle.make,
+        series: parsedVehicle.series,
+        yearModel: parseInt(parsedVehicle.yearModel),
+        color: parsedVehicle.color,
+        type: parsedVehicle.type,
+        plateNumber: parsedVehicle.plateNumber,
+        bodyNumber: parsedVehicle.bodyNumber,
       };
       existingUser.driverStatus = "offline";
       existingUser.isVerified = false;
       existingUser.verificationStatus = "pending";
+    }
 
-      // Handle ID document
-      if (idDocument && req.files && req.files.idDocumentImage) {
-        const idDocumentFile = req.files.idDocumentImage[0];
-        existingUser.idDocument = {
-          type: idDocument.type,
-          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
-          uploadedAt: new Date(),
-          verified: false,
-        };
+    if (role === "passenger") {
+      if (
+        !passengerCategory ||
+        !["regular", "student", "senior"].includes(passengerCategory)
+      ) {
+        return res.status(400).json({ error: "Invalid passenger category" });
       }
+      existingUser.passengerCategory = passengerCategory;
+      existingUser.savedAddresses = [];
+    }
 
-      // Handle driver verification documents
-      const documentTypes = [
+    // 7. Handle file uploads
+    const baseUrl =
+      process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
+
+    if (req.files?.profileImage?.[0]) {
+      existingUser.profileImage = `${baseUrl}/uploads/profiles/${req.files.profileImage[0].filename}`;
+    }
+
+    if (req.files?.idDocumentImage?.[0]) {
+      existingUser.idDocument = {
+        type: parsedIdDoc?.type || "",
+        imageUrl: `${baseUrl}/uploads/documents/${req.files.idDocumentImage[0].filename}`,
+        uploadedAt: new Date(),
+        verified: false,
+      };
+    }
+
+    if (role === "driver") {
+      const docTypes = [
         "Official Receipt (OR)",
         "Certificate of Registration (CR)",
         "MODA Certificate",
@@ -817,61 +846,58 @@ export const completeGoogleRegistration = async (req, res) => {
       ];
       existingUser.documents = [];
 
-      documentTypes.forEach((docType) => {
-        const fieldName = `document_${docType.replace(/\s+/g, "")}`;
-        if (req.files && req.files[fieldName]) {
-          const docFile = req.files[fieldName][0];
+      docTypes.forEach((docType) => {
+        const field = `document_${docType.replace(/\s+/g, "")}`;
+        if (req.files?.[field]?.[0]) {
           existingUser.documents.push({
             documentType: docType,
-            fileURL: `${baseUrl}/uploads/documents/${docFile.filename}`,
+            fileURL: `${baseUrl}/uploads/documents/${req.files[field][0].filename}`,
             verified: false,
             uploadDate: new Date(),
           });
         }
       });
-    } else if (role === "passenger") {
-      existingUser.passengerCategory = passengerCategory;
-      existingUser.savedAddresses = [];
-
-      // Handle ID document for passengers too
-      if (idDocument && req.files && req.files.idDocumentImage) {
-        const idDocumentFile = req.files.idDocumentImage[0];
-        existingUser.idDocument = {
-          type: idDocument.type,
-          imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
-          uploadedAt: new Date(),
-          verified: false,
-        };
-      }
     }
 
-    // Mark profile as complete
+    // 8. Finalize profile
     existingUser.isProfileComplete = true;
 
-    // Save the updated user
+    // Save
     await existingUser.save();
 
-    // Remove password from response (even though Google users don't have passwords)
-    const userResponse = existingUser.toObject();
-    delete userResponse.password;
+    // 9. Issue new token (not a temp token anymore)
+    const fullToken = jwt.sign(
+      {
+        userId: existingUser._id,
+        email: existingUser.email,
+        role: existingUser.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
 
     res.status(200).json({
       message: "Google registration completed successfully",
-      user: userResponse,
+      token: fullToken,
+      user: {
+        id: existingUser._id,
+        email: existingUser.email,
+        firstName: existingUser.firstName,
+        lastName: existingUser.lastName,
+        role: existingUser.role,
+        isProfileComplete: existingUser.isProfileComplete,
+        verificationStatus: existingUser.verificationStatus,
+      },
     });
   } catch (error) {
-    console.error("Complete Google registration error:", error);
-
-    // Send more specific error messages for validation errors
+    console.error("Error completing Google registration:", error);
     if (error.name === "ValidationError") {
-      const errorMessage = Object.values(error.errors)
-        .map((err) => err.message)
-        .join(", ");
-
-      return res.status(400).json({ error: errorMessage });
+      return res.status(400).json({
+        error: Object.values(error.errors)
+          .map((e) => e.message)
+          .join(", "),
+      });
     }
-
-    // Handle duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
@@ -880,19 +906,20 @@ export const completeGoogleRegistration = async (req, res) => {
         } already exists`,
       });
     }
-
-    res.status(500).json({ error: "Error completing Google registration" });
+    return res
+      .status(500)
+      .json({ error: "Server error during Google registration" });
   }
 };
 
 export const googleLogin = async (req, res) => {
   try {
-    const { idToken, email, name } = req.body;
+    const { idToken, email, name, photo } = req.body;
 
     // Verify Google ID token directly with Google
     const ticket = await client.verifyIdToken({
       idToken: idToken,
-      audience: process.env.GOOGLE_CLIENT_ID, // Your web client ID
+      audience: process.env.GOOGLE_CLIENT_ID,
     });
 
     const payload = ticket.getPayload();
@@ -911,17 +938,35 @@ export const googleLogin = async (req, res) => {
     if (!user) {
       user = await User.create({
         email: payload.email,
-        name: payload.name,
+        firstName: payload.given_name || payload.name.split(" ")[0],
+        lastName:
+          payload.family_name || payload.name.split(" ").slice(1).join(" "),
         googleId: googleId,
         role: "passenger", // Default role or determine based on your logic
-        profilePicture: payload.picture,
+        profileImage: payload.picture || "",
         isGoogleUser: true,
+        isProfileComplete: false,
+        homeAddress: {},
       });
+      console.log("New Google user created during login:", user._id);
+    } else {
+      console.log("Existing Google user found during login:", user._id);
+      // Optional: Update user's Google photo if it changed, or other Google-provided info
+      if (payload.picture && user.profileImage !== payload.picture) {
+        user.profileImage = payload.picture;
+        await user.save(); // Save the update
+      }
     }
 
     // Generate your app's JWT token
     const token = jwt.sign(
-      { userId: user._id, role: user.role },
+      {
+        userId: user._id,
+        role: user.role,
+        isProfileComplete: user.isProfileComplete,
+        isTemp: true,
+        email: user.email,
+      },
       process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
@@ -936,8 +981,11 @@ export const googleLogin = async (req, res) => {
       token,
       refreshToken,
       userId: user._id,
-      firstName: user.name.split(" ")[0],
-      username: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      isProfileComplete: user.isProfileComplete,
+      email: user.email,
     });
   } catch (error) {
     console.error("Google login error:", error);

@@ -110,7 +110,7 @@ const RegisterDriverScreen = () => {
         const tempToken = await AsyncStorage.getItem('tempToken');
         if (tempToken) {
           const decoded = jwtDecode<CustomJwtPayload>(tempToken);
-          if (decoded && decoded.isTemp) {
+          if (decoded && !decoded.isProfileComplete) {
             setIsGoogleUser(true);
             // Pre-populate with Google data
             const userData = await AsyncStorage.getItem('googleUserData');
@@ -118,17 +118,21 @@ const RegisterDriverScreen = () => {
               const parsedData = JSON.parse(userData);
               setGoogleUserData(parsedData);
               // Pre-populate personal info with Google data
-              setPersonalInfo(prev => ({
-                ...prev,
-                firstName: parsedData.firstName || parsedData.given_name || '',
-                lastName: parsedData.lastName || parsedData.family_name || '',
-                email: parsedData.email || '',
-                // Keep other fields empty as they need to be filled by user
-                middleInitial: '',
-                birthdate: '',
-                phone: '',
-                licenseNumber: '',
-              }));
+              setPersonalInfo(prev => {
+                const updatedPersonalInfo = {
+                  ...prev, // Keep existing values for fields not explicitly provided by Google
+                  firstName: parsedData.firstName || '',
+                  lastName: parsedData.lastName || '',
+                  email: parsedData.email || '',
+                };
+
+                // Log the update to debug
+                console.log(
+                  'Pre-filling personalInfo with Google data:',
+                  updatedPersonalInfo,
+                );
+                return updatedPersonalInfo;
+              });
 
               // Profile image from Google (if available)
               if (parsedData.picture || parsedData.profileImage) {
@@ -538,44 +542,82 @@ const RegisterDriverScreen = () => {
     try {
       setIsLoading(true);
 
-      const response = await api.post('/api/auth/check-user', {
-        email: personalInfo.email,
-        phone: personalInfo.phone,
-        username: credentials.username,
+      // Step 1: Try getting tempToken (if any)
+      const tempToken = await AsyncStorage.getItem('tempToken');
+      const headers: any = {
+        'Content-Type': 'application/json',
+      };
+
+      if (tempToken) {
+        headers.Authorization = `Bearer ${tempToken}`;
+      }
+
+      // Determine which fields to check based on whether it's a Google user
+      const checkData: {
+        email?: string;
+        phone?: string;
+        username?: string;
+      } = {};
+
+      // Only include email and phone if it's NOT a Google user OR if it's not pre-filled by Google
+      // This assumes Google users will have their email pre-filled and validated from the initial signup
+      if (!isGoogleUser || !personalInfo.email) {
+        checkData.email = personalInfo.email;
+      }
+      if (!isGoogleUser || !personalInfo.phone) {
+        checkData.phone = personalInfo.phone;
+      }
+
+      // Always check username on step 6 regardless of Google user status
+      if (currentStep === 6) {
+        checkData.username = credentials.username;
+      }
+
+      // If no fields are set for checking (e.g., Google user skipping email/phone check), return true directly
+      if (Object.keys(checkData).length === 0) {
+        setIsLoading(false);
+        return true;
+      }
+
+      // Step 2: Make request to check-user endpoint
+      const response = await api.post('/api/auth/check-user', checkData, {
+        headers,
       });
 
       setIsLoading(false);
 
-      // Check if response is successful (200 status)
+      // Step 3: Handle successful response
       if (response.status === 200) {
-        // User information is available, no conflicts
         return true;
       }
 
+      // Step 4: Handle known conflict
       if (response.status === 409) {
         const data = response.data;
-        if (data.field === 'email') {
+
+        if (data.field === 'email' && checkData.email) {
+          // Only show alert if email was actually checked
           Alert.alert(
             'Already Registered',
             'This email address is already registered.',
           );
-          return false;
-        } else if (data.field === 'phone') {
+        } else if (data.field === 'phone' && checkData.phone) {
+          // Only show alert if phone was actually checked
           Alert.alert(
             'Already Registered',
             'This phone number is already registered.',
           );
-          return false;
         } else if (data.field === 'username' && currentStep === 6) {
           Alert.alert(
             'Username Taken',
             'This username is already taken. Please choose another one.',
           );
-          return false;
+        } else {
+          Alert.alert('Conflict', data.message || 'Conflict with user data.');
         }
+        return false;
       }
 
-      // Handle other error responses
       Alert.alert(
         'Error',
         response.data?.error || 'Failed to check user information',
@@ -584,13 +626,11 @@ const RegisterDriverScreen = () => {
     } catch (error: any) {
       setIsLoading(false);
       console.error('Error checking existing user:', error);
-      // Handle different types of errors
+
       if (error.response) {
-        // Server responded with error status
         const {status, data} = error.response;
 
         if (status === 409) {
-          // Handle conflict responses in catch block too
           if (data.field === 'email') {
             Alert.alert(
               'Already Registered',
@@ -602,25 +642,23 @@ const RegisterDriverScreen = () => {
               'This phone number is already registered.',
             );
           } else if (data.field === 'username' && currentStep === 6) {
-            Alert.alert(
-              'Username Taken',
-              'This username is already taken. Please choose another one.',
-            );
+            Alert.alert('Username Taken', 'This username is already taken.');
           }
-          return false;
+        } else {
+          Alert.alert(
+            'Error',
+            data?.error || 'Failed to check user information',
+          );
         }
-
-        Alert.alert('Error', data?.error || 'Failed to check user information');
       } else if (error.request) {
-        // Network error
         Alert.alert(
           'Network Error',
-          'Could not check if user already exists. Please check your connection.',
+          'Could not check user info. Check your connection.',
         );
       } else {
-        // Other error
         Alert.alert('Error', 'An unexpected error occurred.');
       }
+
       return false;
     }
   };
@@ -866,11 +904,37 @@ const RegisterDriverScreen = () => {
         }
       });
 
+      let requestConfig = {};
+      if (isGoogleUser) {
+        const tempToken = await AsyncStorage.getItem('tempToken');
+        if (!tempToken) {
+          throw new Error(
+            'Temporary token not found for Google user completion.',
+          );
+        }
+        requestConfig = {
+          headers: {
+            Authorization: `Bearer ${tempToken}`,
+          },
+        };
+        formData.append('isGoogleUser', 'true');
+        // Ensure username is sent if collected in the UI
+        if (credentials.username) {
+          formData.append('username', credentials.username);
+        }
+      } else {
+        // Only append username/password if not a Google user
+        formData.append('username', credentials.username);
+        formData.append('password', credentials.password);
+        formData.append('isGoogleUser', 'false');
+      }
+      formData.append('isGoogleUser', String(isGoogleUser)); // Ensure boolean is sent as string
+
       const endpoint = isGoogleUser
         ? '/api/auth/complete-google-registration'
         : '/api/auth/register';
 
-      const response = await api.postForm(endpoint, formData);
+      const response = await api.postForm(endpoint, formData, requestConfig);
 
       setIsLoading(false);
 

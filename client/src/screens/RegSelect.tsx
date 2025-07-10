@@ -72,13 +72,15 @@ const RegisterSelectionScreen = () => {
 
       if (response.status === 200) {
         // Store temporary token and user data
-        await AsyncStorage.setItem('tempToken', response.data.tempToken);
+        await AsyncStorage.setItem('tempToken', response.data.token);
         await AsyncStorage.setItem(
           'googleUserData',
           JSON.stringify({
             firstName: response.data.firstName,
             lastName: response.data.lastName,
             email: response.data.email,
+            userId: response.data.userId,
+            isProfileComplete: response.data.isProfileComplete,
           }),
         );
 

@@ -181,6 +181,8 @@ const LoginScreen = ({navigation}: Props) => {
     try {
       // Check if device supports Google Play Services
       await GoogleSignin.hasPlayServices();
+      // Clear any previous sign-in
+      await GoogleSignin.signOut();
 
       // Get user info from Google
       const signInResult = await GoogleSignin.signIn();

@@ -108,7 +108,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       sparse: true, // Allows null values but ensures uniqueness when present
       required: function () {
-        return this.isProfileComplete;
+        return !this.isGoogleUser && this.isProfileComplete;
       },
     },
     email: { type: String, unique: true, required: true },
@@ -363,32 +363,83 @@ userSchema.pre("save", function (next) {
   }
 
   // For Google users, check if profile should be marked complete
-  if (this.isGoogleUser && this.isModified()) {
-    const hasBasicInfo =
+  // ONLY if this is the final completion submission.
+  // We need to be careful here: `this.isModified()` on its own is too broad.
+  // Let's refine the logic for Google user completion.
+  // The `completeGoogleRegistration` explicitly sets `isProfileComplete = true`
+  // just before saving. The `pre('save')` hook then re-validates.
+
+  if (this.isGoogleUser) {
+    // Only set isProfileComplete to true if all necessary fields are present.
+    // This is where the core problem likely is.
+    // Ensure all conditionally required fields are present when setting true.
+
+    const hasCommonInfo =
       this.lastName &&
       this.firstName &&
+      // middleInitial and birthdate are conditionally required based on isProfileComplete
+      // We are *trying* to make isProfileComplete true, so these must be present.
       this.middleInitial &&
       this.birthdate &&
       this.age &&
-      this.username &&
-      this.phone;
+      this.phone; // Phone is conditionally required based on isProfileComplete
 
+    let roleSpecificInfoPresent = false;
     if (this.role === "driver") {
-      const hasDriverInfo =
+      roleSpecificInfoPresent =
         this.licenseNumber &&
         this.homeAddress &&
-        this.homeAddress.street &&
+        this.homeAddress.street && // Assuming street is enough for address validation here
         this.vehicle &&
         this.vehicle.make &&
+        this.vehicle.series &&
+        this.vehicle.yearModel &&
+        this.vehicle.color &&
+        this.vehicle.type &&
         this.vehicle.plateNumber &&
-        this.vehicle.bodyNumber;
-      this.isProfileComplete = hasBasicInfo && hasDriverInfo;
+        this.vehicle.bodyNumber &&
+        // Ensure documents are handled if required by the flow (e.g., at least idDocument)
+        this.idDocument &&
+        this.idDocument.imageUrl;
+
+      // For drivers, check if all required 'documents' are present (if your frontend requires them all for completion)
+      // This part might need fine-tuning based on how strictly you enforce document uploads at completion vs. later
+      // For now, let's just ensure idDocument is present
+      // Example: For MODA, OR, CR, Vehicle Photo, you might not require ALL of them at the moment of profile completion.
+      // Adjust this according to your business logic.
+      // if (this.documents.length < 4) { // Assuming 4 documents are required
+      //   roleSpecificInfoPresent = false;
+      // }
     } else if (this.role === "passenger") {
-      const hasPassengerInfo =
-        this.passengerCategory && this.homeAddress && this.homeAddress.street;
-      this.isProfileComplete = hasBasicInfo && hasPassengerInfo;
+      roleSpecificInfoPresent =
+        this.passengerCategory &&
+        this.homeAddress &&
+        this.homeAddress.street && // Assuming street is enough for address validation here
+        this.idDocument &&
+        this.idDocument.imageUrl; // Ensure ID document is required for passengers too
+    }
+
+    // Crucially, username is required if isProfileComplete is true.
+    // If the username is NOT set for Google users until the final step (Step 6),
+    // then this 'pre-save' hook is the place to ensure it's there.
+    // If username is collected at a later step, it *must* be present when isProfileComplete becomes true.
+    const hasUsername = this.username;
+
+    // Set isProfileComplete to true ONLY if ALL conditions are met.
+    // If it's already true, keep it true.
+    const shouldBeComplete =
+      hasCommonInfo && roleSpecificInfoPresent && hasUsername;
+
+    if (shouldBeComplete) {
+      this.isProfileComplete = true;
     } else {
-      this.isProfileComplete = hasBasicInfo;
+      // If it's a Google user and something is missing, it should remain false.
+      // This is important to prevent validation errors on required fields that
+      // depend on `isProfileComplete` being true, *before* all data is submitted.
+      // However, if the `completeGoogleRegistration` is the *final* endpoint,
+      // it *should* have all data.
+      // The more likely issue is that `username` is still missing.
+      this.isProfileComplete = false; // Keep it false if anything is missing
     }
   }
 

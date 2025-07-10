@@ -69,8 +69,21 @@ router.post("/login", loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
 router.post("/google-signup", googleSignup);
-router.post("/complete-google-registration", completeGoogleRegistration);
 router.post("/google-login", googleLogin);
+
+router.post("/complete-google-registration", uploadFields, (req, res, next) => {
+  // Optional: Add specific Multer error handling for this route if needed
+  // This ensures Multer errors are caught before reaching your controller logic
+  if (req.multerError) {
+    // Assuming you set a custom error property in multerConfig if needed
+    console.error(
+      "Multer error on complete-google-registration:",
+      req.multerError
+    );
+    return res.status(400).json({ error: req.multerError.message });
+  }
+  completeGoogleRegistration(req, res);
+});
 
 // Register route with proper file upload handling
 router.post("/register", (req, res, next) => {
