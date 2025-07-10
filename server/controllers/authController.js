@@ -945,9 +945,9 @@ export const completeGoogleRegistration = async (req, res) => {
 
 export const googleLogin = async (req, res) => {
   try {
-    const { idToken, email, name, photo } = req.body;
+    const { idToken } = req.body;
 
-    // Verify Google ID token directly with Google
+    //1. Verify Google ID token directly with Google
     const ticket = await client.verifyIdToken({
       idToken: idToken,
       audience: process.env.GOOGLE_CLIENT_ID,
@@ -955,71 +955,88 @@ export const googleLogin = async (req, res) => {
 
     const payload = ticket.getPayload();
     const googleId = payload["sub"];
+    const googleEmail = payload.email;
 
-    // Verify the token is valid
-    if (!payload) {
-      return res.status(401).json({ message: "Invalid Google token" });
+    if (!payload || !googleId || !googleEmail) {
+      return res
+        .status(401)
+        .json({ message: "Invalid Google token or missing essential data." });
     }
 
-    // Find or create user in your database
+    // 2. Find user by googleId or email in database
     let user = await User.findOne({
-      $or: [{ email: payload.email }, { googleId: googleId }],
+      $or: [{ googleId: googleId }, { email: googleEmail }],
     });
 
-    if (!user) {
-      user = await User.create({
-        email: payload.email,
-        firstName: payload.given_name || payload.name.split(" ")[0],
-        lastName:
-          payload.family_name || payload.name.split(" ").slice(1).join(" "),
-        googleId: googleId,
-        role: "passenger", // Default role or determine based on your logic
-        profileImage: payload.picture || "",
-        isGoogleUser: true,
-        isProfileComplete: false,
-        homeAddress: {},
-      });
-      console.log("New Google user created during login:", user._id);
-    } else {
-      console.log("Existing Google user found during login:", user._id);
-      // Optional: Update user's Google photo if it changed, or other Google-provided info
-      if (payload.picture && user.profileImage !== payload.picture) {
-        user.profileImage = payload.picture;
-        await user.save(); // Save the update
+    // Only allow login if user exists AND profile is complete
+    if (user && user.isProfileComplete) {
+      // User found and profile is complete! This is a successful login.
+
+      // Optional: If user exists but wasn't previously linked to Google (e.g., regular signup then Google login with same email)
+      if (!user.googleId) {
+        user.googleId = googleId; // Link Google ID
+        user.isGoogleUser = true; // Mark as Google user
+        // user.profileImage = payload.picture || user.profileImage;
+        await user.save();
       }
-    }
 
-    // Generate your app's JWT token
-    const token = jwt.sign(
-      {
+      console.log("Existing Google user logged in successfully:", user._id);
+      const token = jwt.sign(
+        {
+          userId: user._id,
+          role: user.role,
+          isProfileComplete: user.isProfileComplete,
+          email: user.email,
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
+      const refreshToken = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_REFRESH_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      res.status(200).json({
+        // 200 OK for successful login
+        message: "Login successful.",
+        token,
+        refreshToken,
         userId: user._id,
-        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
         isProfileComplete: user.isProfileComplete,
-        isTemp: true,
-        email: user.email,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "24h" }
-    );
-
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_REFRESH_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    res.json({
-      token,
-      refreshToken,
-      userId: user._id,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      username: user.username,
-      isProfileComplete: user.isProfileComplete,
-      email: user.email,
-    });
+        role: user.role,
+      });
+    } else {
+      // User not found, OR user found but profile is not complete.
+      // In this simplified flow, both cases mean "not registered" for login purposes.
+      console.log("Google account not fully registered or profile incomplete.");
+      return res
+        .status(401)
+        .json({
+          message:
+            "Google account not registered or profile incomplete. Please register first.",
+        });
+    }
   } catch (error) {
     console.error("Google login error:", error);
-    res.status(401).json({ message: "Google authentication failed" });
+    // More specific error for Google token verification failures
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError" ||
+      (error.message && error.message.includes("Invalid ID token"))
+    ) {
+      return res
+        .status(401)
+        .json({
+          message: "Google token verification failed. Please try again.",
+        });
+    }
+    // Generic server error for other issues
+    res
+      .status(500)
+      .json({ message: "Server error during Google authentication." });
   }
 };

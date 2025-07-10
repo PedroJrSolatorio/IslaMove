@@ -228,21 +228,99 @@ const LoginScreen = ({navigation}: Props) => {
         refreshProfile();
       }, 100);
     } catch (error: any) {
+      console.log('=== Google Sign-In Error Debug ===');
+      console.log('Full error object:', JSON.stringify(error, null, 2));
+      console.log('Error code:', error.code);
+      console.log('Error response:', error.response);
+      console.log('Error response status:', error.response?.status);
+      console.log('Error response data:', error.response?.data);
+      console.log('Error message:', error.message);
+      console.log('===================================');
+
+      // Check if this is a Google Sign-In specific error first
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         // User cancelled the login flow
         console.log('Google Sign-In cancelled');
+        return; // Don't show error for cancellation
       } else if (error.code === statusCodes.IN_PROGRESS) {
         // Operation (e.g. sign in) is in progress already
         Alert.alert('Sign In', 'Google Sign-In is already in progress');
+        return;
       } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         // Play services not available or outdated
         Alert.alert('Error', 'Google Play Services not available');
+        return;
+      }
+
+      // Handle the specific "Authentication failed" message that likely means unregistered user
+      if (error.message === 'Authentication failed') {
+        Alert.alert(
+          'Account Not Registered',
+          'Your Google account is not registered with our app. Please register first.',
+          [
+            {
+              text: 'Register Now',
+              onPress: () => navigation.navigate('RegisterSelection'),
+            },
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ],
+        );
+        return;
+      }
+
+      // Handle axios/backend errors - check multiple ways the error might be structured
+      if (
+        error.response ||
+        error.status ||
+        (error.message && error.message.includes('401'))
+      ) {
+        // This is likely an axios error with a response from the backend
+        const status = error.response?.status || error.status;
+        const errorData = error.response?.data || error.data;
+        const backendMessage = errorData?.message || error.message;
+
+        console.log(
+          'Detected backend error - Status:',
+          status,
+          'Message:',
+          backendMessage,
+        );
+
+        if (
+          status === 401 ||
+          backendMessage?.includes('not registered') ||
+          backendMessage?.includes('not found')
+        ) {
+          // Handle the specific case where Google account is not registered
+          const displayMessage =
+            backendMessage ||
+            'Google account not registered. Please register first.';
+
+          Alert.alert('Account Not Registered', displayMessage, [
+            {
+              text: 'Register Now',
+              onPress: () => navigation.navigate('RegisterSelection'),
+            },
+            {
+              text: 'OK',
+              style: 'cancel',
+            },
+          ]);
+        } else {
+          // Handle other backend errors
+          const displayMessage = backendMessage || 'Server error occurred';
+          Alert.alert('Sign-In Failed', displayMessage);
+        }
       } else {
-        // Some other error happened
-        const axiosError = error as AxiosError<{message?: string}>;
-        const backendMessage =
-          axiosError.response?.data?.message || 'Google Sign-In failed';
-        Alert.alert('Google Sign-In Failed', backendMessage);
+        // Handle other types of errors (network, etc.)
+        console.error('Unexpected error during Google Sign-In:', error);
+        Alert.alert(
+          'Error',
+          'An unexpected error occurred during sign-in. Please try again.',
+        );
       }
     } finally {
       setGoogleLoading(false);
