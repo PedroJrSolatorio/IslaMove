@@ -1171,7 +1171,7 @@ const RegisterPassengerScreen = () => {
                 onPress={nextStep}
                 loading={isLoading}
                 disabled={isLoading}>
-                {isLoading ? 'Creating Account...' : 'Create Account'}
+                {isLoading ? 'Creating...' : 'Create'}
               </Button>
             </View>
           </View>

@@ -71,41 +71,14 @@ router.post("/refresh", refreshAuthToken);
 router.post("/google-signup", googleSignup);
 router.post("/google-login", googleLogin);
 
-router.post("/complete-google-registration", uploadFields, (req, res, next) => {
-  // Optional: Add specific Multer error handling for this route if needed
-  // This ensures Multer errors are caught before reaching your controller logic
-  if (req.multerError) {
-    // Assuming you set a custom error property in multerConfig if needed
-    console.error(
-      "Multer error on complete-google-registration:",
-      req.multerError
-    );
-    return res.status(400).json({ error: req.multerError.message });
-  }
+router.post("/complete-google-registration", uploadFields, (req, res) => {
+  // Multer errors will be caught by the global error handler
   completeGoogleRegistration(req, res);
 });
 
 // Register route with proper file upload handling
-router.post("/register", (req, res, next) => {
-  uploadFields(req, res, (err) => {
-    if (err) {
-      console.error("Multer error:", err);
-      if (err instanceof multer.MulterError) {
-        if (err.code === "LIMIT_FILE_SIZE") {
-          return res
-            .status(413)
-            .json({ error: "File too large. Maximum size is 15MB." });
-        }
-        if (err.code === "LIMIT_UNEXPECTED_FILE") {
-          return res
-            .status(400)
-            .json({ error: `Unexpected file field: ${err.field}` });
-        }
-      }
-      return res.status(500).json({ error: "File upload error" });
-    }
-    registerUser(req, res);
-  });
+router.post("/register", uploadFields, (req, res) => {
+  registerUser(req, res);
 });
 
 export default router;

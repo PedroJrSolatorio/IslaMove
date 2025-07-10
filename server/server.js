@@ -7,6 +7,7 @@ import connectDB from "./config/db.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import { initializeSocket } from "./socket/socketManager.js";
+import multer from "multer";
 
 //use require if not using ES Module
 // const express = require("express");
@@ -104,22 +105,54 @@ app.use("/api/discounts", discountRoutes);
 app.use("/api/drivers", driverRoutes);
 
 // this will log any unmatched routes so you can confirm if the route path is incorrect
-app.use((req, res) => {
+app.use((req, res, next) => {
+  // Added 'next' here, though not strictly needed for a 404
   console.log(`🔥 Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ error: "Route not found" });
 });
 
-// Error handling middleware
-app.use((err, res) => {
-  console.error("Server error:", err);
+// --- GLOBAL ERROR HANDLING MIDDLEWARE ---
+// This middleware MUST have exactly four arguments: (err, req, res, next)
+// It should be placed LAST, after all other app.use() and router.use() calls.
+app.use((err, req, res, next) => {
+  console.error("Server error caught by global handler:", err);
+
+  // Handle Multer errors specifically
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res
+        .status(413)
+        .json({ error: "File too large. Maximum size is 15MB." });
+    }
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res
+        .status(400)
+        .json({ error: `Unexpected file field: ${err.field}.` });
+    }
+    // For other Multer errors (e.g., storage issues)
+    return res
+      .status(400)
+      .json({
+        error: `File upload error: ${
+          err.message || "Unknown file upload error."
+        }`,
+      });
+  }
+
+  // Handle JSON parsing errors (from express.json())
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
     return res.status(400).json({ error: "Invalid JSON payload" });
   }
+
+  // Handle payload too large from express (if it's not a Multer error)
   if (err.type === "entity.too.large") {
     return res.status(413).json({ error: "Payload too large" });
   }
+
+  // Generic server error for any other uncaught errors
   res.status(500).json({ error: "Internal Server Error" });
 });
+// --- END GLOBAL ERROR HANDLING MIDDLEWARE ---
 
 const PORT = process.env.PORT || 5000;
 

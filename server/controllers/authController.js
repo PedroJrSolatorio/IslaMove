@@ -112,8 +112,10 @@ export const checkUser = async (req, res) => {
 
 // Register a new user
 export const registerUser = async (req, res) => {
+  // Array to store paths of files uploaded during this request. These will be deleted if any error occurs.
+  const uploadedFilePaths = [];
   try {
-    const {
+    let {
       lastName,
       firstName,
       middleInitial,
@@ -129,43 +131,34 @@ export const registerUser = async (req, res) => {
       passengerCategory,
     } = req.body;
 
-    console.log("Backend: req.body.password =", password);
-    console.log("Backend: typeof password =", typeof password);
+    // temporary fix for password as array
+    if (Array.isArray(password)) {
+      password = password[0]; // Take the first password from the array
+    }
 
     // Get the base URL for file paths
     const baseUrl =
       process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
 
-    // Parse vehicle data if provided
-    let vehicle = null;
-    if (req.body.vehicle) {
-      if (typeof req.body.vehicle === "string") {
-        vehicle = JSON.parse(req.body.vehicle);
-      } else {
-        vehicle = req.body.vehicle;
-      }
-    }
+    // Parse nested JSON strings
+    let vehicle = req.body.vehicle
+      ? typeof req.body.vehicle === "string"
+        ? JSON.parse(req.body.vehicle)
+        : req.body.vehicle
+      : null;
+    let parsedHomeAddress = homeAddress
+      ? typeof homeAddress === "string"
+        ? JSON.parse(homeAddress)
+        : homeAddress
+      : null;
+    let idDocument = req.body.idDocument
+      ? typeof req.body.idDocument === "string"
+        ? JSON.parse(req.body.idDocument)
+        : req.body.idDocument
+      : null;
 
-    // Parse homeAddress if provided as string
-    let parsedHomeAddress = null;
-    if (homeAddress) {
-      if (typeof homeAddress === "string") {
-        parsedHomeAddress = JSON.parse(homeAddress);
-      } else {
-        parsedHomeAddress = homeAddress;
-      }
-    }
-
-    // Parse idDocument if provided
-    let idDocument = null;
-    if (req.body.idDocument) {
-      if (typeof req.body.idDocument === "string") {
-        idDocument = JSON.parse(req.body.idDocument);
-      } else {
-        idDocument = req.body.idDocument;
-      }
-    }
-
+    // --- Pre-database Validations ---
+    // Use 'throw new Error' to ensure errors jump to the catch block for file cleanup.
     // Check required fields for all users
     if (
       !lastName ||
@@ -180,9 +173,7 @@ export const registerUser = async (req, res) => {
       !role
     ) {
       console.error("🚨 Missing required fields:", req.body);
-      return res
-        .status(400)
-        .json({ error: "All required fields must be provided" });
+      throw new Error("All required fields must be provided.");
     }
 
     // Role-specific validation
@@ -192,7 +183,6 @@ export const registerUser = async (req, res) => {
           error: "License number is required for drivers",
         });
       }
-
       if (
         !parsedHomeAddress ||
         !parsedHomeAddress.street ||
@@ -200,9 +190,7 @@ export const registerUser = async (req, res) => {
         !parsedHomeAddress.state ||
         !parsedHomeAddress.zipCode
       ) {
-        return res.status(400).json({
-          error: "Complete home address is required for drivers",
-        });
+        throw new Error("Complete home address is required for drivers.");
       }
 
       if (
@@ -215,29 +203,22 @@ export const registerUser = async (req, res) => {
         !vehicle.plateNumber ||
         !vehicle.bodyNumber
       ) {
-        return res.status(400).json({
-          error: "Complete vehicle information is required for drivers",
-        });
+        throw new Error(
+          "Complete vehicle information is required for drivers."
+        );
       }
 
       // Validate vehicle type
       if (vehicle.type !== "bao-bao") {
-        return res.status(400).json({
-          error: "Invalid vehicle type. Only 'bao-bao' is allowed",
-        });
+        throw new Error("Invalid vehicle type. Only 'bao-bao' is allowed.");
       }
-    }
-
-    if (role === "passenger") {
+    } else if (role === "passenger") {
       if (
         !passengerCategory ||
         !["regular", "student", "senior"].includes(passengerCategory)
       ) {
-        return res.status(400).json({
-          error: "Valid passenger category is required for passengers",
-        });
+        throw new Error("Valid passenger category is required for passengers.");
       }
-
       if (
         !parsedHomeAddress ||
         !parsedHomeAddress.street ||
@@ -245,9 +226,7 @@ export const registerUser = async (req, res) => {
         !parsedHomeAddress.state ||
         !parsedHomeAddress.zipCode
       ) {
-        return res.status(400).json({
-          error: "Complete home address is required for passengers",
-        });
+        throw new Error("Complete home address is required for passengers.");
       }
     }
 
@@ -258,15 +237,13 @@ export const registerUser = async (req, res) => {
 
     if (existingUser) {
       if (existingUser.email === email) {
-        return res.status(400).json({ error: "Email already registered" });
+        throw new Error("Email already registered.");
       }
       if (existingUser.username === username) {
-        return res.status(400).json({ error: "Username already taken" });
+        throw new Error("Username already taken.");
       }
       if (existingUser.phone === phone) {
-        return res
-          .status(400)
-          .json({ error: "Phone number already registered" });
+        throw new Error("Phone number already registered.");
       }
     }
 
@@ -285,6 +262,8 @@ export const registerUser = async (req, res) => {
       phone,
       password: hashedPassword,
       role,
+      isGoogleUser: false, // Explicitly set for non-Google registrations
+      isProfileComplete: true, // Assuming non-Google registration means full profile immediately
     };
 
     // Add home address for drivers and passengers (not admin)
@@ -301,6 +280,7 @@ export const registerUser = async (req, res) => {
     // Process profile image if provided
     if (req.files && req.files.profileImage) {
       const profileImageFile = req.files.profileImage[0];
+      uploadedFilePaths.push(profileImageFile.path); // Store path for cleanup
       userData.profileImage = `${baseUrl}/uploads/profiles/${profileImageFile.filename}`;
     }
 
@@ -323,6 +303,7 @@ export const registerUser = async (req, res) => {
       // Handle ID document
       if (idDocument && req.files && req.files.idDocumentImage) {
         const idDocumentFile = req.files.idDocumentImage[0];
+        uploadedFilePaths.push(idDocumentFile.path);
         userData.idDocument = {
           type: idDocument.type,
           imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
@@ -344,6 +325,7 @@ export const registerUser = async (req, res) => {
         const fieldName = `document_${docType.replace(/\s+/g, "")}`;
         if (req.files && req.files[fieldName]) {
           const docFile = req.files[fieldName][0];
+          uploadedFilePaths.push(docFile.path);
           userData.documents.push({
             documentType: docType,
             fileURL: `${baseUrl}/uploads/documents/${docFile.filename}`,
@@ -359,6 +341,7 @@ export const registerUser = async (req, res) => {
       // Handle ID document for passengers too
       if (idDocument && req.files && req.files.idDocumentImage) {
         const idDocumentFile = req.files.idDocumentImage[0];
+        uploadedFilePaths.push(idDocumentFile.path);
         userData.idDocument = {
           type: idDocument.type,
           imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
@@ -368,8 +351,12 @@ export const registerUser = async (req, res) => {
       }
     }
 
-    // Create the user
+    // Create the user in the database. If this fails, the catch block will run.
     const newUser = await User.create(userData);
+
+    // If reached here, the user was successfully created, so we don't want to delete the files.
+    // Clear the array to prevent cleanup in the catch block for successful operations.
+    uploadedFilePaths.length = 0;
 
     // Remove password from response
     const userResponse = newUser.toObject();
@@ -382,12 +369,23 @@ export const registerUser = async (req, res) => {
   } catch (error) {
     console.error("Registration error:", error);
 
+    // --- IMPORTANT: Clean up uploaded files if an error occurred ---
+    for (const filePath of uploadedFilePaths) {
+      try {
+        await fs.promises.unlink(filePath);
+        console.log(`Successfully deleted uploaded file: ${filePath}`);
+      } catch (fileError) {
+        console.error(`Failed to delete file ${filePath}:`, fileError);
+        // Log the error but continue to delete other files
+      }
+    }
+    // --- END Cleanup ---
+
     // Send more specific error messages for validation errors
     if (error.name === "ValidationError") {
       const errorMessage = Object.values(error.errors)
         .map((err) => err.message)
         .join(", ");
-
       return res.status(400).json({ error: errorMessage });
     }
 
@@ -399,6 +397,14 @@ export const registerUser = async (req, res) => {
           field.charAt(0).toUpperCase() + field.slice(1)
         } already exists`,
       });
+    }
+
+    // Handle custom thrown errors (e.g., from validation checks)
+    if (
+      error.message.includes("required") ||
+      error.message.includes("Invalid")
+    ) {
+      return res.status(400).json({ error: error.message });
     }
 
     res.status(500).json({ error: "Error registering user" });
@@ -699,18 +705,19 @@ export const googleSignup = async (req, res) => {
 };
 
 export const completeGoogleRegistration = async (req, res) => {
+  const uploadedFilePaths = []; // Array to store paths for cleanup
   try {
     // 1. Verify temp JWT from header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "No valid token provided" });
+      throw new Error("No valid token provided.");
     }
 
     const tempToken = authHeader.split(" ")[1];
     const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
 
     if (!decoded.isTemp || !decoded.email) {
-      return res.status(401).json({ error: "Invalid or expired token" });
+      throw new Error("Invalid or expired token.");
     }
 
     // 2. Find the Google user
@@ -721,9 +728,9 @@ export const completeGoogleRegistration = async (req, res) => {
     });
 
     if (!existingUser) {
-      return res.status(404).json({
-        error: "Google user not found or already completed registration",
-      });
+      throw new Error(
+        "Google user not found or already completed registration."
+      );
     }
 
     // 3. Parse and validate inputs
@@ -744,7 +751,7 @@ export const completeGoogleRegistration = async (req, res) => {
 
     // Required fields check
     if (!lastName || !firstName || !birthdate || !age || !phone || !role) {
-      return res.status(400).json({ error: "Missing required fields" });
+      throw new Error("Missing required fields.");
     }
 
     const parsedHomeAddress =
@@ -762,7 +769,7 @@ export const completeGoogleRegistration = async (req, res) => {
       _id: { $ne: existingUser._id },
     });
     if (phoneConflict) {
-      return res.status(400).json({ error: "Phone number already registered" });
+      throw new Error("Phone number already registered.");
     }
 
     // 5. Update common fields
@@ -786,15 +793,11 @@ export const completeGoogleRegistration = async (req, res) => {
     // 6. Role-specific fields
     if (role === "driver") {
       if (!licenseNumber || !parsedVehicle) {
-        return res
-          .status(400)
-          .json({ error: "Driver license/vehicle required" });
+        throw new Error("Driver license/vehicle required.");
       }
 
       if (parsedVehicle.type !== "bao-bao") {
-        return res
-          .status(400)
-          .json({ error: "Only 'bao-bao' vehicles allowed" });
+        throw new Error("Only 'bao-bao' vehicles allowed.");
       }
 
       existingUser.licenseNumber = licenseNumber;
@@ -810,14 +813,12 @@ export const completeGoogleRegistration = async (req, res) => {
       existingUser.driverStatus = "offline";
       existingUser.isVerified = false;
       existingUser.verificationStatus = "pending";
-    }
-
-    if (role === "passenger") {
+    } else if (role === "passenger") {
       if (
         !passengerCategory ||
         !["regular", "student", "senior"].includes(passengerCategory)
       ) {
-        return res.status(400).json({ error: "Invalid passenger category" });
+        throw new Error("Invalid passenger category.");
       }
       existingUser.passengerCategory = passengerCategory;
       existingUser.savedAddresses = [];
@@ -828,10 +829,12 @@ export const completeGoogleRegistration = async (req, res) => {
       process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;
 
     if (req.files?.profileImage?.[0]) {
+      uploadedFilePaths.push(req.files.profileImage[0].path); // Store path
       existingUser.profileImage = `${baseUrl}/uploads/profiles/${req.files.profileImage[0].filename}`;
     }
 
     if (req.files?.idDocumentImage?.[0]) {
+      uploadedFilePaths.push(req.files.idDocumentImage[0].path); // Store path
       existingUser.idDocument = {
         type: parsedIdDoc?.type || "",
         imageUrl: `${baseUrl}/uploads/documents/${req.files.idDocumentImage[0].filename}`,
@@ -852,6 +855,7 @@ export const completeGoogleRegistration = async (req, res) => {
       docTypes.forEach((docType) => {
         const field = `document_${docType.replace(/\s+/g, "")}`;
         if (req.files?.[field]?.[0]) {
+          uploadedFilePaths.push(req.files[field][0].path); // Store path
           existingUser.documents.push({
             documentType: docType,
             fileURL: `${baseUrl}/uploads/documents/${req.files[field][0].filename}`,
@@ -865,8 +869,11 @@ export const completeGoogleRegistration = async (req, res) => {
     // 8. Finalize profile
     existingUser.isProfileComplete = true;
 
-    // Save
+    // Save the updated user. If this fails, the catch block will run.
     await existingUser.save();
+
+    // If reached here, the user was successfully updated, so clear the paths.
+    uploadedFilePaths.length = 0;
 
     // 9. Issue new token (not a temp token anymore)
     const fullToken = jwt.sign(
@@ -894,6 +901,19 @@ export const completeGoogleRegistration = async (req, res) => {
     });
   } catch (error) {
     console.error("Error completing Google registration:", error);
+
+    // --- IMPORTANT: Clean up uploaded files if an error occurred ---
+    for (const filePath of uploadedFilePaths) {
+      try {
+        await fs.promises.unlink(filePath);
+        console.log(`Successfully deleted uploaded file: ${filePath}`);
+      } catch (fileError) {
+        console.error(`Failed to delete file ${filePath}:`, fileError);
+        // Log the error but continue to delete other files
+      }
+    }
+    // --- END Cleanup ---
+
     if (error.name === "ValidationError") {
       return res.status(400).json({
         error: Object.values(error.errors)
@@ -908,6 +928,14 @@ export const completeGoogleRegistration = async (req, res) => {
           field.charAt(0).toUpperCase() + field.slice(1)
         } already exists`,
       });
+    }
+    // Handle custom thrown errors (e.g., from validation checks)
+    if (
+      error.message.includes("required") ||
+      error.message.includes("Invalid") ||
+      error.message.includes("token")
+    ) {
+      return res.status(400).json({ error: error.message });
     }
     return res
       .status(500)
