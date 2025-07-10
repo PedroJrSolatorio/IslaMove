@@ -123,7 +123,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   confirmButton: {
-    flex: 2,
+    flex: 1,
   },
   processingOverlay: {
     position: 'absolute',

@@ -922,11 +922,6 @@ const RegisterDriverScreen = () => {
         if (credentials.username) {
           formData.append('username', credentials.username);
         }
-      } else {
-        // Only append username/password if not a Google user
-        formData.append('username', credentials.username);
-        formData.append('password', credentials.password);
-        formData.append('isGoogleUser', 'false');
       }
       formData.append('isGoogleUser', String(isGoogleUser)); // Ensure boolean is sent as string
 

@@ -129,6 +129,9 @@ export const registerUser = async (req, res) => {
       passengerCategory,
     } = req.body;
 
+    console.log("Backend: req.body.password =", password);
+    console.log("Backend: typeof password =", typeof password);
+
     // Get the base URL for file paths
     const baseUrl =
       process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`;

@@ -278,7 +278,7 @@ const MapLocationPicker = () => {
           </Title>
           <Text style={styles.instructionsText}>
             {preselectedLocation
-              ? 'Tap elsewhere or confirm'
+              ? 'Tap elsewhere to adjust'
               : 'Tap anywhere to select'}
           </Text>
         </Card.Content>
@@ -310,7 +310,7 @@ const MapLocationPicker = () => {
                 style={styles.confirmButton}
                 onPress={confirmLocation}
                 disabled={processingLocation}>
-                {processingLocation ? 'Processing...' : 'Confirm Location'}
+                {processingLocation ? 'Processing...' : 'Confirm'}
               </Button>
             </View>
           </Card.Content>
