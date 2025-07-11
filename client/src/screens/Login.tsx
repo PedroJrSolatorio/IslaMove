@@ -228,15 +228,6 @@ const LoginScreen = ({navigation}: Props) => {
         refreshProfile();
       }, 100);
     } catch (error: any) {
-      console.log('=== Google Sign-In Error Debug ===');
-      console.log('Full error object:', JSON.stringify(error, null, 2));
-      console.log('Error code:', error.code);
-      console.log('Error response:', error.response);
-      console.log('Error response status:', error.response?.status);
-      console.log('Error response data:', error.response?.data);
-      console.log('Error message:', error.message);
-      console.log('===================================');
-
       // Check if this is a Google Sign-In specific error first
       if (error.code === statusCodes.SIGN_IN_CANCELLED) {
         // User cancelled the login flow

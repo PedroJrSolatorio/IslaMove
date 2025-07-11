@@ -312,4 +312,17 @@ export const TabsStyles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  googleInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  infoMessage: {
+    fontSize: 12,
+    color: 'gray',
+    marginTop: -10, // Adjust spacing as needed
+    marginBottom: 10,
+    textAlign: 'center',
+  },
 });

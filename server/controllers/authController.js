@@ -38,6 +38,7 @@ const saveBase64Image = (base64Data, folder) => {
 };
 
 // Check existing user before registering
+//SEEMS LIKE THIS IS NOT USED ANYMORE
 export const checkUser = async (req, res) => {
   try {
     const { email, phone, username } = req.body;
@@ -53,7 +54,8 @@ export const checkUser = async (req, res) => {
         const decoded = jwt.verify(tempToken, process.env.JWT_SECRET);
         if (decoded?.isTemp && decoded?.email) {
           isGoogleUserCompleting = true;
-          googleUserId = decoded.sub || decoded.id || decoded._id;
+          googleUserId =
+            decoded.sub || decoded.id || decoded._id || decoded.userId;
         }
       } catch (err) {
         console.warn("JWT decode failed:", err.message);
@@ -468,10 +470,10 @@ export const validateToken = async (req, res) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Token verified successfully, user ID:", decoded._id);
+    console.log("Token verified successfully, user ID:", decoded.userId);
 
     // Find user
-    const user = await User.findById(decoded._id);
+    const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -1013,12 +1015,10 @@ export const googleLogin = async (req, res) => {
       // User not found, OR user found but profile is not complete.
       // In this simplified flow, both cases mean "not registered" for login purposes.
       console.log("Google account not fully registered or profile incomplete.");
-      return res
-        .status(401)
-        .json({
-          message:
-            "Google account not registered or profile incomplete. Please register first.",
-        });
+      return res.status(401).json({
+        message:
+          "Google account not registered or profile incomplete. Please register first.",
+      });
     }
   } catch (error) {
     console.error("Google login error:", error);
@@ -1028,15 +1028,192 @@ export const googleLogin = async (req, res) => {
       error.name === "TokenExpiredError" ||
       (error.message && error.message.includes("Invalid ID token"))
     ) {
-      return res
-        .status(401)
-        .json({
-          message: "Google token verification failed. Please try again.",
-        });
+      return res.status(401).json({
+        message: "Google token verification failed. Please try again.",
+      });
     }
     // Generic server error for other issues
     res
       .status(500)
       .json({ message: "Server error during Google authentication." });
+  }
+};
+
+export const linkGoogleAccount = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    // Extract token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    console.log("TEST Token received for validation");
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.userId;
+    console.log("TEST Token verified successfully, user ID:", currentUserId);
+
+    if (!currentUserId) {
+      // Adding an extra check, though it should be set now
+      return res
+        .status(401)
+        .json({ message: "Invalid token payload: userId missing." });
+    }
+
+    if (!idToken) {
+      return res.status(400).json({ message: "Google ID token is required." });
+    }
+
+    // Verify Google ID token
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload) {
+      return res.status(401).json({ message: "Invalid Google token." });
+    }
+
+    const googleId = payload["sub"];
+    const googleEmail = payload.email;
+
+    // Check if this Google ID is already linked to ANY other user
+    const existingGoogleLink = await User.findOne({ googleId: googleId });
+    if (
+      existingGoogleLink &&
+      existingGoogleLink._id.toString() !== currentUserId.toString()
+    ) {
+      return res.status(409).json({
+        message: "This Google account is already linked to another user.",
+      });
+    }
+
+    // Find the user who is trying to link their account
+    const userToUpdate = await User.findById(currentUserId);
+
+    if (!userToUpdate) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Prevent linking if the user is already a Google user (shouldn't happen if UI is correct)
+    if (userToUpdate.isGoogleUser) {
+      return res
+        .status(400)
+        .json({ message: "Account is already a Google-linked account." });
+    }
+
+    // Prevent linking if the Google email is already associated with a different non-Google account
+    if (userToUpdate.email !== googleEmail) {
+      const emailConflict = await User.findOne({
+        email: googleEmail,
+        _id: { $ne: currentUserId }, // Exclude the current user from the search
+      });
+      if (emailConflict) {
+        return res.status(409).json({
+          message:
+            "This Google account's email is already registered to another account.",
+          suggestion:
+            "Please use a different Google account or log in with your existing account.",
+        });
+      }
+    }
+
+    // Update the user's profile to link Google account
+    userToUpdate.isGoogleUser = true;
+    userToUpdate.googleId = googleId;
+    userToUpdate.email = googleEmail;
+
+    await userToUpdate.save();
+
+    res.status(200).json({
+      message: "Google account linked successfully!",
+      user: {
+        id: userToUpdate._id,
+        email: userToUpdate.email,
+        firstName: userToUpdate.firstName,
+        lastName: userToUpdate.lastName,
+        role: userToUpdate.role,
+        isProfileComplete: userToUpdate.isProfileComplete,
+        isGoogleUser: userToUpdate.isGoogleUser,
+      },
+    });
+  } catch (error) {
+    console.error("Error linking Google account:", error);
+    if (
+      error.name === "TokenExpiredError" ||
+      error.name === "JsonWebTokenError"
+    ) {
+      return res
+        .status(401)
+        .json({ message: "Invalid or expired Google ID token." });
+    }
+    res
+      .status(500)
+      .json({ message: "Server error during Google account linking." });
+  }
+};
+
+export const unlinkGoogleAccount = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.userId;
+
+    const user = await User.findById(currentUserId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Crucial check: Ensure the user has a password set if they're a Google-only user
+    // This assumes your User model has a 'password' field that is nullable or an empty string
+    // for Google-only users, or a separate flag like 'hasPasswordSet'.
+    if (user.isGoogleUser && !user.password) {
+      // Adjust this condition based on your User schema
+      return res.status(400).json({
+        message:
+          "Please set a password for your account before unlinking Google. This will be your primary login method.",
+        action: "set_password_required", // Inform frontend to prompt password setup
+      });
+    }
+
+    if (!user.isGoogleUser || !user.googleId) {
+      return res
+        .status(400)
+        .json({ message: "This account is not linked to Google." });
+    }
+
+    // Unlink the Google account
+    user.isGoogleUser = false;
+    user.googleId = null; // Clear the Google ID
+
+    await user.save();
+
+    res.status(200).json({
+      message: "Google account unlinked successfully.",
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isProfileComplete: user.isProfileComplete,
+        isGoogleUser: user.isGoogleUser, // Should now be false
+      },
+    });
+  } catch (error) {
+    console.error("Error unlinking Google account:", error);
+    res
+      .status(500)
+      .json({ message: "Server error during Google account unlinking." });
   }
 };

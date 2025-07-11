@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
+import fs, { unlink } from "fs";
 import { fileURLToPath } from "url";
 import {
   registerUser,
@@ -12,6 +12,8 @@ import {
   googleSignup,
   completeGoogleRegistration,
   googleLogin,
+  linkGoogleAccount,
+  unlinkGoogleAccount,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -70,15 +72,14 @@ router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
 router.post("/google-signup", googleSignup);
 router.post("/google-login", googleLogin);
-
 router.post("/complete-google-registration", uploadFields, (req, res) => {
   // Multer errors will be caught by the global error handler
   completeGoogleRegistration(req, res);
 });
-
-// Register route with proper file upload handling
 router.post("/register", uploadFields, (req, res) => {
   registerUser(req, res);
 });
+router.post("/link-google", linkGoogleAccount);
+router.post("/unlink-google", unlinkGoogleAccount);
 
 export default router;

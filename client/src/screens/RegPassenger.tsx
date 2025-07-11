@@ -429,19 +429,10 @@ const RegisterPassengerScreen = () => {
 
     // Validate birthdate and age
     const age = calculateAge(birthdate);
-    if (age < 13) {
+    if (age < 12) {
       Alert.alert(
         'Validation Error',
-        'You must be at least 13 years old to register.',
-      );
-      return false;
-    }
-
-    // Check if passenger category matches age
-    if (passengerCategory === 'student' && age > 25) {
-      Alert.alert(
-        'Validation Error',
-        'Student category is only available for users 25 years old and below.',
+        'You must be at least 12 years old to register.',
       );
       return false;
     }

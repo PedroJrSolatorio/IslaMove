@@ -32,6 +32,10 @@ import {RootStackParamList} from '../navigation/types';
 import api from '../../utils/api';
 import LocationSearchModal from '../components/LocationSearchModal';
 import {styles} from '../styles/BookRideStyles';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 
 interface Location {
   type: string;
@@ -564,6 +568,114 @@ const PassengerProfileScreen = () => {
     }
   };
 
+  const handleLinkGoogle = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signOut();
+      const userInfo = await GoogleSignin.signIn();
+      const {data} = userInfo;
+      const googleIdToken = data?.idToken;
+
+      if (!googleIdToken) {
+        Alert.alert('Error', 'Google ID token not found.');
+        return;
+      }
+
+      console.log('User Token being sent:', userToken);
+      console.log('Google ID Token:', googleIdToken);
+      // Send the Google ID token to your backend to link the account
+      const response = await api.post(`/api/auth/link-google`, {
+        idToken: googleIdToken,
+      });
+
+      const backendResponseData = response.data;
+
+      if (backendResponseData && backendResponseData.message) {
+        // If the backend sends a success message, use it.
+        Alert.alert('Success', backendResponseData.message);
+      } else {
+        // Fallback message if backend doesn't send 'message' or is empty
+        Alert.alert(
+          'Success',
+          'Your account has been successfully linked with Google!',
+        );
+      }
+
+      // Refresh profile AFTER the successful link and alert
+      refreshProfile();
+    } catch (error: any) {
+      console.error('Error linking Google account:', error);
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        console.log('Google sign-in cancelled by user');
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        console.log('Google sign-in already in progress');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Google Play Services not available or outdated.');
+      }
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    Alert.alert(
+      'Unlink Google Account',
+      'Are you sure you want to unlink your Google account? If you do not have a password set, you will need to create one to log in next time.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Unlink',
+          onPress: async () => {
+            try {
+              const response = await api.post('/api/auth/unlink-google'); // Your API call
+
+              // You might want to sign out from Google locally as well
+              try {
+                await GoogleSignin.signOut();
+              } catch (googleSignOutError) {
+                console.warn(
+                  'Error during Google local sign out:',
+                  googleSignOutError,
+                );
+              }
+
+              // Check for success or specific actions
+              if (response.data.message) {
+                // Assuming your backend sends a 'message'
+                Alert.alert('Success', response.data.message);
+                refreshProfile(); // Refresh user data in your app
+              } else {
+                Alert.alert('Success', 'Google account unlinked.');
+                refreshProfile();
+              }
+            } catch (error: any) {
+              console.error(
+                'Error unlinking Google account:',
+                error.response?.data || error.message,
+              );
+              const errorMessage =
+                error.response?.data?.message ||
+                'Failed to unlink Google account.';
+
+              if (error.response?.data?.action === 'set_password_required') {
+                Alert.alert(
+                  'Password Required',
+                  errorMessage +
+                    '\nPlease set a password for your account first.',
+                  // Optionally navigate to a password setting screen here
+                );
+              } else {
+                Alert.alert('Error', errorMessage);
+              }
+            }
+          },
+        },
+      ],
+      {cancelable: true},
+    );
+  };
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -746,11 +858,24 @@ const PassengerProfileScreen = () => {
                   style={TabsStyles.input}
                   mode="outlined"
                   keyboardType="email-address"
+                  editable={!profileData.isGoogleUser}
+                  right={
+                    profileData.isGoogleUser ? (
+                      <TextInput.Icon icon="lock" />
+                    ) : undefined
+                  }
                 />
               ) : (
                 <Text style={TabsStyles.infoValue}>{profileData.email}</Text>
               )}
             </View>
+
+            {editing && profileData.isGoogleUser && (
+              <Text style={TabsStyles.infoMessage}>
+                Your email is managed by your linked Google account and cannot
+                be edited.
+              </Text>
+            )}
 
             <View style={TabsStyles.infoRow}>
               <Text style={TabsStyles.infoLabel}>Phone</Text>
@@ -967,13 +1092,36 @@ const PassengerProfileScreen = () => {
               <Card.Content>
                 <Title>Account Security</Title>
                 <Divider style={TabsStyles.divider} />
-                <Button
-                  mode="outlined"
-                  icon="lock"
-                  onPress={() => setShowChangePasswordDialog(true)}
-                  style={{marginTop: 12}}>
-                  Change Password
-                </Button>
+                {profileData.isGoogleUser ? (
+                  <>
+                    <View style={TabsStyles.googleInfoContainer}>
+                      <List.Icon icon="google" color="#3498db" />
+                      <Text style={TabsStyles.infoValue}>
+                        Registered with Google
+                      </Text>
+                    </View>
+                    <Button mode="contained" onPress={handleUnlinkGoogle}>
+                      Unlink Google Account
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      mode="outlined"
+                      icon="lock"
+                      onPress={() => setShowChangePasswordDialog(true)}
+                      style={{marginTop: 12}}>
+                      Change Password
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      icon="google"
+                      onPress={handleLinkGoogle}
+                      style={{marginTop: 12}}>
+                      Link with Google
+                    </Button>
+                  </>
+                )}
               </Card.Content>
             </Card>
 
