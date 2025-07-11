@@ -83,7 +83,7 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
           setUserToken(storedToken);
           setRefreshToken(storedRefreshToken);
           setUserRole(storedRole);
-          setUserData(JSON.parse(storedUserData));
+          setUserData(storedUserData);
 
           // Connect Socket.IO using your service
           try {

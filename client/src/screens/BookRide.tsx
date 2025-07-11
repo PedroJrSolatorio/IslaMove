@@ -41,6 +41,7 @@ import {styles} from '../styles/BookRideStyles';
 import api from '../../utils/api';
 import SoundUtils from '../../utils/SoundUtils';
 import Toast from 'react-native-toast-message';
+import DeviceInfo from 'react-native-device-info';
 
 // Interface for fare types
 interface FareInfo {
@@ -433,9 +434,11 @@ const BookRide = () => {
     const setupSocket = async () => {
       if (!userToken) return;
 
+      const deviceId = await DeviceInfo.getUniqueId();
+
       try {
         // Connect using the service
-        await SocketService.connect(userToken);
+        await SocketService.connect(userToken, deviceId);
 
         // Set up event listeners
         SocketService.on('driver_location_update', (data: any) => {

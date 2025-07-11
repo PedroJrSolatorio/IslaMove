@@ -49,6 +49,11 @@ const DriverProfileScreen = () => {
 
   // Type guard to ensure we're working with driver profile
   const driverProfile = isDriverProfile(profileData) ? profileData : null;
+  const [showCreatePasswordDialog, setShowCreatePasswordDialog] =
+    useState(false);
+  const [createPassword, setCreatePassword] = useState('');
+  const [confirmCreatePassword, setConfirmCreatePassword] = useState('');
+  const [createPasswordVisible, setCreatePasswordVisible] = useState(false);
 
   // Form state for editing profile
   const [formData, setFormData] = useState({
@@ -388,6 +393,48 @@ const DriverProfileScreen = () => {
     }
   };
 
+  const handleCreatePassword = async () => {
+    console.log('Creating password...');
+    if (createPassword !== confirmCreatePassword) {
+      Alert.alert('Error', 'Passwords do not match.');
+      return;
+    }
+
+    if (createPassword.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long.');
+      return;
+    }
+
+    try {
+      // Call your backend API to set the password
+      const response = await api.post('/api/auth/set-password', {
+        newPassword: createPassword,
+      });
+
+      setShowCreatePasswordDialog(false);
+      setCreatePassword('');
+      setConfirmCreatePassword('');
+
+      Alert.alert(
+        'Success',
+        'Password created successfully! You can now unlink your Google account.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              refreshProfile();
+            },
+          },
+        ],
+      );
+    } catch (error: any) {
+      console.error('Error creating password:', error);
+      const errorMessage =
+        error.response?.data?.message || 'Failed to create password.';
+      Alert.alert('Error', errorMessage);
+    }
+  };
+
   const handleUnlinkGoogle = async () => {
     Alert.alert(
       'Unlink Google Account',
@@ -434,9 +481,19 @@ const DriverProfileScreen = () => {
               if (error.response?.data?.action === 'set_password_required') {
                 Alert.alert(
                   'Password Required',
-                  errorMessage +
-                    '\nPlease set a password for your account first.',
-                  // Optionally navigate to a password setting screen here
+                  errorMessage + '\nWould you like to create a password now?',
+                  [
+                    {
+                      text: 'Cancel',
+                      style: 'cancel',
+                    },
+                    {
+                      text: 'Create Password',
+                      onPress: () => {
+                        setShowCreatePasswordDialog(true);
+                      },
+                    },
+                  ],
                 );
               } else {
                 Alert.alert('Error', errorMessage);
@@ -1053,6 +1110,56 @@ const DriverProfileScreen = () => {
                 Cancel
               </Button>
               <Button onPress={handleChangePassword}>Change Password</Button>
+            </Dialog.Actions>
+          </Dialog>
+
+          <Dialog
+            visible={showCreatePasswordDialog}
+            onDismiss={() => setShowCreatePasswordDialog(false)}>
+            <Dialog.Title>Create Password</Dialog.Title>
+            <Dialog.Content>
+              <Text style={{marginBottom: 16, color: '#666'}}>
+                Create a password for your account to enable unlinking from
+                Google.
+              </Text>
+              <TextInput
+                label="New Password"
+                value={createPassword}
+                onChangeText={setCreatePassword}
+                mode="outlined"
+                secureTextEntry={!createPasswordVisible}
+                style={TabsStyles.input}
+                right={
+                  <TextInput.Icon
+                    icon={createPasswordVisible ? 'eye-off' : 'eye'}
+                    onPress={() =>
+                      setCreatePasswordVisible(!createPasswordVisible)
+                    }
+                  />
+                }
+              />
+              <TextInput
+                label="Confirm Password"
+                value={confirmCreatePassword}
+                onChangeText={setConfirmCreatePassword}
+                mode="outlined"
+                secureTextEntry={!createPasswordVisible}
+                style={TabsStyles.input}
+                right={
+                  <TextInput.Icon
+                    icon={createPasswordVisible ? 'eye-off' : 'eye'}
+                    onPress={() =>
+                      setCreatePasswordVisible(!createPasswordVisible)
+                    }
+                  />
+                }
+              />
+            </Dialog.Content>
+            <Dialog.Actions>
+              <Button onPress={() => setShowCreatePasswordDialog(false)}>
+                Cancel
+              </Button>
+              <Button onPress={handleCreatePassword}>Create Password</Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>

@@ -1253,10 +1253,7 @@ export const unlinkGoogleAccount = async (req, res) => {
     }
 
     // Crucial check: Ensure the user has a password set if they're a Google-only user
-    // This assumes your User model has a 'password' field that is nullable or an empty string
-    // for Google-only users, or a separate flag like 'hasPasswordSet'.
-    if (user.isGoogleUser && !user.password) {
-      // Adjust this condition based on your User schema
+    if (user.isGoogleUser && (!user.password || user.password === "")) {
       return res.status(400).json({
         message:
           "Please set a password for your account before unlinking Google. This will be your primary login method.",
@@ -1293,5 +1290,68 @@ export const unlinkGoogleAccount = async (req, res) => {
     res
       .status(500)
       .json({ message: "Server error during Google account unlinking." });
+  }
+};
+
+export const setPassword = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const currentUserId = decoded.userId;
+
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      return res.status(400).json({ message: "New password is required." });
+    }
+
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 6 characters long." });
+    }
+
+    const user = await User.findById(currentUserId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Check if user already has a password
+    if (user.password) {
+      return res
+        .status(400)
+        .json({
+          message: "User already has a password. Use change password instead.",
+        });
+    }
+
+    // Hash the new password
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update user with new password
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({
+      message: "Password created successfully.",
+      user: {
+        id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isProfileComplete: user.isProfileComplete,
+        isGoogleUser: user.isGoogleUser,
+      },
+    });
+  } catch (error) {
+    console.error("Error setting password:", error);
+    res.status(500).json({ message: "Server error during password creation." });
   }
 };

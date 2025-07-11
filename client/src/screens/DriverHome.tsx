@@ -36,6 +36,7 @@ import {styles} from '../styles/DriverHomeStyles';
 import {useFocusEffect} from '@react-navigation/native';
 import SoundUtils from '../../utils/SoundUtils';
 import Toast from 'react-native-toast-message';
+import DeviceInfo from 'react-native-device-info';
 
 // Driver status type
 type DriverStatus = 'offline' | 'available' | 'busy';
@@ -210,13 +211,14 @@ const DriverHome = () => {
       const location = await getCurrentLocation();
       setCurrentLocation(location);
 
+      const deviceId = await DeviceInfo.getUniqueId();
       // Setup socket connection
       if (userToken) {
         console.log(
           'Connecting with token:',
           userToken.substring(0, 20) + '...',
         ); // Log first 20 chars for debugging
-        await SocketService.connect(userToken);
+        await SocketService.connect(userToken, deviceId);
         setupSocketListeners();
       } else {
         console.error('No user token available for socket connection');
