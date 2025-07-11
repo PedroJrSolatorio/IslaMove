@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import fs from "fs";
 import path from "path";
 import { OAuth2Client } from "google-auth-library";
+import { getIO } from "../socket/socketManager.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -110,6 +111,19 @@ export const checkUser = async (req, res) => {
       message: "Server error while checking user details",
     });
   }
+};
+
+// Helper function to manage active refresh tokens
+const updateActiveRefreshToken = async (user, newRefreshToken, deviceId) => {
+  // This effectively logs out all other devices/sessions for this user
+  user.activeRefreshTokens = [
+    {
+      token: newRefreshToken,
+      deviceId: deviceId,
+      createdAt: new Date(),
+    },
+  ];
+  await user.save();
 };
 
 // Register a new user
@@ -415,13 +429,12 @@ export const registerUser = async (req, res) => {
 
 export const loginUser = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, deviceId } = req.body;
+    const io = getIO();
 
     const user = await User.findOne({ username });
-    if (!user)
-      return res.status(401).json({ error: "User not found in loginUser" });
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Compare hashed password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
 
@@ -439,6 +452,16 @@ export const loginUser = async (req, res) => {
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    // Store the new refresh token and invalidate old ones
+    await updateActiveRefreshToken(user, refreshToken, deviceId);
+
+    // Socket.IO part to force logout old devices
+    io.to(`user_${user._id.toString()}`).emit("session_revoked", {
+      message:
+        "Your session has been terminated because you logged in from another device.",
+      newDeviceId: deviceId, // Send the deviceId of the *new* login
+    });
 
     res.json({
       token,
@@ -500,17 +523,49 @@ export const validateToken = async (req, res) => {
 
 export const refreshAuthToken = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const { refreshToken, deviceId } = req.body;
+
     if (!refreshToken)
       return res.status(401).json({ message: "No refresh token provided" });
 
     // Verify the refresh token
-    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+      );
+    } catch (err) {
+      // If the refresh token itself is invalid or expired
+      return res.status(403).json({
+        message: "Invalid or expired refresh token. Please log in again.",
+      });
+    }
+
     const user = await User.findById(decoded.userId);
     if (!user)
       return res
         .status(404)
         .json({ message: "User not found in refreshAuthToken" });
+
+    // Check if the provided refresh token is still active for this device
+    const activeTokenEntry = user.activeRefreshTokens.find(
+      (entry) => entry.token === refreshToken && entry.deviceId === deviceId
+    );
+    if (!activeTokenEntry) {
+      // This means the refresh token is not found or not associated with this device
+      console.log(
+        `Refresh token mismatch for user ${user._id}. Forcing re-login.`
+      );
+      // Optionally, clear all tokens for this user to ensure complete logout across all devices
+      user.activeRefreshTokens = [];
+      await user.save();
+      return res.status(401).json({
+        message:
+          "Your session has expired because you logged in on another device. Please log in again.",
+        code: "SESSION_REVOKED", // Custom code for client to identify
+      });
+    }
 
     // Generate a new access token
     const newToken = jwt.sign(
@@ -526,6 +581,27 @@ export const refreshAuthToken = async (req, res) => {
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    // Find the index of the old token and replace it
+    const tokenIndex = user.activeRefreshTokens.findIndex(
+      (entry) => entry.token === refreshToken
+    );
+    if (tokenIndex > -1) {
+      user.activeRefreshTokens[tokenIndex] = {
+        token: newRefreshToken,
+        deviceId: deviceId, // Keep the same deviceId
+        loggedInAt: new Date(),
+      };
+      await user.save();
+    } else {
+      // This case ideally not happen if activeTokenEntry was found, but as a fallback, add it if somehow missing.
+      user.activeRefreshTokens.push({
+        token: newRefreshToken,
+        deviceId: deviceId,
+        loggedInAt: new Date(),
+      });
+      await user.save();
+    }
 
     res.json({
       success: true,
@@ -771,7 +847,7 @@ export const completeGoogleRegistration = async (req, res) => {
       _id: { $ne: existingUser._id },
     });
     if (phoneConflict) {
-      throw new Error("Phone number already registered.");
+      throw new Error("Phone number already registered by another account.");
     }
 
     // 5. Update common fields
@@ -947,7 +1023,7 @@ export const completeGoogleRegistration = async (req, res) => {
 
 export const googleLogin = async (req, res) => {
   try {
-    const { idToken } = req.body;
+    const { idToken, deviceId } = req.body;
 
     //1. Verify Google ID token directly with Google
     const ticket = await client.verifyIdToken({
@@ -998,6 +1074,8 @@ export const googleLogin = async (req, res) => {
         process.env.JWT_REFRESH_SECRET,
         { expiresIn: "7d" }
       );
+
+      await updateActiveRefreshToken(user, refreshToken, deviceId);
 
       res.status(200).json({
         // 200 OK for successful login

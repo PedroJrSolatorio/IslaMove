@@ -5,7 +5,9 @@ class SocketService {
   private static instance: SocketService;
   private socket: Socket | null = null;
   private listeners: Map<string, Function[]> = new Map();
-
+  private onSessionRevokedCallback:
+    | ((data: {message: string; newDeviceId: string}) => void)
+    | null = null;
   private constructor() {}
 
   public static getInstance(): SocketService {
@@ -15,7 +17,7 @@ class SocketService {
     return SocketService.instance;
   }
 
-  public connect(token: string): Promise<Socket> {
+  public connect(token: string, deviceId: string): Promise<Socket> {
     return new Promise((resolve, reject) => {
       try {
         console.log('Attempting to connect to socket with URL:', BACKEND_URL);
@@ -24,12 +26,17 @@ class SocketService {
         // Disconnect existing connection if any
         if (this.socket) {
           this.socket.disconnect();
+          this.socket = null; // Clear old socket
         }
 
         this.socket = io(BACKEND_URL, {
           // Pass token in auth object
           auth: {
             token: token,
+          },
+          query: {
+            // Pass deviceId as a query parameter for the socket handshake
+            deviceId: deviceId,
           },
           transports: ['websocket'],
           timeout: 20000,
@@ -61,8 +68,14 @@ class SocketService {
             console.error(
               'Authentication failed - token may be invalid or user not found',
             );
+            // This case might mean the token used for socket connection is bad, so we should signal logout.
+            if (this.onSessionRevokedCallback) {
+              this.onSessionRevokedCallback({
+                message: 'Socket authentication failed. Please log in again.',
+                newDeviceId: '',
+              });
+            }
           }
-
           reject(error);
         });
 
@@ -86,7 +99,6 @@ class SocketService {
           console.error('Socket error:', error);
         });
 
-        // Add authentication success/failure handlers
         this.socket.on('authenticated', () => {
           console.log('Socket authentication successful');
         });
@@ -95,6 +107,21 @@ class SocketService {
           console.error('Socket authentication failed:', error);
           reject(new Error(`Authentication failed: ${error.message}`));
         });
+
+        // Listen for 'session_revoked' event
+        this.socket.on(
+          'session_revoked',
+          (data: {message: string; newDeviceId: string}) => {
+            // Only trigger if a callback is registered
+            if (this.onSessionRevokedCallback) {
+              this.onSessionRevokedCallback(data);
+            } else {
+              console.warn(
+                'Session revoked event received but no handler registered in SocketService.',
+              );
+            }
+          },
+        );
 
         // Re-add event listeners
         this.listeners.forEach((callbacks, event) => {
@@ -115,6 +142,18 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
     }
+  }
+
+  //Register a callback for session revocation
+  public setOnSessionRevoked(
+    callback: (data: {message: string; newDeviceId: string}) => void,
+  ) {
+    this.onSessionRevokedCallback = callback;
+  }
+
+  //Clear the session revoked callback
+  public clearOnSessionRevoked() {
+    this.onSessionRevokedCallback = null;
   }
 
   public on(event: string, callback: Function) {

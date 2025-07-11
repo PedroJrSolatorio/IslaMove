@@ -130,13 +130,11 @@ app.use((err, req, res, next) => {
         .json({ error: `Unexpected file field: ${err.field}.` });
     }
     // For other Multer errors (e.g., storage issues)
-    return res
-      .status(400)
-      .json({
-        error: `File upload error: ${
-          err.message || "Unknown file upload error."
-        }`,
-      });
+    return res.status(400).json({
+      error: `File upload error: ${
+        err.message || "Unknown file upload error."
+      }`,
+    });
   }
 
   // Handle JSON parsing errors (from express.json())

@@ -23,6 +23,7 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import {GOOGLE_CONFIG, debugGoogleConfig} from '../config/googleConfig';
+import DeviceInfo from 'react-native-device-info';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -136,11 +137,13 @@ const LoginScreen = ({navigation}: Props) => {
 
     setLoading(true);
     try {
+      const deviceId = await DeviceInfo.getUniqueId();
       const response = await api.post(
         `/api/auth/login`,
         {
           username,
           password,
+          deviceId,
         },
         {skipAuthInterceptor: true} as AxiosRequestConfig & {
           skipAuthInterceptor: boolean;
@@ -194,6 +197,7 @@ const LoginScreen = ({navigation}: Props) => {
       }
 
       const {data} = signInResult;
+      const deviceId = await DeviceInfo.getUniqueId();
 
       // Send Google token to your backend for verification
       const response = await api.post(
@@ -204,6 +208,7 @@ const LoginScreen = ({navigation}: Props) => {
           email: data.user.email,
           name: data.user.name,
           photo: data.user.photo,
+          deviceId,
         },
         {skipAuthInterceptor: true} as AxiosRequestConfig & {
           skipAuthInterceptor: boolean;

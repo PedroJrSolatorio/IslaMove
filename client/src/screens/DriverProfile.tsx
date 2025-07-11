@@ -449,9 +449,11 @@ const DriverProfileScreen = () => {
     );
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (
+    message: string = 'You have been logged out.',
+  ) => {
     try {
-      await logout();
+      await logout(message);
       navigation.navigate('Login');
     } catch (error) {
       console.error('Failed to clear AsyncStorage:', error);

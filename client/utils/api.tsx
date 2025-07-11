@@ -2,10 +2,12 @@ import axios, {AxiosInstance, AxiosError, AxiosRequestConfig} from 'axios';
 import {BACKEND_URL} from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Alert, Platform} from 'react-native';
+import DeviceInfo from 'react-native-device-info';
 
 interface ApiErrorResponse {
   message?: string;
   error?: string;
+  code?: string;
 }
 
 export interface CustomAxiosRequestConfig extends AxiosRequestConfig {
@@ -71,6 +73,16 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Check for session revoked error specifically
+    if (
+      error.response?.status === 401 &&
+      error.response?.data?.code === 'SESSION_REVOKED'
+    ) {
+      return handleLogout(
+        'Your session has expired because you logged in on another device.',
+      );
+    }
+
     // If response is 401 Unauthorized and we haven't tried refreshing yet
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -78,6 +90,7 @@ api.interceptors.response.use(
       try {
         // Get refresh token
         const refreshToken = await AsyncStorage.getItem('refreshToken');
+        const deviceId = await DeviceInfo.getUniqueId(); // Get device ID
 
         if (!refreshToken) {
           // No refresh token, force logout
@@ -87,6 +100,7 @@ api.interceptors.response.use(
         // Call refresh token endpoint
         const response = await refreshTokenInstance.post('/api/auth/refresh', {
           refreshToken: refreshToken,
+          deviceId: deviceId,
         });
 
         // Check if refresh was successful
@@ -113,9 +127,10 @@ api.interceptors.response.use(
           // Refresh failed
           return handleLogout('Token refresh failed');
         }
-      } catch (refreshError) {
-        // Refresh token request failed
-        return handleLogout('Error refreshing token');
+      } catch (refreshError: any) {
+        const backendMessage =
+          refreshError.response?.data?.message || 'Error refreshing token';
+        return handleLogout(backendMessage);
       }
     }
 
@@ -172,13 +187,15 @@ const handleLogout = async (reason: string) => {
 
     // Navigate to login if possible
     if (navigationRef && navigationRef.navigate) {
-      navigationRef.navigate('Login');
+      Alert.alert('Session Expired', reason, [
+        {
+          text: 'OK',
+          onPress: () => navigationRef.navigate('Login'),
+        },
+      ]);
     } else {
       // Show alert if we can't navigate
-      Alert.alert(
-        'Session Expired',
-        'Your session has expired. Please log in again.',
-      );
+      Alert.alert('Session Expired', reason);
     }
   } catch (error) {
     console.error('Error during logout:', error);
