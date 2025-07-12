@@ -18,24 +18,19 @@ import {
   IconButton,
   Portal,
   Modal,
-  Dialog,
 } from 'react-native-paper';
 import {launchCamera, CameraOptions} from 'react-native-image-picker';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {TabsStyles} from '../styles/TabsStyles';
+import {RootStackParamList} from '../navigation/types';
 import {BACKEND_URL} from '@env';
+import {TabsStyles} from '../styles/TabsStyles';
 import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isPassengerProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
-import {RootStackParamList} from '../navigation/types';
 import api from '../../utils/api';
 import LocationSearchModal from '../components/LocationSearchModal';
 import {styles} from '../styles/BookRideStyles';
-import {
-  GoogleSignin,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
 
 interface Location {
   type: string;
@@ -48,8 +43,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const PassengerProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {logout, userToken} = useAuth();
-  const {profileData, loading, updateProfile, updatePassword, refreshProfile} =
-    useProfile();
+  const {profileData, loading, updateProfile, refreshProfile} = useProfile();
 
   const [editing, setEditing] = useState(false);
   const [editingAddresses, setEditingAddresses] = useState(false);
@@ -59,11 +53,6 @@ const PassengerProfileScreen = () => {
 
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
-  const [showCreatePasswordDialog, setShowCreatePasswordDialog] =
-    useState(false);
-  const [createPassword, setCreatePassword] = useState('');
-  const [confirmCreatePassword, setConfirmCreatePassword] = useState('');
-  const [createPasswordVisible, setCreatePasswordVisible] = useState(false);
 
   // Form state for editing profile
   const [formData, setFormData] = useState({
@@ -76,12 +65,6 @@ const PassengerProfileScreen = () => {
   });
 
   // Dialog states
-  const [showChangePasswordDialog, setShowChangePasswordDialog] =
-    useState<boolean>(false);
-  const [passwordVisible, setPasswordVisible] = useState<boolean>(false);
-  const [currentPassword, setCurrentPassword] = useState<string>('');
-  const [newPassword, setNewPassword] = useState<string>('');
-  const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [modalVisible, setModalVisible] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [selectingFor, setSelectingFor] = useState('saveAddress');
@@ -180,8 +163,6 @@ const PassengerProfileScreen = () => {
         email: profileData?.email || '',
         phone: profileData?.phone || '',
       });
-      setCurrentPassword('');
-      setNewPassword('');
     }
     setEditing(!editing);
   };
@@ -548,191 +529,6 @@ const PassengerProfileScreen = () => {
     [profileData],
   );
 
-  const handleChangePassword = async () => {
-    if (newPassword != confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match.');
-      return;
-    }
-
-    if (!currentPassword || !newPassword) {
-      Alert.alert('Error', 'Please fill in all password fields.');
-      return;
-    }
-
-    try {
-      await updatePassword(currentPassword, newPassword);
-
-      setShowChangePasswordDialog(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      Alert.alert('Success', 'Password updated successfully!');
-    } catch (error) {
-      console.error('Error updating password:', error);
-      Alert.alert('Error', 'Incorrect current password');
-    }
-  };
-
-  const handleLinkGoogle = async () => {
-    try {
-      await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signOut();
-      const userInfo = await GoogleSignin.signIn();
-      const {data} = userInfo;
-      const googleIdToken = data?.idToken;
-
-      if (!googleIdToken) {
-        Alert.alert('Error', 'Google ID token not found.');
-        return;
-      }
-
-      console.log('User Token being sent:', userToken);
-      console.log('Google ID Token:', googleIdToken);
-      // Send the Google ID token to your backend to link the account
-      const response = await api.post(`/api/auth/link-google`, {
-        idToken: googleIdToken,
-      });
-
-      const backendResponseData = response.data;
-
-      if (backendResponseData && backendResponseData.message) {
-        // If the backend sends a success message, use it.
-        Alert.alert('Success', backendResponseData.message);
-      } else {
-        // Fallback message if backend doesn't send 'message' or is empty
-        Alert.alert(
-          'Success',
-          'Your account has been successfully linked with Google!',
-        );
-      }
-
-      // Refresh profile AFTER the successful link and alert
-      refreshProfile();
-    } catch (error: any) {
-      console.error('Error linking Google account:', error);
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        console.log('Google sign-in cancelled by user');
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        console.log('Google sign-in already in progress');
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert('Error', 'Google Play Services not available or outdated.');
-      }
-    }
-  };
-
-  const handleCreatePassword = async () => {
-    console.log('Creating password...');
-    if (createPassword !== confirmCreatePassword) {
-      Alert.alert('Error', 'Passwords do not match.');
-      return;
-    }
-
-    if (createPassword.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long.');
-      return;
-    }
-
-    try {
-      // Call your backend API to set the password
-      const response = await api.post('/api/auth/set-password', {
-        newPassword: createPassword,
-      });
-
-      setShowCreatePasswordDialog(false);
-      setCreatePassword('');
-      setConfirmCreatePassword('');
-
-      Alert.alert(
-        'Success',
-        'Password created successfully! You can now unlink your Google account.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              refreshProfile();
-            },
-          },
-        ],
-      );
-    } catch (error: any) {
-      console.error('Error creating password:', error);
-      const errorMessage =
-        error.response?.data?.message || 'Failed to create password.';
-      Alert.alert('Error', errorMessage);
-    }
-  };
-
-  const handleUnlinkGoogle = async () => {
-    Alert.alert(
-      'Unlink Google Account',
-      'Are you sure you want to unlink your Google account? If you do not have a password set, you will need to create one to log in next time.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Unlink',
-          onPress: async () => {
-            try {
-              const response = await api.post('/api/auth/unlink-google'); // Your API call
-
-              // You might want to sign out from Google locally as well
-              try {
-                await GoogleSignin.signOut();
-              } catch (googleSignOutError) {
-                console.warn(
-                  'Error during Google local sign out:',
-                  googleSignOutError,
-                );
-              }
-
-              // Check for success or specific actions
-              if (response.data.message) {
-                // Assuming your backend sends a 'message'
-                Alert.alert('Success', response.data.message);
-                refreshProfile(); // Refresh user data in your app
-              } else {
-                Alert.alert('Success', 'Google account unlinked.');
-                refreshProfile();
-              }
-            } catch (error: any) {
-              console.error(
-                'Error unlinking Google account:',
-                error.response?.data || error.message,
-              );
-              const errorMessage =
-                error.response?.data?.message ||
-                'Failed to unlink Google account.';
-
-              if (error.response?.data?.action === 'set_password_required') {
-                Alert.alert(
-                  'Password Required',
-                  errorMessage + '\nWould you like to create a password now?',
-                  [
-                    {
-                      text: 'Cancel',
-                      style: 'cancel',
-                    },
-                    {
-                      text: 'Create Password',
-                      onPress: () => {
-                        setShowCreatePasswordDialog(true);
-                      },
-                    },
-                  ],
-                );
-              } else {
-                Alert.alert('Error', errorMessage);
-              }
-            }
-          },
-        },
-      ],
-      {cancelable: true},
-    );
-  };
-
   const handleLogout = async (
     message: string = 'You have been logged out.',
   ) => {
@@ -765,14 +561,16 @@ const PassengerProfileScreen = () => {
   return (
     <>
       <View style={GlobalStyles.header}>
-        <Text style={GlobalStyles.headerTitle}>Profile</Text>
-        <IconButton
-          icon={editing ? 'close' : 'pencil'}
-          iconColor="white"
-          size={24}
-          style={{marginTop: 0}}
-          onPress={toggleEdit}
-        />
+        <Text style={GlobalStyles.headerTitle}>Passenger Profile</Text>
+        {!editing && (
+          <IconButton
+            icon="cog"
+            iconColor="gray"
+            size={24}
+            style={{marginTop: 0}}
+            onPress={() => navigation.navigate('Settings' as never)}
+          />
+        )}
       </View>
 
       <ScrollView style={GlobalStyles.container}>
@@ -809,37 +607,6 @@ const PassengerProfileScreen = () => {
               )}
             </TouchableOpacity>
 
-            {/* Show pending image status if applicable */}
-            {/* {profileData.pendingProfileImage?.status === 'pending' && (
-              <View style={{alignItems: 'center', marginTop: 8}}>
-                <Chip
-                  mode="flat"
-                  style={{backgroundColor: '#f39c12'}}
-                  textStyle={{color: 'white', fontSize: 12}}>
-                  Profile Image Pending Approval
-                </Chip>
-              </View>
-            )} */}
-
-            {/* Verification Status */}
-            {/* {profileData.verificationStatus && (
-              <View style={{alignItems: 'center', marginTop: 8}}>
-                <Chip
-                  mode="flat"
-                  style={{
-                    backgroundColor: getVerificationStatusDisplay(
-                      profileData.verificationStatus,
-                    ).color,
-                  }}
-                  textStyle={{color: 'white', fontSize: 12}}>
-                  {
-                    getVerificationStatusDisplay(profileData.verificationStatus)
-                      .label
-                  }
-                </Chip>
-              </View>
-            )} */}
-
             <View style={TabsStyles.profileInfo}>
               {editing ? (
                 <>
@@ -875,23 +642,29 @@ const PassengerProfileScreen = () => {
               ) : (
                 <Text style={TabsStyles.nameText}>{getFullName()}</Text>
               )}
-
-              <Button
-                mode="contained"
-                onPress={editing ? handleSave : () => {}}
-                style={TabsStyles.saveButton}
-                disabled={!editing}>
-                {editing ? 'Save Changes' : 'Full Name'}
-              </Button>
+              {!editing && (
+                <Button
+                  mode="contained"
+                  style={TabsStyles.saveButton}
+                  disabled={!editing}>
+                  Full Name
+                </Button>
+              )}
             </View>
           </Card.Content>
         </Card>
 
         <Card style={TabsStyles.sectionCard}>
           <Card.Content>
-            <Title>Account Information</Title>
+            <View style={TabsStyles.titleRow}>
+              <Title>Account Information</Title>
+              <TouchableOpacity onPress={toggleEdit}>
+                <Text style={TabsStyles.editButtonText}>
+                  {!editing && 'Edit'}
+                </Text>
+              </TouchableOpacity>
+            </View>
             <Divider style={TabsStyles.divider} />
-
             <View style={TabsStyles.infoRow}>
               <Text style={TabsStyles.infoLabel}>Username</Text>
               {editing ? (
@@ -907,7 +680,6 @@ const PassengerProfileScreen = () => {
                 <Text style={TabsStyles.infoValue}>{profileData.username}</Text>
               )}
             </View>
-
             <View style={TabsStyles.infoRow}>
               <Text style={TabsStyles.infoLabel}>Email</Text>
               {editing ? (
@@ -928,14 +700,12 @@ const PassengerProfileScreen = () => {
                 <Text style={TabsStyles.infoValue}>{profileData.email}</Text>
               )}
             </View>
-
             {editing && profileData.isGoogleUser && (
               <Text style={TabsStyles.infoMessage}>
                 Your email is managed by your linked Google account and cannot
                 be edited.
               </Text>
             )}
-
             <View style={TabsStyles.infoRow}>
               <Text style={TabsStyles.infoLabel}>Phone</Text>
               {editing ? (
@@ -950,6 +720,14 @@ const PassengerProfileScreen = () => {
                 <Text style={TabsStyles.infoValue}>{profileData.phone}</Text>
               )}
             </View>
+            {editing && (
+              <View style={TabsStyles.titleRow}>
+                <Button onPress={toggleEdit}>Cancel</Button>
+                <Button onPress={editing ? handleSave : () => {}}>
+                  Update
+                </Button>
+              </View>
+            )}
           </Card.Content>
         </Card>
 
@@ -1147,43 +925,6 @@ const PassengerProfileScreen = () => {
               </Card.Content>
             </Card>
 
-            <Card style={TabsStyles.sectionCard}>
-              <Card.Content>
-                <Title>Account Security</Title>
-                <Divider style={TabsStyles.divider} />
-                {profileData.isGoogleUser ? (
-                  <>
-                    <View style={TabsStyles.googleInfoContainer}>
-                      <List.Icon icon="google" color="#3498db" />
-                      <Text style={TabsStyles.infoValue}>
-                        Registered with Google
-                      </Text>
-                    </View>
-                    <Button mode="contained" onPress={handleUnlinkGoogle}>
-                      Unlink Google Account
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      mode="outlined"
-                      icon="lock"
-                      onPress={() => setShowChangePasswordDialog(true)}
-                      style={{marginTop: 12}}>
-                      Change Password
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      icon="google"
-                      onPress={handleLinkGoogle}
-                      style={{marginTop: 12}}>
-                      Link with Google
-                    </Button>
-                  </>
-                )}
-              </Card.Content>
-            </Card>
-
             <View style={TabsStyles.buttonContainer}>
               <Button
                 mode="contained"
@@ -1364,115 +1105,6 @@ const PassengerProfileScreen = () => {
               </Button>
             </View>
           </Modal>
-        </Portal>
-
-        {/* Change Password Dialog */}
-        <Portal>
-          <Dialog
-            visible={showChangePasswordDialog}
-            onDismiss={() => setShowChangePasswordDialog(false)}>
-            <Dialog.Title>Change Password</Dialog.Title>
-            <Dialog.Content>
-              <TextInput
-                label="Current Password"
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-                mode="outlined"
-                secureTextEntry={!passwordVisible}
-                style={TabsStyles.input}
-                right={
-                  <TextInput.Icon
-                    icon={passwordVisible ? 'eye-off' : 'eye'}
-                    onPress={() => setPasswordVisible(!passwordVisible)}
-                  />
-                }
-              />
-              <TextInput
-                label="New Password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                mode="outlined"
-                secureTextEntry={!passwordVisible}
-                style={TabsStyles.input}
-                right={
-                  <TextInput.Icon
-                    icon={passwordVisible ? 'eye-off' : 'eye'}
-                    onPress={() => setPasswordVisible(!passwordVisible)}
-                  />
-                }
-              />
-              <TextInput
-                label="Confirm New Password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                mode="outlined"
-                secureTextEntry={!passwordVisible}
-                style={TabsStyles.input}
-                right={
-                  <TextInput.Icon
-                    icon={passwordVisible ? 'eye-off' : 'eye'}
-                    onPress={() => setPasswordVisible(!passwordVisible)}
-                  />
-                }
-              />
-            </Dialog.Content>
-            <Dialog.Actions>
-              <Button onPress={() => setShowChangePasswordDialog(false)}>
-                Cancel
-              </Button>
-              <Button onPress={handleChangePassword}>Change Password</Button>
-            </Dialog.Actions>
-          </Dialog>
-
-          <Dialog
-            visible={showCreatePasswordDialog}
-            onDismiss={() => setShowCreatePasswordDialog(false)}>
-            <Dialog.Title>Create Password</Dialog.Title>
-            <Dialog.Content>
-              <Text style={{marginBottom: 16, color: '#666'}}>
-                Create a password for your account to enable unlinking from
-                Google.
-              </Text>
-              <TextInput
-                label="New Password"
-                value={createPassword}
-                onChangeText={setCreatePassword}
-                mode="outlined"
-                secureTextEntry={!createPasswordVisible}
-                style={TabsStyles.input}
-                right={
-                  <TextInput.Icon
-                    icon={createPasswordVisible ? 'eye-off' : 'eye'}
-                    onPress={() =>
-                      setCreatePasswordVisible(!createPasswordVisible)
-                    }
-                  />
-                }
-              />
-              <TextInput
-                label="Confirm Password"
-                value={confirmCreatePassword}
-                onChangeText={setConfirmCreatePassword}
-                mode="outlined"
-                secureTextEntry={!createPasswordVisible}
-                style={TabsStyles.input}
-                right={
-                  <TextInput.Icon
-                    icon={createPasswordVisible ? 'eye-off' : 'eye'}
-                    onPress={() =>
-                      setCreatePasswordVisible(!createPasswordVisible)
-                    }
-                  />
-                }
-              />
-            </Dialog.Content>
-            <Dialog.Actions>
-              <Button onPress={() => setShowCreatePasswordDialog(false)}>
-                Cancel
-              </Button>
-              <Button onPress={handleCreatePassword}>Create Password</Button>
-            </Dialog.Actions>
-          </Dialog>
         </Portal>
       </ScrollView>
 

@@ -345,6 +345,20 @@ const userSchema = new mongoose.Schema(
         loggedInAt: { type: Date, default: Date.now },
       },
     ],
+    // Account deletion fields
+    deletionRequested: {
+      type: Boolean,
+      default: false,
+    },
+    deletionRequestedAt: {
+      type: Date,
+    },
+    deletionScheduledFor: {
+      type: Date,
+    },
+    deletionReason: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

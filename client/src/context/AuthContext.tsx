@@ -11,6 +11,7 @@ import {BACKEND_URL} from '@env';
 import DeviceInfo from 'react-native-device-info';
 import SocketService from '../services/SocketService';
 import {Alert} from 'react-native';
+import Toast from 'react-native-toast-message';
 
 type Role = 'admin' | 'driver' | 'passenger' | null;
 
@@ -271,10 +272,10 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
 
       console.log('Auth data cleared and Socket.IO disconnected.');
 
-      // Show alert after clearing data, before navigation
-      Alert.alert('Session Expired', message, [
-        {text: 'OK', onPress: () => {}}, // Empty onPress, navigation handled by useAuth
-      ]);
+      Toast.show({
+        type: 'success',
+        text1: message,
+      });
     } catch (error) {
       console.error('Error during logout:', error);
       throw error;

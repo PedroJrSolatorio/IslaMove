@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { initializeSocket } from "./socket/socketManager.js";
 import multer from "multer";
+import { setupCleanupJobs } from "./jobs/cleanupJob.js";
 
 //use require if not using ES Module
 // const express = require("express");
@@ -74,6 +75,9 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Connect to MongoDB
 connectDB();
+
+// Start cleanup cron jobs
+setupCleanupJobs();
 
 // Import routes (Use ES Module syntax). ES Module (ESM) – Used in React Native by default (modern standard)
 import authRoutes from "./routes/authRoutes.js";

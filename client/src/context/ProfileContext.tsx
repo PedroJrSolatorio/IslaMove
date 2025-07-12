@@ -97,6 +97,7 @@ interface BaseProfile {
   email: string;
   phone: string;
   isGoogleUser: boolean;
+  hasPassword?: boolean;
   homeAddress: HomeAddress;
   role: 'passenger' | 'driver' | 'admin';
   profileImage: string; // Current active profile image

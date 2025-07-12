@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
-import fs, { unlink } from "fs";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import {
   registerUser,
@@ -15,6 +15,7 @@ import {
   linkGoogleAccount,
   unlinkGoogleAccount,
   setPassword,
+  checkDeletionStatus,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -68,11 +69,11 @@ const uploadFields = upload.fields([
 ]);
 
 router.post("/check-user", checkUser);
-router.post("/login", loginUser);
+router.post("/login", checkDeletionStatus, loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
 router.post("/google-signup", googleSignup);
-router.post("/google-login", googleLogin);
+router.post("/google-login", checkDeletionStatus, googleLogin);
 router.post("/complete-google-registration", uploadFields, (req, res) => {
   // Multer errors will be caught by the global error handler
   completeGoogleRegistration(req, res);

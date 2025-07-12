@@ -1,8 +1,8 @@
 import User from "../models/User.js";
+import Ride from "../models/Ride.js";
+import UserAgreement from "../models/UserAgreement.js";
 import bcrypt from "bcrypt";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import jwt from "jsonwebtoken";
 
 export const getUserByEmail = async (req, res) => {
   try {
@@ -19,14 +19,32 @@ export const getUserByEmail = async (req, res) => {
 
 export const getProfileById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("-password");
+    const user = await User.findById(req.params.id).select("+password");
     if (!user)
       return res
         .status(404)
         .json({ error: "User not found in getProfileById" });
-    res.json(user);
+
+    // 2. Determine if the user has a password set
+    const hasPassword = !!user.password;
+
+    // 3. Convert the Mongoose document to a plain JavaScript object
+    const userObject = user.toObject();
+
+    // 4. Remove the password field from the object before sending
+    delete userObject.password;
+
+    // 5. Add the hasPassword flag
+    userObject.hasPassword = hasPassword;
+
+    // 6. Send the modified user object in the response
+    res.json(userObject);
   } catch (error) {
     console.error("Error fetching profile:", error);
+    // Handle CastError for invalid IDs gracefully
+    if (error.name === "CastError") {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
     res.status(500).json({ error: "Error fetching user" });
   }
 };
@@ -509,5 +527,208 @@ export const removeAddress = async (req, res) => {
   } catch (error) {
     console.error("Error removing address:", error);
     res.status(500).json({ error: "Failed to remove address" });
+  }
+};
+
+// Request account deletion
+export const requestAccountDeletion = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { reason } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Check if deletion is already requested
+    if (user.deletionRequested) {
+      return res.status(400).json({
+        error: "Account deletion already requested",
+        scheduledFor: user.deletionScheduledFor,
+      });
+    }
+
+    // Set deletion request
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+
+    user.deletionRequested = true;
+    user.deletionRequestedAt = new Date();
+    user.deletionScheduledFor = deletionDate;
+    user.deletionReason = reason || "User requested deletion";
+
+    await user.save();
+
+    res.json({
+      message: "Account deletion requested successfully",
+      scheduledFor: deletionDate,
+      daysRemaining: 30,
+      note: "Your account will be permanently deleted in 30 days. You can cancel this request by logging in before the deletion date.",
+    });
+  } catch (error) {
+    console.error("Error requesting account deletion:", error);
+    res.status(500).json({ error: "Failed to request account deletion" });
+  }
+};
+
+// Cancel account deletion
+export const cancelAccountDeletion = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.deletionRequested) {
+      return res.status(400).json({ error: "No deletion request found" });
+    }
+
+    // Cancel deletion request
+    user.deletionRequested = false;
+    user.deletionRequestedAt = undefined;
+    user.deletionScheduledFor = undefined;
+    user.deletionReason = undefined;
+
+    await user.save();
+
+    res.json({
+      message: "Account deletion cancelled successfully",
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+  } catch (error) {
+    console.error("Error cancelling account deletion:", error);
+    res.status(500).json({ error: "Failed to cancel account deletion" });
+  }
+};
+
+// Verify account deletion with password/Google
+export const verifyAccountDeletion = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { password, googleIdToken, reason } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify authentication
+    if (user.isGoogleUser) {
+      // Verify Google ID token
+      if (!googleIdToken) {
+        return res.status(400).json({
+          error: "Google authentication required",
+          requiresGoogle: true,
+        });
+      }
+
+      try {
+        // Verify Google ID token (you'll need to implement this)
+        const payload = jwt.decode(googleIdToken);
+        if (!payload || payload.email !== user.email) {
+          return res
+            .status(400)
+            .json({ error: "Invalid Google authentication" });
+        }
+      } catch (error) {
+        return res.status(400).json({ error: "Invalid Google authentication" });
+      }
+    } else {
+      // Verify password
+      if (!password) {
+        return res.status(400).json({
+          error: "Password required",
+          requiresPassword: true,
+        });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).json({ error: "Invalid password" });
+      }
+    }
+
+    // Set deletion request
+    const deletionDate = new Date();
+    deletionDate.setDate(deletionDate.getDate() + 30);
+
+    user.deletionRequested = true;
+    user.deletionRequestedAt = new Date();
+    user.deletionScheduledFor = deletionDate;
+    user.deletionReason = reason || "User verified deletion";
+
+    await user.save();
+
+    res.json({
+      message: "Account deletion verified and scheduled",
+      scheduledFor: deletionDate,
+      daysRemaining: 30,
+      note: "Your account will be permanently deleted in 30 days. You can cancel this by logging in before the deletion date.",
+    });
+  } catch (error) {
+    console.error("Error verifying account deletion:", error);
+    res.status(500).json({ error: "Failed to verify account deletion" });
+  }
+};
+
+// cleanup job (you can run this daily via cron job)
+export const processScheduledDeletions = async () => {
+  try {
+    const now = new Date();
+
+    // Find users scheduled for deletion
+    const usersToDelete = await User.find({
+      deletionRequested: true,
+      deletionScheduledFor: { $lte: now },
+    });
+
+    console.log(`Found ${usersToDelete.length} users to delete`);
+
+    for (const user of usersToDelete) {
+      try {
+        // Delete user's related data (rides, ratings, etc.)
+        console.log(
+          `Starting deletion process for user: ${user.email} (${user._id})`
+        );
+
+        // 1. Delete user's rides (as passenger and driver)
+        const ridesDeleted = await Ride.deleteMany({
+          $or: [{ passenger: user._id }, { driver: user._id }],
+        });
+        console.log(
+          `Deleted ${ridesDeleted.deletedCount} rides for user ${user._id}`
+        );
+
+        // 2. Delete user agreements
+        const agreementsDeleted = await UserAgreement.deleteMany({
+          userId: user._id,
+        });
+        console.log(
+          `Deleted ${agreementsDeleted.deletedCount} user agreements for user ${user._id}`
+        );
+
+        // Delete the user
+        await User.findByIdAndDelete(user._id);
+
+        console.log(`Deleted user: ${user.email} (${user._id})`);
+      } catch (error) {
+        console.error(`Failed to delete user ${user._id}:`, error);
+      }
+    }
+    if (usersToDelete.length > 0) {
+      console.log(
+        `Completed deletion process for ${usersToDelete.length} users`
+      );
+    }
+  } catch (error) {
+    console.error("Error processing scheduled deletions:", error);
   }
 };
