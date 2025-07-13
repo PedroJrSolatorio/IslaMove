@@ -120,6 +120,7 @@ export const GlobalStyles = StyleSheet.create({
     width: '100%',
     height: 48,
     marginBottom: 10,
+    borderRadius: 25,
   },
   loadingText: {
     textAlign: 'center',

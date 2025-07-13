@@ -108,7 +108,7 @@ const RegisterSelectionScreen = () => {
 
   return (
     <ImageBackground
-      source={require('../assets/images/welcomeImg.webp')}
+      source={require('../assets/images/IslaMove_background.png')}
       style={styles.background}>
       <View style={styles.overlay}>
         <Text style={styles.title}>Create an Account</Text>

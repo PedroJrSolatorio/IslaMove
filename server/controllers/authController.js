@@ -126,6 +126,36 @@ const updateActiveRefreshToken = async (user, newRefreshToken, deviceId) => {
   await user.save();
 };
 
+// Helper function to handle deletion cancellation
+const handleDeletionCancellation = async (user) => {
+  if (user.deletionRequested) {
+    const now = new Date();
+    const daysRemaining = Math.ceil(
+      (user.deletionScheduledFor - now) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysRemaining > 0) {
+      // Cancel deletion
+      await User.findByIdAndUpdate(user._id, {
+        $unset: {
+          deletionRequested: 1,
+          deletionRequestedAt: 1,
+          deletionScheduledFor: 1,
+          deletionReason: 1,
+        },
+      });
+      console.log(`Account deletion cancelled for user: ${user.username}`);
+      return true; // Deletion was cancelled
+    } else {
+      // Account should have been deleted already
+      throw new Error(
+        "Account has been scheduled for deletion and is no longer accessible"
+      );
+    }
+  }
+  return false; // No deletion to cancel
+};
+
 // Register a new user
 export const registerUser = async (req, res) => {
   // Array to store paths of files uploaded during this request. These will be deleted if any error occurs.
@@ -438,35 +468,12 @@ export const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Track if deletion was cancelled
+    // Handle deletion cancellation
     let deletionCancelled = false;
-
-    // Check deletion status BEFORE proceeding with login
-    if (user.deletionRequested) {
-      const now = new Date();
-      const daysRemaining = Math.ceil(
-        (user.deletionScheduledFor - now) / (1000 * 60 * 60 * 24)
-      );
-
-      if (daysRemaining > 0) {
-        // Cancel deletion since user logged in
-        await User.findByIdAndUpdate(user._id, {
-          $unset: {
-            deletionRequested: 1,
-            deletionRequestedAt: 1,
-            deletionScheduledFor: 1,
-            deletionReason: 1,
-          },
-        });
-        deletionCancelled = true;
-        console.log(`Account deletion cancelled for user: ${user.username}`);
-      } else {
-        // Account should have been deleted already
-        return res.status(401).json({
-          error:
-            "Account has been scheduled for deletion and is no longer accessible",
-        });
-      }
+    try {
+      deletionCancelled = await handleDeletionCancellation(user);
+    } catch (error) {
+      return res.status(401).json({ error: error.message });
     }
 
     // Generate JWT token
@@ -474,7 +481,6 @@ export const loginUser = async (req, res) => {
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "12h" }
-      // { expiresIn: "1m" } // For testing purposes, set a shorter expiration time
     );
 
     // Generate refresh token with longer expiry
@@ -491,7 +497,7 @@ export const loginUser = async (req, res) => {
     io.to(`user_${user._id.toString()}`).emit("session_revoked", {
       message:
         "Your session has been terminated because you logged in from another device.",
-      newDeviceId: deviceId, // Send the deviceId of the *new* login
+      newDeviceId: deviceId,
     });
 
     const response = {
@@ -503,10 +509,8 @@ export const loginUser = async (req, res) => {
       username: user.username,
     };
 
-    // Add deletion cancellation message if applicable
     if (deletionCancelled) {
-      response.message =
-        "Login successful. Account deletion has been cancelled.";
+      response.message = "Account deletion cancelled successfully";
       response.deletionCancelled = true;
     }
 
@@ -1088,44 +1092,17 @@ export const googleLogin = async (req, res) => {
 
     // Only allow login if user exists AND profile is complete
     if (user && user.isProfileComplete) {
+      // Handle deletion cancellation
       let deletionCancelled = false;
-      // Check deletion status BEFORE proceeding with login
-      if (user.deletionRequested) {
-        const now = new Date();
-        const daysRemaining = Math.ceil(
-          (user.deletionScheduledFor - now) / (1000 * 60 * 60 * 24)
-        );
-
-        if (daysRemaining > 0) {
-          // Cancel deletion since user logged in
-          await User.findByIdAndUpdate(user._id, {
-            $unset: {
-              deletionRequested: 1,
-              deletionRequestedAt: 1,
-              deletionScheduledFor: 1,
-              deletionReason: 1,
-            },
-          });
-          deletionCancelled = true;
-          console.log(
-            `Account deletion cancelled for Google user: ${user.username}`
-          );
-        } else {
-          // Account should have been deleted already
-          return res.status(401).json({
-            message:
-              "Account has been scheduled for deletion and is no longer accessible",
-          });
-        }
+      try {
+        deletionCancelled = await handleDeletionCancellation(user);
+      } catch (error) {
+        return res.status(401).json({ message: error.message });
       }
-
-      // User found and profile is complete! This is a successful login.
-
-      // Optional: If user exists but wasn't previously linked to Google (e.g., regular signup then Google login with same email)
+      // Optional: If user exists but wasn't previously linked to Google
       if (!user.googleId) {
-        user.googleId = googleId; // Link Google ID
-        user.isGoogleUser = true; // Mark as Google user
-        // user.profileImage = payload.picture || user.profileImage;
+        user.googleId = googleId;
+        user.isGoogleUser = true;
         await user.save();
       }
 
@@ -1159,16 +1136,15 @@ export const googleLogin = async (req, res) => {
         isProfileComplete: user.isProfileComplete,
         role: user.role,
       };
-      // Add deletion cancellation message if applicable
+
+      // Check if deletion was cancelled by middleware
       if (deletionCancelled) {
-        response.message =
-          "Login successful. Account deletion has been cancelled.";
+        response.message = "Account deletion cancelled successfully";
         response.deletionCancelled = true;
       }
+
       res.status(200).json(response);
     } else {
-      // User not found, OR user found but profile is not complete.
-      // In this simplified flow, both cases mean "not registered" for login purposes.
       console.log("Google account not fully registered or profile incomplete.");
       return res.status(401).json({
         message:
@@ -1177,7 +1153,6 @@ export const googleLogin = async (req, res) => {
     }
   } catch (error) {
     console.error("Google login error:", error);
-    // More specific error for Google token verification failures
     if (
       error.name === "JsonWebTokenError" ||
       error.name === "TokenExpiredError" ||
@@ -1187,7 +1162,6 @@ export const googleLogin = async (req, res) => {
         message: "Google token verification failed. Please try again.",
       });
     }
-    // Generic server error for other issues
     res
       .status(500)
       .json({ message: "Server error during Google authentication." });
@@ -1428,51 +1402,5 @@ export const setPassword = async (req, res) => {
   } catch (error) {
     console.error("Error setting password:", error);
     res.status(500).json({ message: "Server error during password creation." });
-  }
-};
-
-// middleware to check for deletion status on login
-export const checkDeletionStatus = async (req, res, next) => {
-  try {
-    const user = req.user; // Assuming user is attached to req by auth middleware
-
-    if (user && user.deletionRequested) {
-      // Calculate days remaining
-      const now = new Date();
-      const daysRemaining = Math.ceil(
-        (user.deletionScheduledFor - now) / (1000 * 60 * 60 * 24)
-      );
-
-      if (daysRemaining > 0) {
-        return res.status(200).json({
-          message: "Account deletion is scheduled",
-          deletionScheduled: true,
-          scheduledFor: user.deletionScheduledFor,
-          daysRemaining: daysRemaining,
-          canCancel: true,
-        });
-      } else {
-        // Deletion date has passed, but user is trying to log in
-        // Cancel the deletion
-        await User.findByIdAndUpdate(user._id, {
-          $unset: {
-            deletionRequested: 1,
-            deletionRequestedAt: 1,
-            deletionScheduledFor: 1,
-            deletionReason: 1,
-          },
-        });
-
-        return res.status(200).json({
-          message: "Account deletion cancelled due to login",
-          deletionCancelled: true,
-        });
-      }
-    }
-
-    next();
-  } catch (error) {
-    console.error("Error checking deletion status:", error);
-    next();
   }
 };

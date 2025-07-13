@@ -163,7 +163,13 @@ const LoginScreen = ({navigation}: Props) => {
           username: response.data.username,
         },
       });
-
+      // Check if deletion was cancelled and show appropriate message
+      if (response.data.deletionCancelled) {
+        Alert.alert(
+          'Account Restored',
+          response.data.message || 'Account deletion cancelled successfully',
+        );
+      }
       // Wait a bit for AsyncStorage to be updated, then refresh profile
       setTimeout(() => {
         refreshProfile();
@@ -228,7 +234,12 @@ const LoginScreen = ({navigation}: Props) => {
           username: response.data.username,
         },
       });
-
+      if (response.data.deletionCancelled) {
+        Alert.alert(
+          'Account Restored',
+          response.data.message || 'Account deletion cancelled successfully',
+        );
+      }
       setTimeout(() => {
         refreshProfile();
       }, 100);
@@ -339,7 +350,7 @@ const LoginScreen = ({navigation}: Props) => {
 
   return (
     <ImageBackground
-      source={require('../assets/images/welcomeImg.webp')}
+      source={require('../assets/images/IslaMove_background.png')}
       style={GlobalStyles.background}>
       <View style={GlobalStyles.overlay}>
         <Text style={GlobalStyles.title}>Welcome to IslaMove</Text>

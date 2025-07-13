@@ -572,43 +572,6 @@ export const requestAccountDeletion = async (req, res) => {
   }
 };
 
-// Cancel account deletion
-export const cancelAccountDeletion = async (req, res) => {
-  try {
-    const userId = req.params.id;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (!user.deletionRequested) {
-      return res.status(400).json({ error: "No deletion request found" });
-    }
-
-    // Cancel deletion request
-    user.deletionRequested = false;
-    user.deletionRequestedAt = undefined;
-    user.deletionScheduledFor = undefined;
-    user.deletionReason = undefined;
-
-    await user.save();
-
-    res.json({
-      message: "Account deletion cancelled successfully",
-      user: {
-        _id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-    });
-  } catch (error) {
-    console.error("Error cancelling account deletion:", error);
-    res.status(500).json({ error: "Failed to cancel account deletion" });
-  }
-};
-
 // Verify account deletion with password/Google
 export const verifyAccountDeletion = async (req, res) => {
   try {
@@ -730,5 +693,42 @@ export const processScheduledDeletions = async () => {
     }
   } catch (error) {
     console.error("Error processing scheduled deletions:", error);
+  }
+};
+
+// Cancel account deletion
+export const cancelAccountDeletion = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!user.deletionRequested) {
+      return res.status(400).json({ error: "No deletion request found" });
+    }
+
+    // Cancel deletion request
+    user.deletionRequested = false;
+    user.deletionRequestedAt = undefined;
+    user.deletionScheduledFor = undefined;
+    user.deletionReason = undefined;
+
+    await user.save();
+
+    res.json({
+      message: "Account deletion cancelled successfully",
+      user: {
+        _id: user._id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+  } catch (error) {
+    console.error("Error cancelling account deletion:", error);
+    res.status(500).json({ error: "Failed to cancel account deletion" });
   }
 };

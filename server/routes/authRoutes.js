@@ -15,7 +15,6 @@ import {
   linkGoogleAccount,
   unlinkGoogleAccount,
   setPassword,
-  checkDeletionStatus,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -69,11 +68,11 @@ const uploadFields = upload.fields([
 ]);
 
 router.post("/check-user", checkUser);
-router.post("/login", checkDeletionStatus, loginUser);
+router.post("/login", loginUser);
 router.get("/validate", validateToken);
 router.post("/refresh", refreshAuthToken);
 router.post("/google-signup", googleSignup);
-router.post("/google-login", checkDeletionStatus, googleLogin);
+router.post("/google-login", googleLogin);
 router.post("/complete-google-registration", uploadFields, (req, res) => {
   // Multer errors will be caught by the global error handler
   completeGoogleRegistration(req, res);
