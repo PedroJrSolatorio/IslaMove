@@ -2,6 +2,8 @@ interface Location {
   type: string;
   coordinates: [number, number];
   address: string;
+  mainText?: string;
+  secondaryText?: string;
 }
 
 export type RootStackParamList = {
@@ -13,6 +15,7 @@ export type RootStackParamList = {
   DriverHome: undefined;
   PassengerHome: undefined;
   MapLocationPicker: {
-    onLocationSelected: (location: Location) => void;
+    callbackId: string;
+    preselectedLocation?: Location;
   };
 };

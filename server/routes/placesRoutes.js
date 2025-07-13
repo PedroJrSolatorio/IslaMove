@@ -4,28 +4,46 @@ import axios from "axios";
 const router = express.Router();
 
 router.get("/autocomplete", async (req, res) => {
-  const { input, lat, lng, radius = 10000 } = req.query; // radius in meters (10km)
+  const { input, lat, lng, radius, sessionToken } = req.query; // radius in meters (6km)
+  //this will be used to filter results based on proximity from user's location
+
+  if (!sessionToken) {
+    return res.status(400).json({ error: "Session token is required" });
+  }
+
+  // Validate and sanitize radius
+  let parsedRadius = parseInt(radius, 10);
+
+  if (isNaN(parsedRadius)) {
+    parsedRadius = 6000; // Default to 6km, Fallback if radius is invalid or not provided from frontend
+  }
+
+  // Optional: enforce a maximum radius to avoid excessive queries
+  const MAX_RADIUS = 10000; // 10km
+  if (parsedRadius > MAX_RADIUS) {
+    parsedRadius = MAX_RADIUS;
+  }
 
   try {
     const params = {
       input,
       key: process.env.GOOGLE_API_KEY,
-      sessiontoken: "your-session-token",
+      sessiontoken: sessionToken,
     };
 
     // Add location bias if coordinates are provided
     if (lat && lng) {
       params.location = `${lat},${lng}`;
-      params.radius = radius;
+      params.radius = parsedRadius.toString();
       // You can also use 'strictbounds' to only return results within the radius
       // params.strictbounds = true;
     }
 
     const response = await axios.get(
       `https://maps.googleapis.com/maps/api/place/autocomplete/json`,
-      { params }
+      { params, timeout: 8000 }
     );
-    console.log("Google Places Response:", response.data);
+    console.log(`Autocomplete API call for session: ${sessionToken}`);
     res.json(response.data);
   } catch (error) {
     console.error("Places Autocomplete error:", error);
@@ -34,7 +52,14 @@ router.get("/autocomplete", async (req, res) => {
 });
 
 router.get("/details", async (req, res) => {
-  const { placeId } = req.query;
+  const { placeId, sessionToken } = req.query;
+
+  // Validate required parameters
+  if (!placeId || !sessionToken) {
+    return res.status(400).json({
+      error: "Place ID and session token are required",
+    });
+  }
 
   try {
     const response = await axios.get(
@@ -43,12 +68,13 @@ router.get("/details", async (req, res) => {
         params: {
           place_id: placeId,
           key: process.env.GOOGLE_API_KEY,
-          sessiontoken: "your-session-token",
-          fields: "geometry,formatted_address,name,place_id",
+          sessiontoken: sessionToken, // Same session token for billing
+          fields: "geometry,formatted_address,name,place_id", // Only fetch needed fields
         },
+        timeout: 8000,
       }
     );
-
+    console.log(`Place Details API call for session: ${sessionToken}`);
     res.json(response.data);
   } catch (error) {
     console.error("Place Details error:", error);

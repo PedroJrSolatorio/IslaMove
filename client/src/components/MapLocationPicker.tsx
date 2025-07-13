@@ -21,11 +21,14 @@ interface Location {
   type: string;
   coordinates: [number, number];
   address: string;
+  mainText?: string;
+  secondaryText?: string;
 }
 
-interface MapLocationPickerProps {
-  onLocationSelected: (location: Location) => void;
-  preselectedLocation?: Location;
+interface AddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
 }
 
 const MapLocationPicker = () => {
@@ -33,9 +36,14 @@ const MapLocationPicker = () => {
   const route = useRoute();
   const mapRef = useRef<MapView | null>(null);
 
-  // Get the callback function and preselected location from route params
-  const {onLocationSelected, preselectedLocation} =
-    route.params as MapLocationPickerProps;
+  // Get the callback ID and preselected location from route params
+  const {callbackId, preselectedLocation} = route.params as {
+    callbackId: string;
+    preselectedLocation?: Location;
+  };
+
+  // Get the callback function from global storage
+  const onLocationSelected = (global as any).locationCallbacks?.[callbackId];
 
   // States
   const [loading, setLoading] = useState(true);
@@ -149,19 +157,93 @@ const MapLocationPicker = () => {
         params: {latlng: `${latitude},${longitude}`},
       });
 
-      const address =
-        response.data.results[0]?.formatted_address || 'Unknown location';
+      if (response.data.results && response.data.results.length > 0) {
+        const result = response.data.results[0];
+        const fullAddress = result.formatted_address;
 
-      const newLocation: Location = {
-        type: 'Point',
-        coordinates: [longitude, latitude],
-        address: address,
-      };
+        // Extract structured address components similar to LocationSearchModal
+        const addressComponents: AddressComponent[] =
+          result.address_components || [];
 
-      setSelectedLocation(newLocation);
+        // Try to create structured format like Google Places API
+        let mainText = '';
+        let secondaryText = '';
+
+        // Find street number and route for main text
+        const streetNumber =
+          addressComponents.find(comp => comp.types.includes('street_number'))
+            ?.long_name || '';
+        const route =
+          addressComponents.find(comp => comp.types.includes('route'))
+            ?.long_name || '';
+
+        if (streetNumber && route) {
+          mainText = `${streetNumber} ${route}`;
+        } else if (route) {
+          mainText = route;
+        } else {
+          // Fallback to establishment name or first component
+          const establishment = addressComponents.find(comp =>
+            comp.types.includes('establishment'),
+          )?.long_name;
+          const premise = addressComponents.find(comp =>
+            comp.types.includes('premise'),
+          )?.long_name;
+
+          mainText =
+            establishment || premise || addressComponents[0]?.long_name || '';
+        }
+
+        // Build secondary text with locality, admin area, and country
+        const locality = addressComponents.find(comp =>
+          comp.types.includes('locality'),
+        )?.long_name;
+        const adminArea = addressComponents.find(comp =>
+          comp.types.includes('administrative_area_level_1'),
+        )?.short_name;
+        const country = addressComponents.find(comp =>
+          comp.types.includes('country'),
+        )?.short_name;
+
+        const secondaryParts = [locality, adminArea, country].filter(Boolean);
+        secondaryText = secondaryParts.join(', ');
+
+        // If we couldn't extract proper main text, use the full address
+        if (!mainText || mainText.trim() === '') {
+          mainText = fullAddress;
+          secondaryText = '';
+        }
+
+        const newLocation: Location = {
+          type: 'Point',
+          coordinates: [longitude, latitude],
+          address: fullAddress, // Keep the full geocoded address
+          mainText: mainText,
+          secondaryText: secondaryText,
+        };
+
+        setSelectedLocation(newLocation);
+      } else {
+        // Fallback if no results
+        const newLocation: Location = {
+          type: 'Point',
+          coordinates: [longitude, latitude],
+          address: 'Unknown location',
+        };
+        setSelectedLocation(newLocation);
+      }
     } catch (error) {
       console.error('Error getting location details:', error);
-      Alert.alert('Error', 'Failed to get location details');
+
+      // Fallback location object
+      const fallbackLocation: Location = {
+        type: 'Point',
+        coordinates: [longitude, latitude],
+        address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+      };
+      setSelectedLocation(fallbackLocation);
+
+      Alert.alert('Error', 'Failed to get location details, using coordinates');
     } finally {
       setProcessingLocation(false);
     }
@@ -169,7 +251,7 @@ const MapLocationPicker = () => {
 
   // Confirm selected location
   const confirmLocation = async () => {
-    if (selectedLocation) {
+    if (selectedLocation && onLocationSelected) {
       try {
         const storedRecent = await AsyncStorage.getItem('recentLocations');
         const recentLocations = storedRecent ? JSON.parse(storedRecent) : [];
@@ -192,6 +274,14 @@ const MapLocationPicker = () => {
       onLocationSelected(selectedLocation);
       navigation.goBack();
     }
+  };
+
+  // Update the selected location display to show structured format if available:
+  const getDisplayAddress = (location: Location) => {
+    if (location.mainText && location.secondaryText) {
+      return `${location.mainText}\n${location.secondaryText}`;
+    }
+    return location.address;
   };
 
   // Get initial region based on preselected location or current location
@@ -292,7 +382,7 @@ const MapLocationPicker = () => {
               <Icon name="map-marker" size={24} color="#e74c3c" />
               <View style={styles.selectedLocationText}>
                 <Text style={styles.selectedLocationAddress} numberOfLines={2}>
-                  {selectedLocation.address}
+                  {getDisplayAddress(selectedLocation)}
                 </Text>
               </View>
             </View>

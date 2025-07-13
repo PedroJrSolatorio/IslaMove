@@ -327,7 +327,7 @@ const SettingsScreen = () => {
           {
             text: 'OK',
             onPress: () => {
-              logout('Account deletion scheduled successfully.');
+              logout('Deletion scheduled successfully.');
             },
           },
         ],
@@ -383,7 +383,7 @@ const SettingsScreen = () => {
           {
             text: 'OK',
             onPress: () => {
-              logout('Account deletion scheduled successfully.');
+              logout('Deletion scheduled successfully.');
             },
           },
         ],

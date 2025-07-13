@@ -36,6 +36,8 @@ interface Location {
   type: string;
   coordinates: [number, number];
   address: string;
+  mainText?: string;
+  secondaryText?: string;
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -74,6 +76,11 @@ const PassengerProfileScreen = () => {
   const [editAddressValue, setEditAddressValue] = useState('');
   const [returningFromMapPicker, setReturningFromMapPicker] = useState(false);
   const [pendingLocationData, setPendingLocationData] =
+    useState<Location | null>(null);
+  const [newAddressLocation, setNewAddressLocation] = useState<Location | null>(
+    null,
+  );
+  const [editAddressLocation, setEditAddressLocation] =
     useState<Location | null>(null);
 
   // Helper function to get full name
@@ -274,48 +281,55 @@ const PassengerProfileScreen = () => {
     }
   };
 
-  const handleLocationSelected = async (location: Location) => {
-    if (selectingFor === 'editAddress') {
-      setEditAddressValue(location.address);
-    } else {
-      setNewAddressValue(location.address);
+  const handleLocationSelected = (location: Location) => {
+    // Helper function to format display address consistently
+    const formatDisplayAddress = (location: Location) => {
+      if (location.mainText && location.secondaryText) {
+        return `${location.mainText}, ${location.secondaryText}`;
+      } else if (location.mainText) {
+        return location.mainText;
+      }
+      return location.address;
+    };
+    if (selectingFor === 'saveAddress') {
+      const displayAddress = formatDisplayAddress(location);
+      setNewAddressValue(displayAddress);
+      setNewAddressLocation(location); // Store the full location object
+      setShowLocationModal(false);
+      setPendingLocationData(location);
+      setReturningFromMapPicker(true);
+    } else if (selectingFor === 'editAddress') {
+      const displayAddress = formatDisplayAddress(location);
+      setEditAddressValue(displayAddress);
+      setEditAddressLocation(location); // Store the full location object
+      setShowLocationModal(false);
+      setPendingLocationData(location);
+      setReturningFromMapPicker(true);
     }
-    setShowLocationModal(false);
-    setPendingLocationData(location);
-    setReturningFromMapPicker(true);
   };
 
   const addNewAddress = async () => {
-    if (!newAddressLabel || !newAddressValue) {
+    if (!newAddressLabel || !newAddressValue || !newAddressLocation) {
       Alert.alert('Error', 'Both label and address value are required');
       return;
     }
 
     try {
-      // Use our backend API to geocode the address instead of calling Google directly
-      const geocodeResponse = await api.post('/api/google/geocode', {
-        address: newAddressValue,
-      });
-
-      if (!geocodeResponse.data || !geocodeResponse.data.coordinates) {
-        console.error('Geocoding response:', geocodeResponse.data);
-        Alert.alert(
-          'Error',
-          'Unable to geocode the address. Please try again or enter a valid address.',
-        );
-        return;
-      }
-
-      const coordinates = geocodeResponse.data.coordinates;
-
-      // Make sure we follow the schema requirements
+      // Use the stored location object instead of geocoding again
       const newAddress = {
         label: newAddressLabel,
-        address: newAddressValue,
+        address: newAddressValue, // This will be the formatted display address
         location: {
           type: 'Point',
-          coordinates: [coordinates.lng, coordinates.lat] as [number, number],
-          address: newAddressValue,
+          coordinates: newAddressLocation.coordinates,
+          address: newAddressLocation.address, // This is the full geocoded address
+          // Include structured data if available
+          ...(newAddressLocation.mainText && {
+            mainText: newAddressLocation.mainText,
+          }),
+          ...(newAddressLocation.secondaryText && {
+            secondaryText: newAddressLocation.secondaryText,
+          }),
         },
       };
 
@@ -335,27 +349,13 @@ const PassengerProfileScreen = () => {
       // Reset form and close modal
       setNewAddressLabel('');
       setNewAddressValue('');
+      setNewAddressLocation(null);
       setModalVisible(false);
 
       Alert.alert('Success', 'Address added successfully!');
-    } catch (error: unknown) {
-      console.error('Geocoding failed:', error);
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        typeof (error as any).response === 'object'
-      ) {
-        const err = error as any;
-        console.error('Error response:', err.response.data);
-        console.error('Status code:', err.response.status);
-      }
-
-      Alert.alert(
-        'Error',
-        'Failed to geocode address. Please check your network connection and try again.',
-      );
+    } catch (error) {
+      console.error('Add address failed:', error);
+      Alert.alert('Error', 'Failed to add address');
     }
   };
 
@@ -368,16 +368,29 @@ const PassengerProfileScreen = () => {
     // Store that we're going to map picker
     setReturningFromMapPicker(true);
 
-    // Navigate to map picker
+    // Create a unique callback ID
+    const callbackId = `location_callback_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    // Store the callback globally
+    (global as any).locationCallbacks = (global as any).locationCallbacks || {};
+    (global as any).locationCallbacks[callbackId] = (location: Location) => {
+      handleLocationSelected(location);
+      // Clean up the callback after use
+      delete (global as any).locationCallbacks[callbackId];
+    };
+
+    // Navigate to map picker with callback ID instead of function
     navigation.navigate('MapLocationPicker', {
-      onLocationSelected: handleLocationSelected,
+      callbackId: callbackId,
     });
   };
 
   // Add this useEffect to handle reopening modal when returning from map picker
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      if (returningFromMapPicker && pendingLocationData) {
+      if (returningFromMapPicker) {
         // Small delay to ensure navigation is complete
         setTimeout(() => {
           if (selectingFor === 'editAddress') {
@@ -391,7 +404,7 @@ const PassengerProfileScreen = () => {
       }
     });
     return unsubscribe;
-  }, [navigation, returningFromMapPicker, pendingLocationData, selectingFor]);
+  }, [navigation, returningFromMapPicker, selectingFor]);
 
   // Add useEffect to close modal when navigating away
   useEffect(() => {
@@ -420,6 +433,7 @@ const PassengerProfileScreen = () => {
     if (
       !editAddressLabel ||
       !editAddressValue ||
+      !editAddressLocation ||
       !passengerProfile?.savedAddresses
     ) {
       Alert.alert('Error', 'Both label and address value are required');
@@ -427,54 +441,23 @@ const PassengerProfileScreen = () => {
     }
 
     try {
-      // Get existing location or create a new one with proper type
-      let location = passengerProfile.savedAddresses[editAddressIndex]
-        ?.location || {
-        type: 'Point',
-        coordinates: [0, 0],
-        address: editAddressValue,
-      };
-
-      // Check if address changed to avoid unnecessary geocoding
-      const currentAddress =
-        passengerProfile.savedAddresses[editAddressIndex].address;
-
-      if (editAddressValue !== currentAddress) {
-        // Use our backend API to geocode the address
-        const geocodeResponse = await api.post('/api/google/geocode', {
-          address: editAddressValue,
-        });
-
-        if (!geocodeResponse.data || !geocodeResponse.data.coordinates) {
-          console.error('Geocoding response:', geocodeResponse.data);
-          Alert.alert(
-            'Error',
-            'Unable to geocode the address. Please try again or enter a valid address.',
-          );
-          return;
-        }
-
-        const coordinates = geocodeResponse.data.coordinates;
-
-        location = {
-          type: 'Point',
-          coordinates: [coordinates.lng, coordinates.lat],
-          address: editAddressValue,
-        };
-      } else {
-        // Ensure location has address even if not changed
-        location = {
-          ...location,
-          address: editAddressValue,
-        };
-      }
-
-      // Follow the schema structure
+      // Use the stored location object
       const updatedAddress = {
         _id: passengerProfile.savedAddresses[editAddressIndex]._id,
         label: editAddressLabel,
-        address: editAddressValue,
-        location: location,
+        address: editAddressValue, // This will be the formatted display address
+        location: {
+          type: 'Point',
+          coordinates: editAddressLocation.coordinates,
+          address: editAddressLocation.address, // This is the full geocoded address
+          // Include structured data if available
+          ...(editAddressLocation.mainText && {
+            mainText: editAddressLocation.mainText,
+          }),
+          ...(editAddressLocation.secondaryText && {
+            secondaryText: editAddressLocation.secondaryText,
+          }),
+        },
       };
 
       const updatedAddresses = [...passengerProfile.savedAddresses];
@@ -497,6 +480,7 @@ const PassengerProfileScreen = () => {
       setEditAddressIndex(-1);
       setEditAddressLabel('');
       setEditAddressValue('');
+      setEditAddressLocation(null);
       setEditAddressModalVisible(false);
 
       Alert.alert('Success', 'Address updated successfully!');

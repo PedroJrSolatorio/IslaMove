@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   Modal,
@@ -30,6 +30,8 @@ interface Location {
   type: string;
   coordinates: [number, number];
   address: string;
+  mainText?: string;
+  secondaryText?: string;
 }
 
 interface LocationSearchModalProps {
@@ -46,6 +48,10 @@ interface UserLocation {
   longitude: number;
 }
 
+const generateSessionToken = (): string => {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
 const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   visible,
   onClose,
@@ -60,6 +66,20 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const navigation = useNavigation<any>();
+
+  // Generate unique session token per modal session
+  const [sessionToken] = useState(() => generateSessionToken());
+
+  // Cache for search results to avoid redundant API calls
+  const searchCache = useRef<Map<string, any[]>>(new Map());
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Clear cache when modal closes
+  useEffect(() => {
+    if (!visible) {
+      searchCache.current.clear();
+    }
+  }, [visible]);
 
   // Load recent locations from storage
   useEffect(() => {
@@ -127,46 +147,84 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   };
 
   // Search for locations
-  const searchLocations = debounce(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Build query parameters
-      const params = new URLSearchParams({
-        input: query,
-      });
-
-      // Add location bias if user location is available
-      if (userLocation) {
-        params.append('lat', userLocation.latitude.toString());
-        params.append('lng', userLocation.longitude.toString());
-        params.append('radius', '50000'); // 50km radius
+  const searchLocations = useCallback(
+    debounce(async (query: string) => {
+      console.log('searchLocations called with query:', query);
+      // Cancel previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
 
-      const response = await axios.get(
-        `${BACKEND_URL}/api/places/autocomplete?${params.toString()}`,
-        {headers: {Authorization: `Bearer ${userToken}`}},
-      );
+      if (!query.trim()) {
+        setSearchResults([]);
+        return;
+      }
 
-      setSearchResults(response.data.predictions || []);
-    } catch (error) {
-      console.error('Error searching for locations:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, 500);
+      // Check cache first
+      const cacheKey = `${query}-${userLocation?.latitude}-${userLocation?.longitude}`;
+      if (searchCache.current.has(cacheKey)) {
+        console.log('Using cached results for:', query);
+        setSearchResults(searchCache.current.get(cacheKey)!);
+        return;
+      }
 
-  // Get details for a place
-  const getPlaceDetails = async (placeId: string) => {
+      setLoading(true);
+      abortControllerRef.current = new AbortController();
+
+      try {
+        const params = new URLSearchParams({
+          input: query,
+          sessionToken, // Use unique session token
+        });
+
+        // Add location bias if user location is available
+        if (userLocation) {
+          params.append('lat', userLocation.latitude.toString());
+          params.append('lng', userLocation.longitude.toString());
+          params.append('radius', '6000'); // 6km radius, this is used to filter results based on proximity from user's location
+        }
+
+        console.log('Making API call with params:', params.toString());
+
+        const response = await axios.get(
+          `${BACKEND_URL}/api/places/autocomplete?${params.toString()}`,
+          {
+            headers: {Authorization: `Bearer ${userToken}`},
+            timeout: 8000, // Cancel request if it takes longer than 8s to prevent UI freeze
+            signal: abortControllerRef.current.signal,
+          },
+        );
+
+        console.log('API response:', response.data);
+
+        const results = response.data.predictions || [];
+        // Cache results for this query
+        searchCache.current.set(cacheKey, results);
+        setSearchResults(results);
+      } catch (error: any) {
+        if (error.name !== 'CanceledError') {
+          console.error('Error searching for locations:', error);
+          setSearchResults([]);
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 1000), // Debounce to avoid excessive API calls, delays 1 second before calling API
+    [],
+  );
+
+  // Only call details when user actually selects a prediction
+  const handleLocationSelect = async (prediction: any) => {
     try {
-      const response = await axios.get(
-        `${BACKEND_URL}/api/places/details?placeId=${placeId}`,
-        {headers: {Authorization: `Bearer ${userToken}`}},
-      );
+      setLoading(true);
+      // Still calls the Places API Place Details istead of just using the Places API Autocomplete because Autocomplete results don't include coordinates
+      const response = await axios.get(`${BACKEND_URL}/api/places/details`, {
+        params: {
+          placeId: prediction.place_id,
+          sessionToken, // Same session token for billing optimization
+        },
+        headers: {Authorization: `Bearer ${userToken}`},
+      });
 
       const place = response.data.result;
       if (place && place.geometry) {
@@ -177,6 +235,10 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
             place.geometry.location.lat,
           ],
           address: place.formatted_address || place.name,
+          mainText:
+            prediction.structured_formatting?.main_text ||
+            prediction.description,
+          secondaryText: prediction.structured_formatting?.secondary_text || '',
         };
         // Check if we're in destination mode (coming from BookRide)
         if (searching === 'destination') {
@@ -192,17 +254,37 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
       }
     } catch (error) {
       console.error('Error getting place details:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const navigateToMapPicker = (preselectedLocation?: Location) => {
     onClose(); // Close the search modal first
 
+    // Create a unique callback ID to avoid passing functions in params
+    const callbackId = `location_callback_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
+    // Store the callback globally or in a context
+    (global as any).locationCallbacks = (global as any).locationCallbacks || {};
+    (global as any).locationCallbacks[callbackId] = (location: Location) => {
+      // Preserve the structured format from the original preselected location
+      const locationWithStructuredFormat = {
+        ...location,
+        mainText: preselectedLocation?.mainText || location.mainText,
+        secondaryText:
+          preselectedLocation?.secondaryText || location.secondaryText,
+      };
+      onLocationSelected(locationWithStructuredFormat);
+      // Clean up the callback after use
+      delete (global as any).locationCallbacks[callbackId];
+    };
+
     navigation.navigate('MapLocationPicker', {
-      onLocationSelected: (location: Location) => {
-        onLocationSelected(location);
-      },
-      preselectedLocation: preselectedLocation, // Pass the preselected location
+      callbackId: callbackId,
+      preselectedLocation: preselectedLocation,
     });
   };
 
@@ -270,6 +352,15 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
       navigateToMapPicker();
     }
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   return (
     <Modal
@@ -376,7 +467,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           renderItem={({item}) => (
             <TouchableOpacity
               style={styles.locationItem}
-              onPress={() => getPlaceDetails(item.place_id)}>
+              onPress={() => handleLocationSelect(item)}>
               <Icon name="map-marker" size={24} color="#3498db" />
               <View style={styles.locationItemContent}>
                 <Text style={styles.locationName} numberOfLines={1}>
