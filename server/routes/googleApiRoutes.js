@@ -29,7 +29,8 @@ router.get("/geocode", async (req, res) => {
         address
       )}&key=${GOOGLE_API_KEY}`;
     } else if (latlng) {
-      url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&key=${GOOGLE_API_KEY}`;
+      // Add result_type parameter to get more specific results
+      url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&result_type=street_address|route|intersection|political|colloquial_area|locality|sublocality|neighborhood|premise|subpremise|establishment|point_of_interest&key=${GOOGLE_API_KEY}`;
     } else {
       return res
         .status(400)
@@ -37,7 +38,17 @@ router.get("/geocode", async (req, res) => {
     }
 
     const response = await axios.get(url);
-    res.json(response.data);
+    // If the filtered request doesn't return good results, try without filters
+    if (
+      latlng &&
+      (!response.data.results || response.data.results.length === 0)
+    ) {
+      const fallbackUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&key=${GOOGLE_API_KEY}`;
+      const fallbackResponse = await axios.get(fallbackUrl);
+      res.json(fallbackResponse.data);
+    } else {
+      res.json(response.data);
+    }
   } catch (error) {
     console.error("Google Geocoding API error:", error);
     res.status(500).json({ error: "Failed to fetch geocoding data" });

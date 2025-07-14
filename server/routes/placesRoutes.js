@@ -24,11 +24,14 @@ router.get("/autocomplete", async (req, res) => {
     parsedRadius = MAX_RADIUS;
   }
 
+  // Note: params.radius and params.strictbounds still did not limit the results to the specified radius, maybe Google Nearby Search is more suitable for this
+
   try {
     const params = {
       input,
       key: process.env.GOOGLE_API_KEY,
       sessiontoken: sessionToken,
+      components: "country:ph",
     };
 
     // Add location bias if coordinates are provided
@@ -36,7 +39,7 @@ router.get("/autocomplete", async (req, res) => {
       params.location = `${lat},${lng}`;
       params.radius = parsedRadius.toString();
       // You can also use 'strictbounds' to only return results within the radius
-      // params.strictbounds = true;
+      params.strictbounds = true;
     }
 
     const response = await axios.get(

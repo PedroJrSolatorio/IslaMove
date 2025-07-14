@@ -267,6 +267,7 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
         'userRole',
         'userData',
         'userId',
+        'recentLocations',
       ];
       await AsyncStorage.multiRemove(keysToRemove);
 

@@ -248,6 +248,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
           onLocationSelected(newLocation);
           onClose();
         } else {
+          await saveToRecent(newLocation);
           // Navigate to map picker for address saving
           navigateToMapPicker(newLocation);
         }
@@ -325,12 +326,31 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   // helper function to save locations to recent
   const saveToRecent = async (location: Location) => {
     try {
-      // Add to recent locations (avoid duplicates)
+      // Ensure we have proper display text
+      const displayText = location.mainText || 'Unknown Location';
+      const secondaryText = location.secondaryText || '';
+
+      // Create a properly formatted location object
+      const formattedLocation: Location = {
+        type: location.type,
+        coordinates: location.coordinates,
+        address: location.address,
+        mainText: displayText,
+        secondaryText: secondaryText,
+      };
+
+      // Add to recent locations (avoid duplicates based on coordinates)
       const updatedRecent = [
-        location,
-        ...recentLocations.filter(
-          recent => recent.address !== location.address,
-        ),
+        formattedLocation,
+        ...recentLocations.filter(recent => {
+          // Check for duplicate based on coordinates instead of just address
+          const [lng1, lat1] = recent.coordinates || [0, 0];
+          const [lng2, lat2] = location.coordinates || [0, 0];
+          const distance = Math.sqrt(
+            Math.pow(lng1 - lng2, 2) + Math.pow(lat1 - lat2, 2),
+          );
+          return distance > 0.001; // ~100m threshold for considering locations different
+        }),
       ].slice(0, 5); // Keep only 5 recent locations
 
       setRecentLocations(updatedRecent);
@@ -450,7 +470,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
                           <Text
                             style={styles.locationAddress}
                             numberOfLines={1}>
-                            {location.address}
+                            {[location.mainText, ', ', location.secondaryText]}
                           </Text>
                         </View>
                       </TouchableOpacity>
