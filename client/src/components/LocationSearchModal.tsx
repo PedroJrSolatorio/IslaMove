@@ -155,7 +155,8 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
         abortControllerRef.current.abort();
       }
 
-      if (!query.trim()) {
+      // Only search if query has 3+ characters
+      if (!query.trim() || query.trim().length < 3) {
         setSearchResults([]);
         return;
       }
@@ -234,7 +235,7 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
             place.geometry.location.lng,
             place.geometry.location.lat,
           ],
-          address: place.formatted_address || place.name,
+          address: place.formatted_address,
           mainText:
             prediction.structured_formatting?.main_text ||
             prediction.description,
@@ -298,13 +299,19 @@ const LocationSearchModal: React.FC<LocationSearchModalProps> = ({
   // Handle saved address selection
   const handleSavedAddressSelection = (address: Address) => {
     if (address.location) {
+      // Ensure the location has proper display text
+      const locationWithDisplayText = {
+        ...address.location,
+        mainText: address.location.mainText || address.label || 'Saved Address',
+        secondaryText: address.location.secondaryText || address.address || '',
+      };
       if (searching === 'destination') {
         // Coming from BookRide - pass location back directly
-        onLocationSelected(address.location);
+        onLocationSelected(locationWithDisplayText);
         onClose();
       } else {
         // Going to map picker for address saving
-        navigateToMapPicker(address.location);
+        navigateToMapPicker(locationWithDisplayText);
       }
     } else {
       console.error('Location data is missing for this address');

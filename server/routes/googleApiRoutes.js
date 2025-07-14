@@ -30,21 +30,21 @@ router.get("/geocode", async (req, res) => {
       )}&key=${GOOGLE_API_KEY}`;
     } else if (latlng) {
       // Add result_type parameter to get more specific results
-      url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&result_type=street_address|route|intersection|political|colloquial_area|locality|sublocality|neighborhood|premise|subpremise|establishment|point_of_interest&key=${GOOGLE_API_KEY}`;
+      url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&result_type=street_address|route|intersection|locality|sublocality|neighborhood|premise|establishment&key=${GOOGLE_API_KEY}`;
     } else {
       return res
         .status(400)
         .json({ error: "Address or latlng parameter is required" });
     }
 
-    const response = await axios.get(url);
+    const response = await axios.get(url, { timeout: 8000 });
     // If the filtered request doesn't return good results, try without filters
     if (
       latlng &&
       (!response.data.results || response.data.results.length === 0)
     ) {
       const fallbackUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latlng}&key=${GOOGLE_API_KEY}`;
-      const fallbackResponse = await axios.get(fallbackUrl);
+      const fallbackResponse = await axios.get(fallbackUrl, { timeout: 8000 });
       res.json(fallbackResponse.data);
     } else {
       res.json(response.data);
@@ -55,41 +55,41 @@ router.get("/geocode", async (req, res) => {
   }
 });
 
-router.post("/geocode", async (req, res) => {
-  try {
-    const { address } = req.body;
+// router.post("/geocode", async (req, res) => {
+//   try {
+//     const { address } = req.body;
 
-    if (!address) {
-      return res.status(400).json({ error: "Address is required" });
-    }
+//     if (!address) {
+//       return res.status(400).json({ error: "Address is required" });
+//     }
 
-    const geocodeRes = await axios.get(
-      "https://maps.googleapis.com/maps/api/geocode/json",
-      {
-        params: {
-          address: address,
-          key: process.env.GOOGLE_API_KEY,
-        },
-      }
-    );
+//     const geocodeRes = await axios.get(
+//       "https://maps.googleapis.com/maps/api/geocode/json",
+//       {
+//         params: {
+//           address: address,
+//           key: process.env.GOOGLE_API_KEY,
+//         },
+//       }
+//     );
 
-    const location = geocodeRes.data.results[0]?.geometry.location;
+//     const location = geocodeRes.data.results[0]?.geometry.location;
 
-    if (!location) {
-      return res.status(400).json({ error: "Unable to geocode the address" });
-    }
+//     if (!location) {
+//       return res.status(400).json({ error: "Unable to geocode the address" });
+//     }
 
-    return res.json({
-      coordinates: {
-        lat: location.lat,
-        lng: location.lng,
-      },
-    });
-  } catch (error) {
-    console.error("Geocoding error:", error);
-    return res.status(500).json({ error: "Failed to geocode address" });
-  }
-});
+//     return res.json({
+//       coordinates: {
+//         lat: location.lat,
+//         lng: location.lng,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Geocoding error:", error);
+//     return res.status(500).json({ error: "Failed to geocode address" });
+//   }
+// });
 
 // Directions endpoint
 router.get("/directions", async (req, res) => {

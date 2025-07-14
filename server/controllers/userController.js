@@ -440,6 +440,8 @@ export const addNewAddress = async (req, res) => {
         type: "Point",
         coordinates: address.location.coordinates,
         address: address.location.address || address.address,
+        mainText: address.location.mainText || "",
+        secondaryText: address.location.secondaryText || "",
       },
     };
 

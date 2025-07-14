@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef} from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   TouchableOpacity,
@@ -13,9 +13,10 @@ import Geolocation from 'react-native-geolocation-service';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapTypeSelector from './MapTypeSelector';
-import api from '../../utils/api';
 import {styles} from '../styles/MapLocationPickerStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import debounce from 'lodash/debounce';
+import {useGeocoding} from '../hooks/useGeocoding';
 
 interface Location {
   type: string;
@@ -36,6 +37,14 @@ const MapLocationPicker = () => {
   const route = useRoute();
   const mapRef = useRef<MapView | null>(null);
 
+  // Use the enhanced geocoding hook
+  const {
+    debouncedGeocodeWithProcessing,
+    getCurrentLocationWithGeocoding,
+    createImmediateLocation,
+    hasValidAddress,
+  } = useGeocoding();
+
   // Get the callback ID and preselected location from route params
   const {callbackId, preselectedLocation} = route.params as {
     callbackId: string;
@@ -53,7 +62,7 @@ const MapLocationPicker = () => {
   );
   const [mapType, setMapType] = useState<MapType>('satellite');
   const [showMapTypeSelector, setShowMapTypeSelector] = useState(false);
-  const [processingLocation, setProcessingLocation] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -74,59 +83,37 @@ const MapLocationPicker = () => {
   };
 
   // Get current location on component mount
-  useEffect(() => {
-    const fetchCurrentLocation = async () => {
-      const hasPermission = await requestLocationPermission();
+  const fetchCurrentLocation = async (): Promise<Location> => {
+    const hasPermission = await requestLocationPermission();
 
-      if (!hasPermission) {
-        setLoading(false);
+    if (!hasPermission) {
+      throw new Error('Location permission denied');
+    }
+
+    return await getCurrentLocationWithGeocoding(
+      Geolocation.getCurrentPosition,
+      {enableHighAccuracy: true, timeout: 15000, maximumAge: 60000},
+    );
+  };
+
+  useEffect(() => {
+    const initializeLocation = async () => {
+      setLoading(true);
+      try {
+        const location = await fetchCurrentLocation();
+        setCurrentLocation(location);
+      } catch (error) {
+        console.error('Failed to get current location:', error);
         Alert.alert(
-          'Permission Error',
-          'Please enable location services to use this feature',
+          'Location Error',
+          'Could not get your current location. Please try again.',
           [{text: 'OK', onPress: () => navigation.goBack()}],
         );
-        return;
+      } finally {
+        setLoading(false);
       }
-
-      Geolocation.getCurrentPosition(
-        async position => {
-          const {longitude, latitude} = position.coords;
-
-          try {
-            const response = await api.get(`/api/google/geocode`, {
-              params: {latlng: `${latitude},${longitude}`},
-            });
-
-            const address =
-              response.data.results[0]?.formatted_address || 'Unknown location';
-
-            setCurrentLocation({
-              type: 'Point',
-              coordinates: [longitude, latitude],
-              address: address,
-            });
-
-            setLoading(false);
-          } catch (error) {
-            console.error('Error in location processing:', error);
-            setLoading(false);
-            Alert.alert('Error', 'Failed to get your current location details');
-          }
-        },
-        error => {
-          console.error(error);
-          setLoading(false);
-          Alert.alert(
-            'Permission Error',
-            'Please enable location services to use this feature',
-            [{text: 'OK', onPress: () => navigation.goBack()}],
-          );
-        },
-        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
-      );
     };
-
-    fetchCurrentLocation();
+    initializeLocation();
   }, []);
 
   // Focus map on preselected location when map is ready
@@ -149,216 +136,22 @@ const MapLocationPicker = () => {
   // Handle map press to select location
   const handleMapPress = async (event: any) => {
     const {latitude, longitude} = event.nativeEvent.coordinate;
-    setProcessingLocation(true);
 
-    try {
-      // Reverse geocoding to get address
-      const response = await api.get(`/api/google/geocode`, {
-        params: {latlng: `${latitude},${longitude}`},
-      });
+    // Show coordinates immediately
+    const immediateLocation = createImmediateLocation(latitude, longitude);
+    setSelectedLocation(immediateLocation);
+    setIsGeocoding(true);
 
-      if (response.data.results && response.data.results.length > 0) {
-        const results = response.data.results;
-
-        // Find the best result (avoid Plus Codes and prefer street addresses)
-        const bestResult = findBestAddressResult(results);
-
-        if (bestResult) {
-          const fullAddress = bestResult.formatted_address;
-          const addressComponents: AddressComponent[] =
-            bestResult.address_components || [];
-
-          const {mainText, secondaryText} = extractStructuredAddress(
-            addressComponents,
-            fullAddress,
-          );
-
-          const newLocation: Location = {
-            type: 'Point',
-            coordinates: [longitude, latitude],
-            address: fullAddress,
-            mainText: mainText,
-            secondaryText: secondaryText,
-          };
-
-          setSelectedLocation(newLocation);
-        } else {
-          // Fallback if no good results
-          const fallbackLocation: Location = {
-            type: 'Point',
-            coordinates: [longitude, latitude],
-            address: 'Unknown location',
-            mainText: 'Unknown location',
-            secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-          };
-          setSelectedLocation(fallbackLocation);
-        }
-      } else {
-        // Fallback if no results
-        const newLocation: Location = {
-          type: 'Point',
-          coordinates: [longitude, latitude],
-          address: 'Unknown location',
-          mainText: 'Unknown location',
-          secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        };
-        setSelectedLocation(newLocation);
-      }
-    } catch (error) {
-      console.error('Error getting location details:', error);
-
-      // Fallback location object
-      const fallbackLocation: Location = {
-        type: 'Point',
-        coordinates: [longitude, latitude],
-        address: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        mainText: 'Unknown location',
-        secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-      };
-      setSelectedLocation(fallbackLocation);
-
-      Alert.alert('Error', 'Failed to get location details, using coordinates');
-    } finally {
-      setProcessingLocation(false);
-    }
-  };
-
-  // Helper function to find the best address result (avoiding Plus Codes)
-  const findBestAddressResult = (results: any[]) => {
-    // Priority order for result types (best to worst)
-    const typesPriority = [
-      'establishment',
-      'point_of_interest',
-      'premise',
-      'subpremise',
-      'street_address',
-      'route',
-      'intersection',
-      'neighborhood',
-      'sublocality',
-      'colloquial_area',
-      'locality',
-      'political',
-      'administrative_area_level_1',
-      'administrative_area_level_2',
-      'administrative_area_level_3',
-      'country',
-    ];
-
-    // Filter out Plus Codes (they typically contain + and are short)
-    const filteredResults = results.filter(result => {
-      const address = result.formatted_address;
-      const isPlusCode = /^[A-Z0-9]{4}\+[A-Z0-9]{2,}/.test(address);
-      return !isPlusCode;
-    });
-
-    // If no results after filtering, use original results
-    const resultsToUse = filteredResults.length > 0 ? filteredResults : results;
-
-    // Find the best result based on types
-    for (const priorityType of typesPriority) {
-      const result = resultsToUse.find(
-        r => r.types && r.types.includes(priorityType),
-      );
-      if (result) {
-        return result;
-      }
-    }
-
-    // If no prioritized type found, return the first non-Plus Code result
-    return resultsToUse[0];
-  };
-
-  // Helper function to extract structured address components
-  const extractStructuredAddress = (
-    addressComponents: AddressComponent[],
-    fullAddress: string,
-  ) => {
-    let mainText = '';
-    let secondaryText = '';
-
-    // Prioritize establishment first for main text
-    const establishment = addressComponents.find(comp =>
-      comp.types.includes('establishment'),
-    )?.long_name;
-
-    const pointOfInterest = addressComponents.find(comp =>
-      comp.types.includes('point_of_interest'),
-    )?.long_name;
-
-    const premise = addressComponents.find(comp =>
-      comp.types.includes('premise'),
-    )?.long_name;
-
-    // If we have establishment, use it as main text
-    if (establishment) {
-      mainText = establishment;
-    } else if (pointOfInterest) {
-      mainText = pointOfInterest;
-    } else if (premise) {
-      mainText = premise;
-    } else {
-      // Fall back to street address components
-      const streetNumber =
-        addressComponents.find(comp => comp.types.includes('street_number'))
-          ?.long_name || '';
-
-      const route =
-        addressComponents.find(comp => comp.types.includes('route'))
-          ?.long_name || '';
-
-      if (streetNumber && route) {
-        mainText = `${streetNumber} ${route}`;
-      } else if (route) {
-        mainText = route;
-      } else {
-        // Try other neighborhood/area components
-        const sublocality = addressComponents.find(
-          comp =>
-            comp.types.includes('sublocality') ||
-            comp.types.includes('sublocality_level_1'),
-        )?.long_name;
-
-        const neighborhood = addressComponents.find(comp =>
-          comp.types.includes('neighborhood'),
-        )?.long_name;
-
-        mainText = sublocality || neighborhood || '';
-      }
-    }
-
-    // Build secondary text with locality, admin area, and country
-    const locality = addressComponents.find(comp =>
-      comp.types.includes('locality'),
-    )?.long_name;
-
-    const adminArea = addressComponents.find(comp =>
-      comp.types.includes('administrative_area_level_1'),
-    )?.short_name;
-
-    const country = addressComponents.find(comp =>
-      comp.types.includes('country'),
-    )?.short_name;
-
-    const secondaryParts = [locality, adminArea, country].filter(Boolean);
-    secondaryText = secondaryParts.join(', ');
-
-    // If we still couldn't extract proper main text, use a cleaner version of full address
-    if (!mainText || mainText.trim() === '') {
-      // Try to extract the first meaningful part of the address
-      const addressParts = fullAddress.split(',');
-      if (addressParts.length > 0) {
-        mainText = addressParts[0].trim();
-        if (addressParts.length > 1) {
-          secondaryText = addressParts.slice(1).join(',').trim();
-        }
-      } else {
-        mainText = fullAddress;
-        secondaryText = '';
-      }
-    }
-
-    return {mainText, secondaryText};
+    // Geocode in background using the enhanced hook
+    debouncedGeocodeWithProcessing(
+      latitude,
+      longitude,
+      (processedLocation: Location) => {
+        setSelectedLocation(processedLocation);
+        setIsGeocoding(false);
+      },
+      1500,
+    );
   };
 
   // Confirm selected location
@@ -496,6 +289,13 @@ const MapLocationPicker = () => {
                 <Text style={styles.selectedLocationAddress} numberOfLines={2}>
                   {getDisplayAddress(selectedLocation)}
                 </Text>
+                {/* Show geocoding indicator */}
+                {isGeocoding && (
+                  <View style={styles.geocodingIndicator}>
+                    <ActivityIndicator size="small" color="#3498db" />
+                    <Text style={styles.geocodingText}>Getting address...</Text>
+                  </View>
+                )}
               </View>
             </View>
             <View style={styles.buttonRow}>
@@ -511,19 +311,12 @@ const MapLocationPicker = () => {
                 mode="contained"
                 style={styles.confirmButton}
                 onPress={confirmLocation}
-                disabled={processingLocation}>
-                {processingLocation ? 'Processing...' : 'Confirm'}
+                disabled={isGeocoding || !hasValidAddress(selectedLocation)}>
+                {isGeocoding ? 'Loading...' : 'Confirm'}
               </Button>
             </View>
           </Card.Content>
         </Card>
-      )}
-
-      {processingLocation && (
-        <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#3498db" />
-          <Text style={styles.processingText}>Getting location details...</Text>
-        </View>
       )}
 
       <MapTypeSelector

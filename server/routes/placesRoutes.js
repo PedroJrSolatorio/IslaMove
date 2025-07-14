@@ -11,9 +11,13 @@ router.get("/autocomplete", async (req, res) => {
     return res.status(400).json({ error: "Session token is required" });
   }
 
+  // Don't process very short queries
+  if (!input || input.length < 3) {
+    return res.json({ predictions: [] });
+  }
+
   // Validate and sanitize radius
   let parsedRadius = parseInt(radius, 10);
-
   if (isNaN(parsedRadius)) {
     parsedRadius = 6000; // Default to 6km, Fallback if radius is invalid or not provided from frontend
   }
@@ -32,6 +36,7 @@ router.get("/autocomplete", async (req, res) => {
       key: process.env.GOOGLE_API_KEY,
       sessiontoken: sessionToken,
       components: "country:ph",
+      language: "en",
     };
 
     // Add location bias if coordinates are provided
@@ -72,7 +77,7 @@ router.get("/details", async (req, res) => {
           place_id: placeId,
           key: process.env.GOOGLE_API_KEY,
           sessiontoken: sessionToken, // Same session token for billing
-          fields: "geometry,formatted_address,name,place_id", // Only fetch needed fields
+          fields: "geometry,formatted_address,place_id", // Only fetch needed fields
         },
         timeout: 8000,
       }

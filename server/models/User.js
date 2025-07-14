@@ -14,6 +14,12 @@ const locationSchema = new mongoose.Schema(
     address: {
       type: String,
     },
+    mainText: {
+      type: String,
+    },
+    secondaryText: {
+      type: String,
+    },
   },
   { _id: false }
 );

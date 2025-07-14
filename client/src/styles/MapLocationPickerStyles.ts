@@ -141,4 +141,14 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 10,
   },
+  geocodingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  geocodingText: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#3498db',
+  },
 });

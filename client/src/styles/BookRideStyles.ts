@@ -287,8 +287,6 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   confirmationAddress: {
-    flex: 1,
-    marginLeft: 10,
     fontSize: 16,
     color: '#333',
   },
@@ -342,24 +340,20 @@ export const styles = StyleSheet.create({
     color: '#27ae60',
     fontWeight: '600',
   },
-
   fareDivider: {
     marginVertical: 8,
     backgroundColor: '#e0e0e0',
   },
-
   totalFareLabel: {
     fontSize: 16,
     color: '#333',
     fontWeight: '600',
   },
-
   totalFareAmount: {
     fontSize: 18,
     color: '#3498db',
     fontWeight: '700',
   },
-
   passengerTypeInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,11 +362,30 @@ export const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 8,
   },
-
   passengerTypeText: {
     marginLeft: 8,
     fontSize: 14,
     color: '#1976d2',
     fontWeight: '500',
+  },
+  geocodingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 4,
+  },
+  geocodingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  confirmationAddressContainer: {
+    flex: 1,
+    marginLeft: 12,
+    maxWidth: '85%',
   },
 });

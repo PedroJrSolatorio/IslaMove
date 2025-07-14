@@ -42,6 +42,7 @@ import api from '../../utils/api';
 import SoundUtils from '../../utils/SoundUtils';
 import Toast from 'react-native-toast-message';
 import DeviceInfo from 'react-native-device-info';
+import {useGeocoding} from '../hooks/useGeocoding';
 
 // Interface for fare types
 interface FareInfo {
@@ -122,6 +123,14 @@ const BookRide = () => {
   const {profileData} = useProfile();
   const mapRef = useRef<MapView | null>(null);
 
+  // Use the enhanced geocoding hook
+  const {
+    debouncedGeocodeWithProcessing,
+    getCurrentLocationWithGeocoding,
+    createImmediateLocation,
+    hasValidAddress,
+  } = useGeocoding();
+
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
 
@@ -155,6 +164,7 @@ const BookRide = () => {
   const [notifiedArrival, setNotifiedArrival] = useState(false);
   const cancelWindowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [soundsInitialized, setSoundsInitialized] = useState(false);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -178,142 +188,6 @@ const BookRide = () => {
     return false;
   };
 
-  const findBestAddressResult = (results: any[]) => {
-    // Priority order for result types (best to worst) - establishment first
-    const typesPriority = [
-      'establishment',
-      'point_of_interest',
-      'premise',
-      'subpremise',
-      'street_address',
-      'route',
-      'intersection',
-      'neighborhood',
-      'sublocality',
-      'colloquial_area',
-      'locality',
-      'political',
-      'administrative_area_level_1',
-      'administrative_area_level_2',
-      'administrative_area_level_3',
-      'country',
-    ];
-
-    // Filter out Plus Codes (they typically contain + and are short)
-    const filteredResults = results.filter(result => {
-      const address = result.formatted_address;
-      const isPlusCode = /^[A-Z0-9]{4}\+[A-Z0-9]{2,}/.test(address);
-      return !isPlusCode;
-    });
-
-    // If no results after filtering, use original results
-    const resultsToUse = filteredResults.length > 0 ? filteredResults : results;
-
-    // Find the best result based on types
-    for (const priorityType of typesPriority) {
-      const result = resultsToUse.find(
-        r => r.types && r.types.includes(priorityType),
-      );
-      if (result) {
-        return result;
-      }
-    }
-
-    // If no prioritized type found, return the first non-Plus Code result
-    return resultsToUse[0];
-  };
-
-  const extractStructuredAddress = (
-    addressComponents: any[],
-    fullAddress: string,
-  ) => {
-    let mainText = '';
-    let secondaryText = '';
-
-    // Prioritize establishment first for main text
-    const establishment = addressComponents.find(comp =>
-      comp.types.includes('establishment'),
-    )?.long_name;
-
-    const pointOfInterest = addressComponents.find(comp =>
-      comp.types.includes('point_of_interest'),
-    )?.long_name;
-
-    const premise = addressComponents.find(comp =>
-      comp.types.includes('premise'),
-    )?.long_name;
-
-    // If we have establishment, use it as main text
-    if (establishment) {
-      mainText = establishment;
-    } else if (pointOfInterest) {
-      mainText = pointOfInterest;
-    } else if (premise) {
-      mainText = premise;
-    } else {
-      // Fall back to street address components
-      const streetNumber =
-        addressComponents.find(comp => comp.types.includes('street_number'))
-          ?.long_name || '';
-
-      const route =
-        addressComponents.find(comp => comp.types.includes('route'))
-          ?.long_name || '';
-
-      if (streetNumber && route) {
-        mainText = `${streetNumber} ${route}`;
-      } else if (route) {
-        mainText = route;
-      } else {
-        // Try other neighborhood/area components
-        const sublocality = addressComponents.find(
-          comp =>
-            comp.types.includes('sublocality') ||
-            comp.types.includes('sublocality_level_1'),
-        )?.long_name;
-
-        const neighborhood = addressComponents.find(comp =>
-          comp.types.includes('neighborhood'),
-        )?.long_name;
-
-        mainText = sublocality || neighborhood || '';
-      }
-    }
-
-    // Build secondary text with locality, admin area, and country
-    const locality = addressComponents.find(comp =>
-      comp.types.includes('locality'),
-    )?.long_name;
-
-    const adminArea = addressComponents.find(comp =>
-      comp.types.includes('administrative_area_level_1'),
-    )?.short_name;
-
-    const country = addressComponents.find(comp =>
-      comp.types.includes('country'),
-    )?.short_name;
-
-    const secondaryParts = [locality, adminArea, country].filter(Boolean);
-    secondaryText = secondaryParts.join(', ');
-
-    // If we still couldn't extract proper main text, use a cleaner version of full address
-    if (!mainText || mainText.trim() === '') {
-      // Try to extract the first meaningful part of the address
-      const addressParts = fullAddress.split(',');
-      if (addressParts.length > 0) {
-        mainText = addressParts[0].trim();
-        if (addressParts.length > 1) {
-          secondaryText = addressParts.slice(1).join(',').trim();
-        }
-      } else {
-        mainText = fullAddress;
-        secondaryText = '';
-      }
-    }
-
-    return {mainText, secondaryText};
-  };
-
   // Add this function to handle map press for destination selection
   const handleMapPress = async (event: any) => {
     // Only allow destination selection when in idle state
@@ -323,67 +197,23 @@ const BookRide = () => {
 
     const {latitude, longitude} = event.nativeEvent.coordinate;
 
-    try {
-      // Reverse geocoding to get address
-      const response = await api.get(`/api/google/geocode`, {
-        params: {latlng: `${latitude},${longitude}`},
-      });
+    // Show coordinates immediately using the shared utility
+    const immediateLocation = createImmediateLocation(latitude, longitude);
+    setTempSelectedLocation(immediateLocation);
+    setShowDestinationConfirmation(true);
+    setIsGeocoding(true);
 
-      if (response.data.results && response.data.results.length > 0) {
-        const results = response.data.results;
-
-        // Find the best result (avoid Plus Codes and prefer establishments)
-        const bestResult = findBestAddressResult(results);
-
-        if (bestResult) {
-          const fullAddress = bestResult.formatted_address;
-          const addressComponents = bestResult.address_components || [];
-
-          const {mainText, secondaryText} = extractStructuredAddress(
-            addressComponents,
-            fullAddress,
-          );
-
-          const newLocation: Location = {
-            type: 'Point',
-            coordinates: [longitude, latitude],
-            address: fullAddress,
-            mainText: mainText,
-            secondaryText: secondaryText,
-          };
-
-          setTempSelectedLocation(newLocation);
-          setShowDestinationConfirmation(true);
-        } else {
-          // Fallback
-          const fallbackLocation: Location = {
-            type: 'Point',
-            coordinates: [longitude, latitude],
-            address: 'Unknown location',
-            mainText: 'Unknown location',
-            secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-          };
-
-          setTempSelectedLocation(fallbackLocation);
-          setShowDestinationConfirmation(true);
-        }
-      } else {
-        // Fallback if no results
-        const fallbackLocation: Location = {
-          type: 'Point',
-          coordinates: [longitude, latitude],
-          address: 'Unknown location',
-          mainText: 'Unknown location',
-          secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-        };
-
-        setTempSelectedLocation(fallbackLocation);
-        setShowDestinationConfirmation(true);
-      }
-    } catch (error) {
-      console.error('Error getting location details:', error);
-      Alert.alert('Error', 'Failed to get location details');
-    }
+    // Geocode in background with debounce
+    // Geocode in background using the enhanced hook
+    debouncedGeocodeWithProcessing(
+      latitude,
+      longitude,
+      (processedLocation: Location) => {
+        setTempSelectedLocation(processedLocation);
+        setIsGeocoding(false);
+      },
+      1500,
+    );
   };
 
   // Add this function to confirm destination selection
@@ -404,7 +234,7 @@ const BookRide = () => {
 
         let destinationZone = null;
 
-        // FIX: Check if the response has the expected structure
+        // Check if the response has the expected structure
         if (
           zoneResponse.data &&
           zoneResponse.data.success &&
@@ -435,8 +265,6 @@ const BookRide = () => {
         if (currentLocation) {
           await calculateRoute(currentLocation, tempSelectedLocation);
         }
-
-        // The fetchFareEstimate will be triggered by the useEffect when toZone is set
       } catch (error) {
         console.error('Error getting zone info:', error);
         Alert.alert(
@@ -522,126 +350,65 @@ const BookRide = () => {
   // Getting user's current location
   useEffect(() => {
     const fetchCurrentLocation = async () => {
-      // Request permission first
-      const hasPermission = await requestLocationPermission();
+      try {
+        const hasPermission = await requestLocationPermission();
 
-      if (!hasPermission) {
-        setLoading(false);
-        Alert.alert(
-          'Permission Error',
-          'Please enable location services to use this feature',
-          [{text: 'OK', onPress: () => navigation.goBack()}],
-        );
-        return;
-      }
-
-      Geolocation.getCurrentPosition(
-        async position => {
-          const {longitude, latitude} = position.coords;
-
-          try {
-            // Reverse geocoding to get address
-            const response = await api.get(`/api/google/geocode`, {
-              params: {latlng: `${latitude},${longitude}`},
-            });
-
-            if (response.data.results && response.data.results.length > 0) {
-              const results = response.data.results;
-
-              // Find the best result (avoid Plus Codes and prefer establishments)
-              const bestResult = findBestAddressResult(results);
-
-              if (bestResult) {
-                const fullAddress = bestResult.formatted_address;
-                const addressComponents = bestResult.address_components || [];
-
-                const {mainText, secondaryText} = extractStructuredAddress(
-                  addressComponents,
-                  fullAddress,
-                );
-
-                setCurrentLocation({
-                  type: 'Point',
-                  coordinates: [longitude, latitude],
-                  address: fullAddress,
-                  mainText: mainText,
-                  secondaryText: secondaryText,
-                });
-              } else {
-                // Fallback
-                setCurrentLocation({
-                  type: 'Point',
-                  coordinates: [longitude, latitude],
-                  address: 'Unknown location',
-                  mainText: 'Unknown location',
-                  secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(
-                    6,
-                  )}`,
-                });
-              }
-            } else {
-              // Fallback if no results
-              setCurrentLocation({
-                type: 'Point',
-                coordinates: [longitude, latitude],
-                address: 'Unknown location',
-                mainText: 'Unknown location',
-                secondaryText: `${latitude.toFixed(6)}, ${longitude.toFixed(
-                  6,
-                )}`,
-              });
-            }
-
-            // Get zone information for current location
-            const zoneResponse = await api.get(`/api/zones/lookup`, {
-              params: {longitude, latitude},
-            });
-
-            console.log(
-              'Zone response for current location:',
-              zoneResponse.data,
-            );
-
-            // Check if the response has the expected structure
-            if (
-              zoneResponse.data &&
-              zoneResponse.data.success &&
-              zoneResponse.data.data
-            ) {
-              // If the API returns {success: true, data: {zone object}}
-              setFromZone(zoneResponse.data.data);
-            } else if (zoneResponse.data && zoneResponse.data._id) {
-              // If the API returns the zone object directly
-              setFromZone(zoneResponse.data);
-            } else {
-              console.error(
-                'Unexpected zone response structure:',
-                zoneResponse.data,
-              );
-              Alert.alert(
-                'Zone Not Found',
-                'Service is not available in your current location area',
-              );
-            }
-
-            setLoading(false);
-          } catch (error) {
-            console.error('Error in location processing:', error);
-            setLoading(false);
-            Alert.alert('Error', 'Failed to get your current location details');
-          }
-        },
-        error => {
-          console.error(error);
+        if (!hasPermission) {
           setLoading(false);
           Alert.alert(
             'Permission Error',
             'Please enable location services to use this feature',
             [{text: 'OK', onPress: () => navigation.goBack()}],
           );
-        },
-        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
-      );
+          return;
+        }
+
+        // Use the enhanced geocoding hook to get current location
+        const location = await getCurrentLocationWithGeocoding(
+          Geolocation.getCurrentPosition,
+          {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
+        );
+
+        setCurrentLocation(location);
+
+        // Get zone information for current location
+        const zoneResponse = await api.get(`/api/zones/lookup`, {
+          params: {
+            longitude: location.coordinates[0],
+            latitude: location.coordinates[1],
+          },
+        });
+
+        console.log('Zone response for current location:', zoneResponse.data);
+
+        // Check if the response has the expected structure
+        if (
+          zoneResponse.data &&
+          zoneResponse.data.success &&
+          zoneResponse.data.data
+        ) {
+          // If the API returns {success: true, data: {zone object}}
+          setFromZone(zoneResponse.data.data);
+        } else if (zoneResponse.data && zoneResponse.data._id) {
+          // If the API returns the zone object directly
+          setFromZone(zoneResponse.data);
+        } else {
+          console.error(
+            'Unexpected zone response structure:',
+            zoneResponse.data,
+          );
+          Alert.alert(
+            'Zone Not Found',
+            'Service is not available in your current location area',
+          );
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error in location processing:', error);
+        setLoading(false);
+        Alert.alert('Error', 'Failed to get your current location details');
+      }
     };
 
     fetchCurrentLocation();
@@ -887,6 +654,7 @@ const BookRide = () => {
     };
   }, []);
 
+  // play sound notification when driver is arriving
   useEffect(() => {
     const playNotificationSound = async () => {
       if (
@@ -1510,7 +1278,13 @@ const BookRide = () => {
                     }}>
                     <Icon name="flag-checkered" size={24} color="#e74c3c" />
                     <Text style={styles.locationText}>
-                      {destination ? destination.address : 'Select destination'}
+                      {destination
+                        ? `${destination.mainText}${
+                            destination.secondaryText
+                              ? ', ' + destination.secondaryText
+                              : ''
+                          }`
+                        : 'Select destination'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1972,15 +1746,28 @@ const BookRide = () => {
         onRequestClose={() => {
           setShowDestinationConfirmation(false);
           setTempSelectedLocation(null);
+          setIsGeocoding(false);
         }}>
         <View style={styles.modalOverlay}>
           <View style={styles.confirmationModal}>
             <Text style={styles.confirmationTitle}>Set as Destination?</Text>
             <View style={styles.confirmationContent}>
               <Icon name="map-marker" size={24} color="#e74c3c" />
-              <Text style={styles.confirmationAddress} numberOfLines={3}>
-                {tempSelectedLocation?.address}
-              </Text>
+              <View style={styles.confirmationAddressContainer}>
+                <Text
+                  style={styles.confirmationAddress}
+                  numberOfLines={2}
+                  ellipsizeMode="tail">
+                  {tempSelectedLocation?.address}
+                </Text>
+                {/* Show geocoding indicator */}
+                {isGeocoding && (
+                  <View style={styles.geocodingIndicator}>
+                    <ActivityIndicator size="small" color="#3498db" />
+                    <Text style={styles.geocodingText}>Getting address...</Text>
+                  </View>
+                )}
+              </View>
             </View>
             <View style={styles.confirmationButtons}>
               <Button
@@ -1989,14 +1776,17 @@ const BookRide = () => {
                 onPress={() => {
                   setShowDestinationConfirmation(false);
                   setTempSelectedLocation(null);
+                  setIsGeocoding(false);
                 }}>
                 Cancel
               </Button>
               <Button
                 mode="contained"
                 style={styles.confirmationButton}
-                onPress={confirmDestinationSelection}>
-                Confirm
+                onPress={confirmDestinationSelection}
+                disabled={isGeocoding || !hasValidAddress(tempSelectedLocation)}
+                loading={isGeocoding}>
+                {isGeocoding ? 'Loading...' : 'Confirm'}
               </Button>
             </View>
           </View>
