@@ -129,6 +129,12 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: 8,
+    gap: 8,
+  },
+  documentButtonRow2: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
   },
   documentButton: {
     flex: 0.45,

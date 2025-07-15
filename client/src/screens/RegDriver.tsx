@@ -1224,13 +1224,21 @@ const RegisterDriverScreen = () => {
                     <Button
                       mode="outlined"
                       onPress={() => pickImage()}
-                      style={styles.documentButton}>
-                      Change Photo
+                      style={styles.documentButton}
+                      icon="folder">
+                      Gallery
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => takePicture()}
+                      style={styles.documentButton}
+                      icon="camera">
+                      Camera
                     </Button>
                   </View>
                 </View>
               ) : (
-                <View>
+                <View style={styles.profilePreviewContainer}>
                   <View style={styles.emptyProfileContainer}>
                     <Text style={styles.emptyProfileText}>No Photo</Text>
                   </View>
@@ -1305,17 +1313,25 @@ const RegisterDriverScreen = () => {
                     style={styles.documentPreview}
                     resizeMode="contain"
                   />
-                  <View style={styles.documentButtonRow}>
+                  <View style={styles.documentButtonRow2}>
                     <Button
                       mode="outlined"
                       onPress={() => pickImage(undefined, true)}
-                      style={styles.documentButton}>
-                      Change
+                      style={styles.documentButton}
+                      icon="folder">
+                      Gallery
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => takePicture(undefined, true)}
+                      style={styles.documentButton}
+                      icon="camera">
+                      Camera
                     </Button>
                   </View>
                 </View>
               ) : (
-                <View style={styles.documentButtonRow}>
+                <View style={styles.documentButtonRow2}>
                   <Button
                     mode="outlined"
                     onPress={() => pickImage(undefined, true)}
@@ -1345,17 +1361,25 @@ const RegisterDriverScreen = () => {
                       style={styles.documentPreview}
                       resizeMode="contain"
                     />
-                    <View style={styles.documentButtonRow}>
+                    <View style={styles.documentButtonRow2}>
                       <Button
                         mode="outlined"
                         onPress={() => pickImage(doc.documentType)}
-                        style={styles.documentButton}>
-                        Change
+                        style={styles.documentButton}
+                        icon="folder">
+                        Gallery
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        onPress={() => takePicture(doc.documentType)}
+                        style={styles.documentButton}
+                        icon="camera">
+                        Camera
                       </Button>
                     </View>
                   </View>
                 ) : (
-                  <View style={styles.documentButtonRow}>
+                  <View style={styles.documentButtonRow2}>
                     <Button
                       mode="outlined"
                       onPress={() => pickImage(doc.documentType)}
@@ -1421,7 +1445,7 @@ const RegisterDriverScreen = () => {
                   accepting rides
                 </Text>
                 <Text style={styles.infoNote}>
-                  The verification process typically takes 1-3 business days.
+                  The verification process typically takes 1-2 business days.
                 </Text>
               </View>
 
@@ -1503,7 +1527,7 @@ const RegisterDriverScreen = () => {
                 rides
               </Text>
               <Text style={styles.infoNote}>
-                The verification process typically takes 1-3 business days.
+                The verification process typically takes 1-2 business days.
               </Text>
             </View>
 

@@ -978,8 +978,16 @@ const RegisterPassengerScreen = () => {
                     <Button
                       mode="outlined"
                       onPress={() => pickImage()}
-                      style={styles.documentButton}>
-                      Change Photo
+                      style={styles.documentButton}
+                      icon="folder">
+                      Gallery
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => takePicture()}
+                      style={styles.documentButton}
+                      icon="camera">
+                      Camera
                     </Button>
                   </View>
                 </View>
@@ -1037,8 +1045,16 @@ const RegisterPassengerScreen = () => {
                     <Button
                       mode="outlined"
                       onPress={() => pickImage(true)}
-                      style={styles.documentButton}>
-                      Change
+                      style={styles.documentButton}
+                      icon="folder">
+                      Gallery
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => takePicture()}
+                      style={styles.documentButton}
+                      icon="camera">
+                      Camera
                     </Button>
                   </View>
                 </View>
