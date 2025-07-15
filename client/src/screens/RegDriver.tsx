@@ -2,7 +2,6 @@ import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
-  TextInput,
   Alert,
   ScrollView,
   Image,
@@ -11,7 +10,7 @@ import {
   PermissionsAndroid,
   Linking,
 } from 'react-native';
-import {Button, ProgressBar, List} from 'react-native-paper';
+import {Button, ProgressBar, List, TextInput} from 'react-native-paper';
 import {
   launchImageLibrary,
   launchCamera,
@@ -96,11 +95,11 @@ const RegisterDriverScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const scrollViewRef = useRef<ScrollView>(null);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
-  const [googleUserData, setGoogleUserData] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 6;
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   // Check if user came from Google Sign-Up
   useEffect(() => {
@@ -116,7 +115,6 @@ const RegisterDriverScreen = () => {
             const userData = await AsyncStorage.getItem('googleUserData');
             if (userData) {
               const parsedData = JSON.parse(userData);
-              setGoogleUserData(parsedData);
               // Pre-populate personal info with Google data
               setPersonalInfo(prev => {
                 const updatedPersonalInfo = {
@@ -961,24 +959,33 @@ const RegisterDriverScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 1: Personal Information</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Last Name"
+              mode="outlined"
+              label="Last Name"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.lastName}
               onChangeText={value =>
                 handlePersonalInfoChange('lastName', value)
               }
             />
             <TextInput
-              style={styles.input}
-              placeholder="First Name"
+              mode="outlined"
+              label="First Name"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.firstName}
               onChangeText={value =>
                 handlePersonalInfoChange('firstName', value)
               }
             />
             <TextInput
-              style={styles.input}
-              placeholder="Middle Initial"
+              mode="outlined"
+              label="Middle Initial"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.middleInitial}
               onChangeText={value =>
                 handlePersonalInfoChange('middleInitial', value)
@@ -1012,22 +1019,31 @@ const RegisterDriverScreen = () => {
             )}
 
             <TextInput
-              style={styles.input}
-              placeholder="Email"
+              mode="outlined"
+              label="Email"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               keyboardType="email-address"
               value={personalInfo.email}
               onChangeText={value => handlePersonalInfoChange('email', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
+              mode="outlined"
+              label="Phone Number"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               keyboardType="phone-pad"
               value={personalInfo.phone}
               onChangeText={value => handlePersonalInfoChange('phone', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Driver's License Number"
+              mode="outlined"
+              label="Driver's License Number"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.licenseNumber}
               onChangeText={value =>
                 handlePersonalInfoChange('licenseNumber', value)
@@ -1048,26 +1064,38 @@ const RegisterDriverScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 2: Home Address</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Street Address"
+              mode="outlined"
+              label="Street Address"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.street}
               onChangeText={value => handleAddressChange('street', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="City"
+              mode="outlined"
+              label="City"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.city}
               onChangeText={value => handleAddressChange('city', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="State/Province"
+              mode="outlined"
+              label="State/Province"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.state}
               onChangeText={value => handleAddressChange('state', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="ZIP/Postal Code"
+              mode="outlined"
+              label="ZIP/Postal Code"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.zipCode}
               onChangeText={value => handleAddressChange('zipCode', value)}
             />
@@ -1092,27 +1120,39 @@ const RegisterDriverScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 3: Vehicle Information</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Vehicle Make"
+              mode="outlined"
+              label="Vehicle Make"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={vehicleInfo.make}
               onChangeText={value => handleVehicleChange('make', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Vehicle Series/Model"
+              mode="outlined"
+              label="Vehicle Series/Model"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={vehicleInfo.series}
               onChangeText={value => handleVehicleChange('series', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Year Model"
+              mode="outlined"
+              label="Year Model"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               keyboardType="numeric"
               value={vehicleInfo.yearModel}
               onChangeText={value => handleVehicleChange('yearModel', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Vehicle Color"
+              mode="outlined"
+              label="Vehicle Color"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={vehicleInfo.color}
               onChangeText={value => handleVehicleChange('color', value)}
             />
@@ -1130,14 +1170,20 @@ const RegisterDriverScreen = () => {
               ))}
             </List.Accordion>
             <TextInput
-              style={styles.input}
-              placeholder="Plate Number"
+              mode="outlined"
+              label="Plate Number"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={vehicleInfo.plateNumber}
               onChangeText={value => handleVehicleChange('plateNumber', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Body Number"
+              mode="outlined"
+              label="Body Number"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={vehicleInfo.bodyNumber}
               onChangeText={value => handleVehicleChange('bodyNumber', value)}
             />
@@ -1404,25 +1450,46 @@ const RegisterDriverScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 6: Create Account</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Username"
+              mode="outlined"
+              label="Username"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={credentials.username}
               onChangeText={value => handleCredentialsChange('username', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Password"
-              secureTextEntry
+              mode="outlined"
+              label="Password"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
+              secureTextEntry={!passwordVisible}
               value={credentials.password}
               onChangeText={value => handleCredentialsChange('password', value)}
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? 'eye-off' : 'eye'}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
+              }
             />
             <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              secureTextEntry
+              mode="outlined"
+              label="Confirm Password"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
+              secureTextEntry={!passwordVisible}
               value={credentials.confirmPassword}
               onChangeText={value =>
                 handleCredentialsChange('confirmPassword', value)
+              }
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? 'eye-off' : 'eye'}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
               }
             />
 

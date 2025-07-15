@@ -117,7 +117,7 @@ const RegisterSelectionScreen = () => {
         <View style={styles.buttonContainer}>
           <Button
             mode="contained"
-            style={styles.button}
+            style={GlobalStyles.primaryButton}
             onPress={() => navigation.navigate('RegisterPassenger')}>
             Register as Passenger (Email)
           </Button>
@@ -138,7 +138,7 @@ const RegisterSelectionScreen = () => {
 
           <Button
             mode="contained"
-            style={[styles.button, styles.driverButton]}
+            style={styles.driverButton}
             onPress={() => navigation.navigate('RegisterDriver')}>
             Register as Driver (Email)
           </Button>
@@ -154,7 +154,7 @@ const RegisterSelectionScreen = () => {
           <Button
             mode="text"
             icon="arrow-left"
-            labelStyle={styles.backButtonText}
+            labelStyle={GlobalStyles.registerButtonText}
             onPress={() => navigation.navigate('Login')}>
             Back
           </Button>
@@ -195,22 +195,14 @@ const styles = StyleSheet.create({
   buttonContainer: {
     width: '80%',
   },
-  button: {
-    marginVertical: 10,
-    backgroundColor: '#007AFF',
-  },
   driverButton: {
+    marginVertical: 10,
     backgroundColor: '#FF9500',
   },
   googleButton: {
     width: '100%',
     height: 48,
     marginBottom: 15,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: 'lightblue',
-    textDecorationLine: 'underline',
   },
   loadingText: {
     color: '#fff',

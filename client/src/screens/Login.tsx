@@ -37,6 +37,7 @@ const LoginScreen = ({navigation}: Props) => {
   const [isValidating, setIsValidating] = useState(false);
   const {login, userToken, userRole} = useAuth();
   const {refreshProfile} = useProfile();
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   // Initialize Google Sign-In
   useEffect(() => {
@@ -367,8 +368,14 @@ const LoginScreen = ({navigation}: Props) => {
             label="Password"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!passwordVisible}
             style={GlobalStyles.input}
+            right={
+              <TextInput.Icon
+                icon={passwordVisible ? 'eye-off' : 'eye'}
+                onPress={() => setPasswordVisible(!passwordVisible)}
+              />
+            }
           />
           <Button
             mode="contained"

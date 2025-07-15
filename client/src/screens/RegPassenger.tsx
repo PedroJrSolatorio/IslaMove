@@ -2,7 +2,6 @@ import React, {useState, useRef, useEffect} from 'react';
 import {
   View,
   Text,
-  TextInput,
   Alert,
   ScrollView,
   Image,
@@ -11,7 +10,7 @@ import {
   PermissionsAndroid,
   Linking,
 } from 'react-native';
-import {Button, ProgressBar, List} from 'react-native-paper';
+import {Button, ProgressBar, List, TextInput} from 'react-native-paper';
 import {
   launchImageLibrary,
   launchCamera,
@@ -78,11 +77,11 @@ const RegisterPassengerScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const scrollViewRef = useRef<ScrollView>(null);
   const [isGoogleUser, setIsGoogleUser] = useState(false);
-  const [googleUserData, setGoogleUserData] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   // Check if user came from Google Sign-Up
   useEffect(() => {
@@ -98,7 +97,6 @@ const RegisterPassengerScreen = () => {
             const userData = await AsyncStorage.getItem('googleUserData');
             if (userData) {
               const parsedData = JSON.parse(userData);
-              setGoogleUserData(parsedData);
               // Pre-populate personal info with Google data
               setPersonalInfo(prev => {
                 const updatedPersonalInfo = {
@@ -791,24 +789,33 @@ const RegisterPassengerScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 1: Personal Information</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Last Name"
+              mode="outlined"
+              label="Last Name"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.lastName}
               onChangeText={value =>
                 handlePersonalInfoChange('lastName', value)
               }
             />
             <TextInput
-              style={styles.input}
-              placeholder="First Name"
+              mode="outlined"
+              label="First Name"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.firstName}
               onChangeText={value =>
                 handlePersonalInfoChange('firstName', value)
               }
             />
             <TextInput
-              style={styles.input}
-              placeholder="Middle Initial"
+              mode="outlined"
+              label="Middle Initial"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={personalInfo.middleInitial}
               onChangeText={value =>
                 handlePersonalInfoChange('middleInitial', value)
@@ -842,15 +849,21 @@ const RegisterPassengerScreen = () => {
             )}
 
             <TextInput
-              style={styles.input}
-              placeholder="Email"
+              mode="outlined"
+              label="Email"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               keyboardType="email-address"
               value={personalInfo.email}
               onChangeText={value => handlePersonalInfoChange('email', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Phone Number"
+              mode="outlined"
+              label="Phone Number"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               keyboardType="phone-pad"
               value={personalInfo.phone}
               onChangeText={value => handlePersonalInfoChange('phone', value)}
@@ -872,8 +885,8 @@ const RegisterPassengerScreen = () => {
 
             <Text style={styles.categoryInfo}>
               • Regular: Standard passenger rates
-              {'\n'}• Student: Discounted rates (25 years old and below)
-              {'\n'}• Senior: Discounted rates (60 years old and above)
+              {'\n'}• Student: Discounted rates
+              {'\n'}• Senior: Discounted rates
             </Text>
 
             <Button
@@ -891,26 +904,38 @@ const RegisterPassengerScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 2: Home Address</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Street Address"
+              mode="outlined"
+              label="Street Address"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.street}
               onChangeText={value => handleAddressChange('street', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="City"
+              mode="outlined"
+              label="City"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.city}
               onChangeText={value => handleAddressChange('city', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="State/Province"
+              mode="outlined"
+              label="State/Province"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.state}
               onChangeText={value => handleAddressChange('state', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="ZIP/Postal Code"
+              mode="outlined"
+              label="ZIP/Postal Code"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={homeAddress.zipCode}
               onChangeText={value => handleAddressChange('zipCode', value)}
             />
@@ -1112,25 +1137,46 @@ const RegisterPassengerScreen = () => {
           <View style={styles.stepContainer}>
             <Text style={styles.stepTitle}>Step 4: Create Account</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Username"
+              mode="outlined"
+              label="Username"
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
               value={credentials.username}
               onChangeText={value => handleCredentialsChange('username', value)}
             />
             <TextInput
-              style={styles.input}
-              placeholder="Password"
-              secureTextEntry
+              mode="outlined"
+              label="Password"
+              secureTextEntry={!passwordVisible}
               value={credentials.password}
               onChangeText={value => handleCredentialsChange('password', value)}
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? 'eye-off' : 'eye'}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
+              }
             />
             <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              secureTextEntry
+              mode="outlined"
+              label="Confirm Password"
+              secureTextEntry={!passwordVisible}
               value={credentials.confirmPassword}
               onChangeText={value =>
                 handleCredentialsChange('confirmPassword', value)
+              }
+              style={styles.paperInput}
+              outlineStyle={styles.paperInputOutline}
+              contentStyle={styles.paperInputContent}
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? 'eye-off' : 'eye'}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
               }
             />
 

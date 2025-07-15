@@ -85,6 +85,13 @@ const SettingsScreen = () => {
     }
   };
 
+  const handleCancelChangePassword = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowChangePasswordDialog(false);
+  };
+
   const handleLinkGoogle = async () => {
     try {
       await GoogleSignin.hasPlayServices();
@@ -552,9 +559,7 @@ const SettingsScreen = () => {
             />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowChangePasswordDialog(false)}>
-              Cancel
-            </Button>
+            <Button onPress={handleCancelChangePassword}>Cancel</Button>
             <Button onPress={handleChangePassword}>Change Password</Button>
           </Dialog.Actions>
         </Dialog>

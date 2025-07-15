@@ -175,4 +175,16 @@ export const styles = StyleSheet.create({
     color: '#666',
     lineHeight: 20,
   },
+  paperInput: {
+    marginBottom: 15,
+    backgroundColor: '#fff',
+  },
+  paperInputOutline: {
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  paperInputContent: {
+    paddingHorizontal: 15,
+  },
 });
