@@ -9,6 +9,7 @@ import {
   Pressable,
   Modal,
   Vibration,
+  AppState,
 } from 'react-native';
 import {
   Text,
@@ -26,7 +27,7 @@ import MapView, {
   MapType,
 } from 'react-native-maps';
 import Geolocation from 'react-native-geolocation-service';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import {decode} from '@googlemaps/polyline-codec';
 import {useAuth} from '../context/AuthContext';
@@ -43,6 +44,7 @@ import SoundUtils from '../../utils/SoundUtils';
 import Toast from 'react-native-toast-message';
 import DeviceInfo from 'react-native-device-info';
 import {useGeocoding} from '../hooks/useGeocoding';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Interface for fare types
 interface FareInfo {
@@ -117,6 +119,12 @@ type RideStatus =
   | 'in_progress'
   | 'completed';
 
+// storage keys
+const STORAGE_KEYS = {
+  RIDE_STATE: 'bookride_state',
+  RIDE_DATA: 'bookride_data',
+};
+
 const BookRide = () => {
   const navigation = useNavigation();
   const {userToken} = useAuth();
@@ -165,6 +173,7 @@ const BookRide = () => {
   const cancelWindowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [soundsInitialized, setSoundsInitialized] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isRestoringState, setIsRestoringState] = useState(false);
 
   // Function to request location permissions
   const requestLocationPermission = async () => {
@@ -188,7 +197,7 @@ const BookRide = () => {
     return false;
   };
 
-  // Add this function to handle map press for destination selection
+  // function to handle map press for destination selection
   const handleMapPress = async (event: any) => {
     // Only allow destination selection when in idle state
     if (rideStatus !== 'idle' && rideStatus !== 'selecting_location') {
@@ -216,7 +225,7 @@ const BookRide = () => {
     );
   };
 
-  // Add this function to confirm destination selection
+  // function to confirm destination selection
   const confirmDestinationSelection = async () => {
     if (tempSelectedLocation) {
       setDestination(tempSelectedLocation);
@@ -347,10 +356,149 @@ const BookRide = () => {
     return 'Regular';
   };
 
+  // Save ride state to AsyncStorage
+  const saveRideState = async (stateData: any) => {
+    try {
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.RIDE_STATE,
+        JSON.stringify(stateData),
+      );
+    } catch (error) {
+      console.error('Error saving ride state:', error);
+    }
+  };
+
+  // Load ride state from AsyncStorage
+  const loadRideState = async () => {
+    try {
+      const savedState = await AsyncStorage.getItem(STORAGE_KEYS.RIDE_STATE);
+      if (savedState) {
+        return JSON.parse(savedState);
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading ride state:', error);
+      return null;
+    }
+  };
+
+  // Clear saved ride state
+  const clearRideState = async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.RIDE_STATE);
+    } catch (error) {
+      console.error('Error clearing ride state:', error);
+    }
+  };
+
+  // Restore ride state when component mounts or comes into focus
+  const restoreRideState = async () => {
+    setIsRestoringState(true);
+    try {
+      const savedState = await loadRideState();
+      if (savedState) {
+        console.log('Restoring ride state:', savedState);
+
+        // Restore all relevant state
+        if (savedState.rideStatus) setRideStatus(savedState.rideStatus);
+        if (savedState.destination) setDestination(savedState.destination);
+        if (savedState.toZone) setToZone(savedState.toZone);
+        if (savedState.fromZone) setFromZone(savedState.fromZone);
+        if (savedState.fareEstimate) setFareEstimate(savedState.fareEstimate);
+        if (savedState.routeCoordinates)
+          setRouteCoordinates(savedState.routeCoordinates);
+        if (savedState.estimatedDistance)
+          setEstimatedDistance(savedState.estimatedDistance);
+        if (savedState.estimatedDuration)
+          setEstimatedDuration(savedState.estimatedDuration);
+        if (savedState.currentRideId)
+          setCurrentRideId(savedState.currentRideId);
+        if (savedState.assignedDriver)
+          setAssignedDriver(savedState.assignedDriver);
+        if (savedState.driverEta) setDriverEta(savedState.driverEta);
+        if (savedState.canCancel !== undefined)
+          setCanCancel(savedState.canCancel);
+
+        // If there's an active ride, reconnect to socket events
+        if (
+          savedState.currentRideId &&
+          [
+            'searching_driver',
+            'driver_found',
+            'driver_arrived',
+            'in_progress',
+          ].includes(savedState.rideStatus)
+        ) {
+          console.log('Reconnecting to active ride:', savedState.currentRideId);
+          // The socket setup in useEffect will handle reconnection
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring ride state:', error);
+    } finally {
+      setIsRestoringState(false);
+    }
+  };
+
+  // Save state whenever relevant state changes
+  useEffect(() => {
+    if (!isRestoringState && !loading) {
+      const stateToSave = {
+        rideStatus,
+        destination,
+        toZone,
+        fromZone,
+        fareEstimate,
+        routeCoordinates,
+        estimatedDistance,
+        estimatedDuration,
+        currentRideId,
+        assignedDriver,
+        driverEta,
+        canCancel,
+        timestamp: Date.now(),
+      };
+
+      // Only save if there's meaningful state to preserve
+      if (rideStatus !== 'idle' || destination || currentRideId) {
+        saveRideState(stateToSave);
+      }
+    }
+  }, [
+    rideStatus,
+    destination,
+    toZone,
+    fromZone,
+    fareEstimate,
+    routeCoordinates,
+    estimatedDistance,
+    estimatedDuration,
+    currentRideId,
+    assignedDriver,
+    driverEta,
+    canCancel,
+    isRestoringState,
+    loading,
+  ]);
+
+  // Use focus effect to restore state when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (!loading) {
+        restoreRideState();
+      }
+    }, [loading]),
+  );
+
   // Getting user's current location
   useEffect(() => {
     const fetchCurrentLocation = async () => {
       try {
+        // Check if saved state is still valid
+        const isStateValid = await checkRideStateExpiry();
+        if (!isStateValid) {
+          await resetRide();
+        }
         const hasPermission = await requestLocationPermission();
 
         if (!hasPermission) {
@@ -460,7 +608,7 @@ const BookRide = () => {
                 setRideStatus('in_progress');
                 break;
               case 'completed':
-                setRideStatus('completed');
+                await handleRideCompletion();
                 // Show a toast
                 Toast.show({
                   type: 'success', // or 'info', 'error'
@@ -475,10 +623,6 @@ const BookRide = () => {
                 } catch (err) {
                   console.error('Failed to increment totalRides:', err);
                 }
-                // Show rating modal after 2 seconds
-                setTimeout(() => {
-                  setShowRatingModal(true);
-                }, 2000); // 2000 ms = 2 seconds delay
                 break;
             }
           }
@@ -540,6 +684,7 @@ const BookRide = () => {
     };
   }, [userToken, currentRideId, rideStatus]);
 
+  // adding small delay for fair estimation
   useEffect(() => {
     if (fromZone && toZone) {
       // Add a small delay to ensure state is stable
@@ -768,6 +913,7 @@ const BookRide = () => {
     }
   };
 
+  // check if zone is valid
   const validateZoneData = (zone: Zone | null, zoneName: string): boolean => {
     if (!zone) {
       console.error(`${zoneName} is null`);
@@ -957,17 +1103,6 @@ const BookRide = () => {
       return;
     }
 
-    console.log('Requesting ride with data:', {
-      fromZone: fromZone._id,
-      toZone: toZone._id,
-      passenger: passengerProfile._id,
-      estimatedDistance,
-      estimatedDuration,
-      fareEstimate: fareEstimate.finalAmount,
-      baseAmount: fareEstimate.baseAmount,
-      discountAmount: fareEstimate.discount.amount,
-    });
-
     setRideStatus('searching_driver');
 
     if (searchTimeoutRef.current) {
@@ -992,7 +1127,6 @@ const BookRide = () => {
         estimatedDistance: estimatedDistance || 0,
         estimatedDuration: estimatedDuration || 0,
         price: fareEstimate.finalAmount,
-        // Add all the pricing details that the backend expects
         baseFare: fareEstimate.baseAmount,
         discountApplied: fareEstimate.discount.amount,
         discountRate: fareEstimate.discount.rate,
@@ -1002,15 +1136,6 @@ const BookRide = () => {
         paymentMethod: 'cash',
       };
 
-      console.log('=== FRONTEND RIDE DATA ===');
-      console.log('From Zone:', fromZone);
-      console.log('To Zone:', toZone);
-      console.log('Current Location:', currentLocation);
-      console.log('Destination:', destination);
-      console.log('Fare Estimate:', fareEstimate);
-      console.log('Final ride data:', JSON.stringify(rideData, null, 2));
-
-      // Validation before sending
       if (!currentLocation?.coordinates || !destination?.coordinates) {
         Alert.alert('Error', 'Invalid location coordinates');
         return;
@@ -1027,54 +1152,66 @@ const BookRide = () => {
       }
 
       const response = await api.post(`/api/rides/request`, rideData);
-
       console.log('Ride request successful:', response.data);
 
       // Make sure to get the ride ID from response
       const rideId = response.data._id || response.data.data?._id;
-      console.log('Setting current ride ID:', rideId);
       setCurrentRideId(rideId);
 
       // Set timeout for driver search (can be cancelled by socket event)
-      searchTimeoutRef.current = setTimeout(() => {
-        console.log('Search timeout triggered');
-        console.log('Current ride status at timeout:', rideStatus);
+      searchTimeoutRef.current = setTimeout(async () => {
+        console.log('Search timeout triggered, cancelling ride request');
 
-        // Set timeout for driver search
-        setRideStatus(currentStatus => {
-          console.log('Status check in timeout:', currentStatus);
-          if (currentStatus === 'searching_driver') {
-            console.log(
-              'No driver found - showing alert and preserving destination',
-            );
-            Alert.alert(
-              'No Drivers Available',
-              'No drivers accepted your ride request. You can try booking again or select a different destination.',
-              [
-                {
-                  text: 'Try Again',
-                  onPress: () => {
-                    resetRideKeepDestination(); // Use the new function that preserves destination
-                  },
-                },
-                {
-                  text: 'Change Destination',
-                  onPress: () => {
-                    resetRide(); // Use full reset if user wants to change destination
-                  },
-                  style: 'cancel',
-                },
-              ],
-            );
-            return 'confirming_booking'; // Go back to confirmation screen
-          }
-          return currentStatus;
-        });
-
+        // Clear the timeout reference immediately
         searchTimeoutRef.current = null;
+
+        try {
+          // Cancel the ride request on the backend FIRST
+          await cancelRideRequest();
+
+          // Then show the alert to user
+          Alert.alert(
+            'No Drivers Available',
+            'No drivers accepted your ride request. You can try booking again or select a different destination.',
+            [
+              {
+                text: 'Try Again',
+                onPress: () => {
+                  resetRideKeepDestination(true); // Skip internal cancellation since already done
+                },
+              },
+              {
+                text: 'Change Destination',
+                onPress: () => {
+                  resetRide(true); // Skip internal cancellation since already done
+                },
+                style: 'cancel',
+              },
+            ],
+          );
+        } catch (error) {
+          console.error('Error during timeout cancellation:', error);
+          // Even if cancellation fails, reset the UI to prevent stuck state
+          Alert.alert(
+            'Error',
+            'Failed to cancel previous request. Please try again later.',
+          );
+          resetRide(true); // Force reset
+        }
       }, 60000); // 1 minute timeout
     } catch (error: any) {
       console.error('Error requesting ride:', error);
+
+      // Clear timeout immediately on any error during request
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
+
+      // Auto-cancel any created ride request on error
+      if (currentRideId) {
+        await cancelRideRequest();
+      }
 
       if (error.response) {
         console.error('Error response data:', error.response.data);
@@ -1085,26 +1222,46 @@ const BookRide = () => {
           error.response.status === 400 &&
           error.response.data?.message?.includes('No drivers available')
         ) {
-          // Handle this gracefully - don't show error, just let timeout handle it
           console.log(
-            'Backend says no drivers available, letting frontend timeout handle it',
+            'Backend says no drivers available, handling gracefully.',
           );
-
-          // Still set the ride ID if one was created
           const rideId = error.response.data?.rideId;
           if (rideId) {
             setCurrentRideId(rideId);
+            await cancelRideRequest(); // Cancel on backend
+            Alert.alert(
+              'No Drivers Available',
+              'The system found no drivers available for your request. Please try again.',
+              [
+                {
+                  text: 'Try Again',
+                  onPress: () => resetRideKeepDestination(true),
+                },
+                {
+                  text: 'Change Destination',
+                  onPress: () => resetRide(true),
+                },
+              ],
+            );
+            return;
           }
-
-          // Keep searching status and let timeout handle it
-          return;
+        } else if (
+          error.response.status === 409 &&
+          error.response.data?.message?.includes(
+            'You already have an active ride request',
+          )
+        ) {
+          Alert.alert(
+            'Active Ride',
+            'You already have an active ride request. Please cancel it or wait for a driver to accept.',
+            [{text: 'OK', onPress: () => resetRide(true)}],
+          );
+        } else {
+          const errorMessage =
+            error.response.data?.message ||
+            'Failed to request ride. Please try again.';
+          Alert.alert('Error', errorMessage);
         }
-
-        // Show other error messages
-        const errorMessage =
-          error.response.data?.message ||
-          'Failed to request ride. Please try again.';
-        Alert.alert('Error', errorMessage);
       } else if (error.request) {
         console.error('Error request:', error.request);
         Alert.alert('Error', 'Network error. Please check your connection.');
@@ -1113,16 +1270,16 @@ const BookRide = () => {
         Alert.alert('Error', 'An unexpected error occurred.');
       }
 
-      // Clear timeout on error
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-      setRideStatus('confirming_booking');
+      // Ensure a reset to a stable state
+      resetRide(true);
     }
   };
 
-  const resetRideKeepDestination = () => {
+  const resetRideKeepDestination = async (skipCancelRequest = false) => {
+    // Cancel any active ride request first
+    if (currentRideId && !skipCancelRequest) {
+      await cancelRideRequest();
+    }
     // Keep destination, toZone, and related route information. Only reset ride-specific states
     setRideStatus('confirming_booking');
     setFareEstimate(null); // Will be recalculated below
@@ -1136,6 +1293,40 @@ const BookRide = () => {
     if (fromZone && toZone && estimatedDistance > 0) {
       fetchFareEstimate(estimatedDistance);
     }
+  };
+
+  // Check for expired ride state
+  const checkRideStateExpiry = async () => {
+    try {
+      const savedState = await loadRideState();
+      if (savedState && savedState.timestamp) {
+        const now = Date.now();
+        const stateAge = now - savedState.timestamp;
+        const maxAge = 30 * 60 * 1000; // 30 minutes
+
+        if (stateAge > maxAge) {
+          console.log('Ride state expired, clearing...');
+          await clearRideState();
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error('Error checking ride state expiry:', error);
+      return false;
+    }
+  };
+
+  const handleRideCompletion = async () => {
+    setRideStatus('completed');
+
+    // Clear the saved state since ride is completed
+    await clearRideState();
+
+    // Show rating modal after 2 seconds
+    setTimeout(() => {
+      setShowRatingModal(true);
+    }, 2000);
   };
 
   // Submit rating after ride
@@ -1161,7 +1352,11 @@ const BookRide = () => {
   };
 
   // Reset ride state
-  const resetRide = () => {
+  const resetRide = async (skipCancelRequest = false) => {
+    // Cancel any active ride request first
+    if (currentRideId && !skipCancelRequest) {
+      await cancelRideRequest();
+    }
     setDestination(null);
     setToZone(null);
     setRideStatus('idle');
@@ -1174,7 +1369,32 @@ const BookRide = () => {
     setDriverEta(0);
     setTempSelectedLocation(null);
     setShowDestinationConfirmation(false);
+    await clearRideState();
   };
+
+  // useEffect to handle app state changes (when user closes app)
+  useEffect(() => {
+    const handleAppStateChange = async (nextAppState: string) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // If user is searching for driver and app goes to background, cancel the request
+        if (rideStatus === 'searching_driver' && currentRideId) {
+          console.log(
+            'App going to background during driver search, cancelling ride request',
+          );
+          await cancelRideRequest();
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener(
+      'change',
+      handleAppStateChange,
+    );
+
+    return () => {
+      subscription?.remove();
+    };
+  }, [rideStatus, currentRideId]);
 
   // Cancel ride
   const cancelRide = async () => {
@@ -1185,25 +1405,39 @@ const BookRide = () => {
       searchTimeoutRef.current = null;
     }
 
-    // If we're just searching for a driver, offer to preserve destination
+    // If we're just searching for a driver, immediately cancel the backend request
     if (rideStatus === 'searching_driver') {
-      console.log('Cancelling during driver search');
-
-      Alert.alert('Cancel Ride', 'What would you like to do?', [
-        {text: 'Keep Searching', style: 'cancel'},
-        {
-          text: 'Try Again Later',
-          onPress: () => {
-            resetRideKeepDestination(); // Preserve destination
+      // Cancel the ride request on backend immediately
+      const cancelled = await cancelRideRequest();
+      if (cancelled) {
+        Alert.alert('Cancel Ride', 'What would you like to do?', [
+          {
+            text: 'Try Again',
+            onPress: () => {
+              resetRideKeepDestination(true);
+            },
           },
-        },
-        {
-          text: 'Change Destination',
-          onPress: () => {
-            resetRide(); // Full reset
+          {
+            text: 'Try Again Later',
+            onPress: () => {
+              resetRideKeepDestination(true);
+            },
           },
-        },
-      ]);
+          {
+            text: 'Change Destination',
+            onPress: () => {
+              resetRide(true);
+            },
+          },
+        ]);
+      } else {
+        // If cancellation failed, still reset UI but inform user
+        Alert.alert(
+          'Warning',
+          'There was an issue cancelling the ride request. Please try again.',
+          [{text: 'OK', onPress: () => resetRide(true)}],
+        );
+      }
       return;
     }
 
@@ -1217,28 +1451,50 @@ const BookRide = () => {
       {
         text: 'Yes',
         onPress: async () => {
-          try {
-            const response = await api.post(
-              `/api/rides/${currentRideId}/cancel`,
-              {
-                reason: 'Cancelled by passenger',
-              },
-            );
-            // For active rides, do full reset since the trip is completely cancelled
+          const cancelled = await cancelRideRequest();
+          if (cancelled) {
             resetRide();
             Toast.show({
-              type: 'success', // or 'info', 'error'
+              type: 'success',
               text1: 'Success',
               text2: 'Ride cancelled successfully!',
-              visibilityTime: 4000, // 4 seconds
+              visibilityTime: 4000,
             });
-          } catch (error) {
-            console.error('Error canceling ride:', error);
-            Alert.alert('Error', 'Failed to cancel ride. Please try again.');
+          } else {
+            Toast.show({
+              type: 'error',
+              text1: 'Error',
+              text2: 'Failed to cancel ride. Please try again.',
+              visibilityTime: 4000,
+            });
           }
         },
       },
     ]);
+  };
+
+  const cancelRideRequest = async () => {
+    if (!currentRideId) {
+      console.log('No currentRideId to cancel');
+      // Ensure local states are clean even if currentRideId is null unexpectedly
+      setCurrentRideId(null);
+      setRideStatus('confirming_booking'); // Or 'idle'
+      return true;
+    }
+
+    const rideIdToCancel = currentRideId;
+    setCurrentRideId(null);
+    setRideStatus('confirming_booking');
+    try {
+      const response = await api.post(`/api/rides/${rideIdToCancel}/cancel`, {
+        reason: 'No drivers available - timeout',
+      });
+      return true;
+    } catch (error) {
+      console.error('Error canceling ride on backend:', error);
+      // to prevent UI from being stuck
+      return false;
+    }
   };
 
   // Render UI based on ride status
@@ -1563,16 +1819,6 @@ const BookRide = () => {
                 </View>
               </View>
 
-              {/* <Button
-                mode="contained"
-                icon="phone"
-                style={styles.callButton}
-                onPress={() => {
-                  // Implement call functionality
-                }}>
-                Call Driver
-              </Button> */}
-
               {!['driver_arrived', 'in_progress', 'completed'].includes(
                 rideStatus,
               ) && (
@@ -1598,6 +1844,19 @@ const BookRide = () => {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={styles.loadingText}>Getting your location...</Text>
+      </View>
+    );
+  }
+
+  if (isRestoringState) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {justifyContent: 'center', alignItems: 'center'},
+        ]}>
+        <ActivityIndicator size="large" color="#3498db" />
+        <Text style={{marginTop: 10}}>Restoring ride state...</Text>
       </View>
     );
   }

@@ -867,6 +867,66 @@ export const createRideRequest = async (req, res) => {
     await newRide.save();
     console.log("Ride created successfully:", newRide._id);
 
+    setTimeout(async () => {
+      try {
+        const ride = await Ride.findById(newRide._id);
+
+        // Only auto-cancel if the ride is still in the 'requested' state
+        // It could have been accepted or manually cancelled by now.
+        if (ride && ride.status === "requested") {
+          console.log(
+            `Backend: Ride ${newRide._id} timed out. Auto-cancelling...`
+          );
+
+          const updatedTimedOutRide = await Ride.findByIdAndUpdate(
+            newRide._id,
+            {
+              status: "cancelled",
+              cancellationReason: "No drivers available - system timeout",
+              cancellationTime: new Date(),
+              cancellationInitiator: "system",
+            },
+            { new: true }
+          );
+
+          // Notify the passenger via socket that their ride was auto-cancelled
+          if (io) {
+            io.to(`user_${updatedTimedOutRide.passenger._id}`).emit(
+              "ride_cancelled",
+              {
+                rideId: updatedTimedOutRide._id,
+                reason: "No drivers available - timeout (system auto-cancel)",
+                initiator: "system",
+                rideStatus: updatedTimedOutRide.status, // Send the new status
+              }
+            );
+            console.log(
+              `Backend: Passenger ${updatedTimedOutRide.passenger._id} notified of auto-cancellation.`
+            );
+          } else {
+            console.warn(
+              "Socket.IO not available for auto-cancellation notification."
+            );
+          }
+
+          console.log(
+            `Backend: Ride ${newRide._id} successfully auto-cancelled.`
+          );
+        } else {
+          console.log(
+            `Backend: Ride ${newRide._id} was no longer in 'requested' status (current: ${ride?.status}), not auto-cancelling.`
+          );
+        }
+      } catch (timeoutError) {
+        console.error(
+          "Error in backend timeout cancellation for ride",
+          newRide._id,
+          ":",
+          timeoutError
+        );
+      }
+    }, 60000); // 1 minute timeout (adjust as needed)
+
     // Populate zone information for response
     const populatedRide = await Ride.findById(newRide._id)
       .populate("fromZone", "name")
