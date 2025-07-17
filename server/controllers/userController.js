@@ -533,46 +533,46 @@ export const removeAddress = async (req, res) => {
 };
 
 // Request account deletion
-export const requestAccountDeletion = async (req, res) => {
-  try {
-    const userId = req.params.id;
-    const { reason } = req.body;
+// export const requestAccountDeletion = async (req, res) => {
+//   try {
+//     const userId = req.params.id;
+//     const { reason } = req.body;
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
 
-    // Check if deletion is already requested
-    if (user.deletionRequested) {
-      return res.status(400).json({
-        error: "Account deletion already requested",
-        scheduledFor: user.deletionScheduledFor,
-      });
-    }
+//     // Check if deletion is already requested
+//     if (user.deletionRequested) {
+//       return res.status(400).json({
+//         error: "Account deletion already requested",
+//         scheduledFor: user.deletionScheduledFor,
+//       });
+//     }
 
-    // Set deletion request
-    const deletionDate = new Date();
-    deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
+//     // Set deletion request
+//     const deletionDate = new Date();
+//     deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
 
-    user.deletionRequested = true;
-    user.deletionRequestedAt = new Date();
-    user.deletionScheduledFor = deletionDate;
-    user.deletionReason = reason || "User requested deletion";
+//     user.deletionRequested = true;
+//     user.deletionRequestedAt = new Date();
+//     user.deletionScheduledFor = deletionDate;
+//     user.deletionReason = reason || "User requested deletion";
 
-    await user.save();
+//     await user.save();
 
-    res.json({
-      message: "Account deletion requested successfully",
-      scheduledFor: deletionDate,
-      daysRemaining: 30,
-      note: "Your account will be permanently deleted in 30 days. You can cancel this request by logging in before the deletion date.",
-    });
-  } catch (error) {
-    console.error("Error requesting account deletion:", error);
-    res.status(500).json({ error: "Failed to request account deletion" });
-  }
-};
+//     res.json({
+//       message: "Account deletion requested successfully",
+//       scheduledFor: deletionDate,
+//       daysRemaining: 30,
+//       note: "Your account will be permanently deleted in 30 days. You can cancel this request by logging in before the deletion date.",
+//     });
+//   } catch (error) {
+//     console.error("Error requesting account deletion:", error);
+//     res.status(500).json({ error: "Failed to request account deletion" });
+//   }
+// };
 
 // Verify account deletion with password/Google
 export const verifyAccountDeletion = async (req, res) => {
@@ -623,7 +623,8 @@ export const verifyAccountDeletion = async (req, res) => {
 
     // Set deletion request
     const deletionDate = new Date();
-    deletionDate.setDate(deletionDate.getDate() + 30);
+    // deletionDate.setDate(deletionDate.getDate() + 30);
+    deletionDate.setDate(deletionDate.getDate() + 1); // test delete after 1 day
 
     user.deletionRequested = true;
     user.deletionRequestedAt = new Date();

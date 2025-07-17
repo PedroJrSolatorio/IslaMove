@@ -100,6 +100,10 @@ const DriverHome = () => {
   const [pendingRequest, setPendingRequest] = useState<RideRequest | null>(
     null,
   );
+  const [requestQueue, setRequestQueue] = useState<RideRequest[]>([]);
+  const [currentRequest, setCurrentRequest] = useState<RideRequest | null>(
+    null,
+  );
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [selectedRideForRating, setSelectedRideForRating] =
@@ -115,6 +119,7 @@ const DriverHome = () => {
   const driverStatusRef = useRef(driverStatus);
   const activeRidesRef = useRef(activeRides);
   const requestTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const requestQueueRef = useRef<RideRequest[]>([]);
   const [networkError, setNetworkError] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -129,6 +134,9 @@ const DriverHome = () => {
   useEffect(() => {
     requestTimerRef.current = requestTimer;
   }, [requestTimer]);
+  useEffect(() => {
+    requestQueueRef.current = requestQueue;
+  }, [requestQueue]);
 
   // Constants
   const MAX_PASSENGERS = 5;
@@ -151,6 +159,55 @@ const DriverHome = () => {
       return granted === PermissionsAndroid.RESULTS.GRANTED;
     }
     return false;
+  };
+
+  const addToRequestQueue = (request: RideRequest) => {
+    setRequestQueue(prev => {
+      // Check if request already exists in queue
+      const exists = prev.some(r => r._id === request._id);
+      if (exists) return prev;
+
+      return [...prev, request];
+    });
+  };
+
+  const removeFromRequestQueue = (requestId: string) => {
+    setRequestQueue(prev => prev.filter(r => r._id !== requestId));
+  };
+
+  const processNextRequest = () => {
+    if (
+      requestQueueRef.current.length === 0 ||
+      currentRequest ||
+      showRequestModal
+    ) {
+      return;
+    }
+
+    const nextRequest = requestQueueRef.current[0];
+    setCurrentRequest(nextRequest);
+    setShowRequestModal(true);
+    setRequestTimeRemaining(REQUEST_TIMEOUT);
+
+    // Clear any existing timer
+    if (requestTimerRef.current) {
+      clearTimeout(requestTimerRef.current);
+    }
+
+    // Start countdown timer
+    const timer = setInterval(() => {
+      setRequestTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleDeclineRequest();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    setRequestTimer(timer);
+    requestTimerRef.current = timer;
   };
 
   // Get current location
@@ -251,6 +308,16 @@ const DriverHome = () => {
     };
   }, [userToken]);
 
+  // Effect to process queue when it changes
+  useEffect(() => {
+    if (requestQueue.length > 0 && !currentRequest && !showRequestModal) {
+      const timer = setTimeout(() => {
+        processNextRequest();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [requestQueue.length > 0, !currentRequest, !showRequestModal]);
+
   // Verify authentication and profile access
   useEffect(() => {
     const verifyAuth = async () => {
@@ -338,29 +405,8 @@ const DriverHome = () => {
       ) {
         Vibration.vibrate(1000);
         SoundUtils.playDing();
-        setPendingRequest(request);
-        setShowRequestModal(true);
-        setRequestTimeRemaining(REQUEST_TIMEOUT);
-
-        // Clear any existing timer
-        if (requestTimerRef.current) {
-          clearTimeout(requestTimerRef.current);
-        }
-
-        // Start countdown timer
-        const timer = setInterval(() => {
-          setRequestTimeRemaining(prev => {
-            if (prev <= 1) {
-              clearInterval(timer);
-              handleDeclineRequest();
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-
-        setRequestTimer(timer);
-        requestTimerRef.current = timer;
+        addToRequestQueue(request);
+        console.log('Added ride request to queue:', request._id);
       } else {
         console.log('Driver not available for new rides:', {
           driverStatus: driverStatusRef.current,
@@ -402,13 +448,21 @@ const DriverHome = () => {
     // Add listener for when ride is taken by another driver
     SocketService.on('ride_taken', (data: {rideId: string}) => {
       console.log('Ride taken by another driver:', data);
-      // Clear any pending request if it matches
-      if (pendingRequest?._id === data.rideId) {
-        setPendingRequest(null);
+      removeFromRequestQueue(data.rideId);
+      // Clear current request if it matches
+      if (currentRequest?._id === data.rideId) {
+        setCurrentRequest(null);
         setShowRequestModal(false);
         if (requestTimer) {
           clearTimeout(requestTimer);
+          setRequestTimer(null);
         }
+        // Process next request in queue
+        setTimeout(() => {
+          if (requestQueueRef.current.length > 0) {
+            processNextRequest();
+          }
+        }, 100);
       }
     });
   };
@@ -457,6 +511,16 @@ const DriverHome = () => {
         });
         setDriverStatus('offline');
         stopLocationUpdates();
+
+        // Clear queue when going offline
+        setRequestQueue([]);
+        setCurrentRequest(null);
+        setShowRequestModal(false);
+        if (requestTimer) {
+          clearTimeout(requestTimer);
+          setRequestTimer(null);
+        }
+
         Toast.show({
           type: 'success', // or 'info', 'error'
           text1: 'Status Updated',
@@ -537,14 +601,16 @@ const DriverHome = () => {
 
   // Accept ride request
   const handleAcceptRequest = async () => {
-    if (!pendingRequest) return;
+    if (!currentRequest) return;
 
     try {
       const response = await api.post(
-        `/api/rides/${pendingRequest._id}/accept`,
+        `/api/rides/${currentRequest._id}/accept`,
       );
 
-      setPendingRequest(null);
+      // Remove from queue
+      removeFromRequestQueue(currentRequest._id);
+      setCurrentRequest(null);
       setShowRequestModal(false);
 
       if (requestTimer) {
@@ -553,16 +619,16 @@ const DriverHome = () => {
       }
 
       // Join the ride room for real-time updates
-      joinRideRoom(pendingRequest._id);
+      joinRideRoom(currentRequest._id);
 
       // Only set to busy if this will reach the max passengers
       setActiveRides(prev => {
-        const alreadyExists = prev.some(r => r._id === pendingRequest!._id);
+        const alreadyExists = prev.some(r => r._id === currentRequest!._id);
         if (alreadyExists) return prev;
 
         const newRides = [
           ...prev,
-          {...pendingRequest!, status: 'accepted' as RideStatus},
+          {...currentRequest!, status: 'accepted' as RideStatus},
         ];
         if (newRides.length >= MAX_PASSENGERS) {
           setDriverStatus('busy');
@@ -574,9 +640,9 @@ const DriverHome = () => {
 
       // Calculate route to pickup location
       calculateRoute(
-        pendingRequest._id,
+        currentRequest._id,
         currentLocation!,
-        pendingRequest.pickupLocation,
+        currentRequest.pickupLocation,
       );
 
       Toast.show({
@@ -585,6 +651,16 @@ const DriverHome = () => {
         text2: 'Navigate to the pickup location!',
         visibilityTime: 4000, // 4 seconds
       });
+      // Use a longer delay to prevent rapid successive requests
+      setTimeout(() => {
+        if (
+          requestQueueRef.current.length > 0 &&
+          !currentRequest &&
+          !showRequestModal
+        ) {
+          processNextRequest();
+        }
+      }, 500);
     } catch (error) {
       console.error('Error accepting ride:', error);
       Alert.alert('Error', 'Failed to accept ride. Please try again.');
@@ -593,17 +669,28 @@ const DriverHome = () => {
 
   // Decline ride request
   const handleDeclineRequest = () => {
-    if (pendingRequest) {
-      SocketService.emit('ride_declined', {rideId: pendingRequest._id});
+    if (currentRequest) {
+      SocketService.emit('ride_declined', {rideId: currentRequest._id});
+      removeFromRequestQueue(currentRequest._id);
     }
 
-    setPendingRequest(null);
+    setCurrentRequest(null);
     setShowRequestModal(false);
 
     if (requestTimer) {
       clearTimeout(requestTimer);
       setRequestTimer(null);
     }
+    // Use a longer delay to prevent rapid successive requests
+    setTimeout(() => {
+      if (
+        requestQueueRef.current.length > 0 &&
+        !currentRequest &&
+        !showRequestModal
+      ) {
+        processNextRequest();
+      }
+    }, 500);
   };
 
   // Calculate route
@@ -800,28 +887,35 @@ const DriverHome = () => {
           <Card.Content>
             <View style={styles.requestHeader}>
               <Title>New Ride Request</Title>
-              <Badge
-                style={styles.timerBadge}>{`${requestTimeRemaining}s`}</Badge>
+              <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                {requestQueue.length > 1 && (
+                  <Badge style={{backgroundColor: '#e74c3c', marginRight: 8}}>
+                    {`${requestQueue.length} pending`}
+                  </Badge>
+                )}
+                <Badge
+                  style={styles.timerBadge}>{`${requestTimeRemaining}s`}</Badge>
+              </View>
             </View>
 
-            {pendingRequest && (
+            {currentRequest && (
               <>
                 <View style={styles.passengerInfo}>
                   <Avatar.Image
                     size={50}
                     source={
-                      pendingRequest.passenger.profileImage
-                        ? {uri: pendingRequest.passenger.profileImage}
+                      currentRequest.passenger.profileImage
+                        ? {uri: currentRequest.passenger.profileImage}
                         : require('../assets/images/avatar-default-icon.png')
                     }
                   />
                   <View style={styles.passengerDetails}>
                     <Text style={styles.passengerName}>
-                      {getFullName(pendingRequest.passenger)}
+                      {getFullName(currentRequest.passenger)}
                     </Text>
                     <View style={styles.ratingContainer}>
                       <Icon name="star" size={16} color="#f39c12" />
-                      <Text>{pendingRequest.passenger.rating.toFixed(1)}</Text>
+                      <Text>{currentRequest.passenger.rating.toFixed(1)}</Text>
                     </View>
                   </View>
                 </View>
@@ -832,14 +926,14 @@ const DriverHome = () => {
                   <View style={styles.locationItem}>
                     <Icon name="map-marker" size={20} color="#3498db" />
                     <Text style={styles.locationText} numberOfLines={2}>
-                      {pendingRequest.pickupLocation.address}
+                      {currentRequest.pickupLocation.address}
                     </Text>
                   </View>
 
                   <View style={styles.locationItem}>
                     <Icon name="flag-checkered" size={20} color="#e74c3c" />
                     <Text style={styles.locationText} numberOfLines={2}>
-                      {pendingRequest.destinationLocation.address}
+                      {currentRequest.destinationLocation.address}
                     </Text>
                   </View>
 
@@ -847,19 +941,19 @@ const DriverHome = () => {
                     <View style={styles.tripInfoItem}>
                       <Icon name="map-marker-distance" size={16} color="#666" />
                       <Text style={styles.tripInfoText}>
-                        {pendingRequest.estimatedDistance.toFixed(1)} km
+                        {currentRequest.estimatedDistance.toFixed(1)} km
                       </Text>
                     </View>
                     <View style={styles.tripInfoItem}>
                       <Icon name="clock-outline" size={16} color="#666" />
                       <Text style={styles.tripInfoText}>
-                        {pendingRequest.estimatedDuration} min
+                        {currentRequest.estimatedDuration} min
                       </Text>
                     </View>
                     <View style={styles.tripInfoItem}>
                       <Icon name="currency-php" size={16} color="#27ae60" />
                       <Text style={styles.tripInfoText}>
-                        ₱{pendingRequest.price}
+                        ₱{currentRequest.price}
                       </Text>
                     </View>
                   </View>

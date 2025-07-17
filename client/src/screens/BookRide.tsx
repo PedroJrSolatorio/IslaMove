@@ -1487,7 +1487,7 @@ const BookRide = () => {
     setRideStatus('confirming_booking');
     try {
       const response = await api.post(`/api/rides/${rideIdToCancel}/cancel`, {
-        reason: 'No drivers available - timeout',
+        reason: 'Changed my mind',
       });
       return true;
     } catch (error) {
