@@ -798,10 +798,6 @@ export const getRideHistory = async (req, res) => {
 };
 
 export const createRideRequest = async (req, res) => {
-  console.log("=== RIDE REQUEST DEBUG ===");
-  console.log("Request body:", JSON.stringify(req.body, null, 2));
-  console.log("User ID:", req.user?.id);
-
   try {
     const {
       pickupLocation,
@@ -819,14 +815,6 @@ export const createRideRequest = async (req, res) => {
       passengerAge,
       paymentMethod = "cash",
     } = req.body;
-
-    console.log("Received ride request:", {
-      fromZone,
-      toZone,
-      passengerId: req.user.id,
-      estimatedDistance,
-      estimatedDuration,
-    });
 
     const passengerId = req.user.id;
 

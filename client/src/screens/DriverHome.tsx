@@ -54,6 +54,8 @@ interface Location {
   type: string;
   coordinates: [number, number];
   address: string;
+  mainText?: string; // Optional for better UI
+  secondaryText?: string;
 }
 
 interface Passenger {
@@ -943,7 +945,12 @@ const DriverHome = () => {
                   <View style={styles.locationItem}>
                     <Icon name="flag-checkered" size={20} color="#e74c3c" />
                     <Text style={styles.locationText} numberOfLines={2}>
-                      {currentRequest.destinationLocation.address}
+                      {`${currentRequest.destinationLocation?.mainText || ''}${
+                        currentRequest.destinationLocation?.secondaryText
+                          ? ', ' +
+                            currentRequest.destinationLocation.secondaryText
+                          : ''
+                      }`}
                     </Text>
                   </View>
 
@@ -1027,7 +1034,11 @@ const DriverHome = () => {
           <View style={styles.locationItem}>
             <Icon name="flag-checkered" size={16} color="#e74c3c" />
             <Text style={styles.locationText} numberOfLines={1}>
-              {ride.destinationLocation.address}
+              {`${ride.destinationLocation?.mainText || ''}${
+                ride.destinationLocation?.secondaryText
+                  ? ', ' + ride.destinationLocation.secondaryText
+                  : ''
+              }`}
             </Text>
           </View>
         </View>

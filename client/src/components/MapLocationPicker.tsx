@@ -15,7 +15,6 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import MapTypeSelector from './MapTypeSelector';
 import {styles} from '../styles/MapLocationPickerStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import debounce from 'lodash/debounce';
 import {useGeocoding} from '../hooks/useGeocoding';
 
 interface Location {
@@ -24,12 +23,6 @@ interface Location {
   address: string;
   mainText?: string;
   secondaryText?: string;
-}
-
-interface AddressComponent {
-  long_name: string;
-  short_name: string;
-  types: string[];
 }
 
 const MapLocationPicker = () => {

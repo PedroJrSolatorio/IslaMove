@@ -34,8 +34,6 @@ import {useAuth} from '../context/AuthContext';
 import {isPassengerProfile, useProfile} from '../context/ProfileContext';
 import LocationSearchModal from '../components/LocationSearchModal';
 import MapTypeSelector from '../components/MapTypeSelector';
-import DriverSearchingModal from '../components/DriverSearchingModal';
-import DriverDetailsModal from '../components/DriverDetailsModal';
 import PassengerRatingModal from '../components/PassengerRatingModal';
 import SocketService from '../services/SocketService';
 import {styles} from '../styles/BookRideStyles';
@@ -1121,6 +1119,8 @@ const BookRide = () => {
           type: 'Point',
           coordinates: destination.coordinates,
           address: destination.address,
+          mainText: destination.mainText,
+          secondaryText: destination.secondaryText,
         },
         fromZone: fromZone._id,
         toZone: toZone._id,
@@ -1589,7 +1589,13 @@ const BookRide = () => {
                   <View style={styles.locationSummaryItem}>
                     <Icon name="flag-checkered" size={20} color="#e74c3c" />
                     <Text style={styles.locationSummaryText} numberOfLines={1}>
-                      {destination?.address}
+                      {destination
+                        ? `${destination.mainText}${
+                            destination.secondaryText
+                              ? ', ' + destination.secondaryText
+                              : ''
+                          }`
+                        : ''}
                     </Text>
                   </View>
                 </View>
@@ -1813,7 +1819,13 @@ const BookRide = () => {
                   <View style={styles.locationSummaryItem}>
                     <Icon name="flag-checkered" size={20} color="#e74c3c" />
                     <Text style={styles.locationSummaryText} numberOfLines={1}>
-                      {destination?.address}
+                      {destination
+                        ? `${destination.mainText}${
+                            destination.secondaryText
+                              ? ', ' + destination.secondaryText
+                              : ''
+                          }`
+                        : ''}
                     </Text>
                   </View>
                 </View>
