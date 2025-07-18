@@ -145,6 +145,25 @@ const rideSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    driverQueue: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    currentDriverIndex: {
+      type: Number,
+      default: 0,
+    },
+    lastNotificationTime: {
+      type: Date,
+    },
+    skippedDrivers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );

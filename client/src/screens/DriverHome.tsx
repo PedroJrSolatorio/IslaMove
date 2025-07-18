@@ -97,9 +97,6 @@ const DriverHome = () => {
   const [driverStatus, setDriverStatus] = useState<DriverStatus>('offline');
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [activeRides, setActiveRides] = useState<RideRequest[]>([]);
-  const [pendingRequest, setPendingRequest] = useState<RideRequest | null>(
-    null,
-  );
   const [requestQueue, setRequestQueue] = useState<RideRequest[]>([]);
   const [currentRequest, setCurrentRequest] = useState<RideRequest | null>(
     null,
@@ -399,20 +396,33 @@ const DriverHome = () => {
 
     SocketService.on('ride_request', (request: RideRequest) => {
       console.log('Received new ride request:', request);
+
+      // Only handle request if driver is available and not at max passengers
       if (
         driverStatusRef.current === 'available' &&
-        activeRidesRef.current.length < MAX_PASSENGERS
+        activeRidesRef.current.length < MAX_PASSENGERS &&
+        !currentRequest // Ensure no active request modal
       ) {
         Vibration.vibrate(1000);
         SoundUtils.playDing();
-        addToRequestQueue(request);
-        console.log('Added ride request to queue:', request._id);
-      } else {
-        console.log('Driver not available for new rides:', {
-          driverStatus: driverStatusRef.current,
-          activeRidesCount: activeRidesRef.current.length,
-          maxPassengers: MAX_PASSENGERS,
-        });
+        setCurrentRequest(request);
+        setShowRequestModal(true);
+        setRequestTimeRemaining(20);
+
+        // Start countdown timer
+        const timer = setInterval(() => {
+          setRequestTimeRemaining(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              handleDeclineRequest();
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+
+        setRequestTimer(timer);
+        requestTimerRef.current = timer;
       }
     });
 

@@ -297,113 +297,213 @@ const findNearbyDrivers = async (pickupLocation, maxDistance = 500) => {
 // Notify drivers about ride request
 const notifyDriversAboutRide = async (ride) => {
   let io;
-
   try {
     io = getIO();
   } catch (socketError) {
     console.error("Socket.io not initialized:", socketError.message);
-    // Continue without socket notifications for now
-    console.log("Continuing without real-time notifications...");
+    return false;
   }
 
-  let maxRadius = 500; // Start with 500 meters
-  const maxAllowedRadius = 800; // Maximum 800 meters
-  const radiusIncrement = 100; // Increase by 100 meters each time
+  const nearbyDrivers = await findNearbyDrivers(ride.pickupLocation, 500);
 
-  while (maxRadius <= maxAllowedRadius) {
-    console.log(`Searching for drivers within ${maxRadius} meters...`);
+  if (nearbyDrivers.length === 0) {
+    console.log("No nearby drivers found");
+    return false;
+  }
 
-    const nearbyDrivers = await findNearbyDrivers(
-      ride.pickupLocation,
-      maxRadius
-    );
+  // Sort drivers by rating and experience
+  const sortedDrivers = nearbyDrivers.sort((a, b) => {
+    if (b.rating !== a.rating) return b.rating - a.rating;
+    return b.totalRides - a.totalRides;
+  });
 
-    if (nearbyDrivers.length > 0) {
-      console.log(
-        `Found ${nearbyDrivers.length} drivers within ${maxRadius} meters`
-      );
+  // Find the first available driver who isn't handling a request
+  let selectedDriver = null;
+  for (const driver of sortedDrivers) {
+    const hasActiveRequest = await Ride.findOne({
+      status: "requested",
+      driverQueue: driver._id,
+      lastNotificationTime: {
+        $gt: new Date(Date.now() - 20000), // Check if driver has an active request in last 20 seconds
+      },
+    });
 
-      // Sort drivers by rating (descending) and total rides (descending)
-      const sortedDrivers = nearbyDrivers.sort((a, b) => {
-        if (b.rating !== a.rating) {
-          return b.rating - a.rating; // Higher rating first
-        }
-        return b.totalRides - a.totalRides; // More experienced first
-      });
-
-      // Notify the best driver first
-      const bestDriver = sortedDrivers[0];
-      console.log(
-        `Notifying best driver: ${bestDriver.firstName} ${bestDriver.lastName} (Rating: ${bestDriver.rating})`
-      );
-
-      // Only emit if socket is available
-      if (io) {
-        try {
-          io.to(`user_${bestDriver._id}`).emit("ride_request", {
-            ...ride.toObject(),
-            passenger: {
-              _id: ride.passenger._id,
-              firstName: ride.passenger.firstName,
-              lastName: ride.passenger.lastName,
-              middleInitial: ride.passenger.middleInitial,
-              profileImage: ride.passenger.profileImage,
-              phoneNumber: ride.passenger.phoneNumber,
-              rating: ride.passenger.rating,
-            },
-          });
-          console.log(`Socket notification sent to driver: ${bestDriver._id}`);
-        } catch (emitError) {
-          console.error("Error emitting to driver:", emitError);
-        }
-      } else {
-        console.log("Socket not available - driver notification skipped");
-      }
-
-      // Set a timeout to notify the next driver if the first one doesn't respond
-      setTimeout(async () => {
-        const rideCheck = await Ride.findById(ride._id);
-        if (rideCheck && rideCheck.status === "requested") {
-          // If ride is still not accepted, notify other drivers
-          for (let i = 1; i < Math.min(sortedDrivers.length, 3); i++) {
-            const driver = sortedDrivers[i];
-            if (io) {
-              try {
-                io.to(`user_${driver._id}`).emit("ride_request", {
-                  ...ride.toObject(),
-                  passenger: {
-                    _id: ride.passenger._id,
-                    firstName: ride.passenger.firstName,
-                    lastName: ride.passenger.lastName,
-                    middleInitial: ride.passenger.middleInitial,
-                    profileImage: ride.passenger.profileImage,
-                    phoneNumber: ride.passenger.phoneNumber,
-                    rating: ride.passenger.rating,
-                  },
-                });
-                console.log(
-                  `Backup notification sent to driver: ${driver._id}`
-                );
-              } catch (emitError) {
-                console.error("Error emitting to backup driver:", emitError);
-              }
-            }
-          }
-        }
-      }, 15000); // Wait 15 seconds before notifying other drivers
-
-      return true; // Found drivers, stop searching
+    if (!hasActiveRequest) {
+      selectedDriver = driver;
+      break;
     }
-
-    // No drivers found, increase radius
-    maxRadius += radiusIncrement;
-    console.log(`No drivers found, increasing radius to ${maxRadius} meters`);
   }
 
-  console.log(
-    `No drivers found within maximum radius of ${maxAllowedRadius} meters`
-  );
-  return false;
+  if (!selectedDriver) {
+    console.log("No available drivers without active requests");
+    return false;
+  }
+
+  // Update ride with selected driver
+  await Ride.findByIdAndUpdate(ride._id, {
+    driverQueue: [selectedDriver._id],
+    currentDriverIndex: 0,
+    lastNotificationTime: new Date(),
+  });
+
+  // Notify the selected driver
+  io.to(`user_${selectedDriver._id}`).emit("ride_request", {
+    ...ride.toObject(),
+    passenger: {
+      _id: ride.passenger._id,
+      firstName: ride.passenger.firstName,
+      lastName: ride.passenger.lastName,
+      middleInitial: ride.passenger.middleInitial,
+      profileImage: ride.passenger.profileImage,
+      phoneNumber: ride.passenger.phoneNumber,
+      rating: ride.passenger.rating || 0,
+    },
+  });
+
+  // Set timeout to move to next driver if no response
+  setTimeout(async () => {
+    const updatedRide = await Ride.findById(ride._id);
+    if (updatedRide && updatedRide.status === "requested") {
+      notifyNextDriver(updatedRide, selectedDriver._id);
+    }
+  }, 20000);
+
+  return true;
+};
+
+// helper function to notify the next driver
+const notifyNextDriver = async (ride, lastDriverId) => {
+  const io = getIO();
+
+  // Find next best available driver
+  const nearbyDrivers = await findNearbyDrivers(ride.pickupLocation, 500);
+  const sortedDrivers = nearbyDrivers
+    .filter((d) => d._id.toString() !== lastDriverId.toString())
+    .sort((a, b) => {
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      return b.totalRides - a.totalRides;
+    });
+
+  // Find first driver without active request
+  let nextDriver = null;
+  for (const driver of sortedDrivers) {
+    const hasActiveRequest = await Ride.findOne({
+      status: "requested",
+      driverQueue: driver._id,
+      lastNotificationTime: {
+        $gt: new Date(Date.now() - 20000),
+      },
+    });
+
+    if (!hasActiveRequest) {
+      nextDriver = driver;
+      break;
+    }
+  }
+
+  if (nextDriver) {
+    // Update ride with new driver
+    await Ride.findByIdAndUpdate(ride._id, {
+      driverQueue: [nextDriver._id],
+      lastNotificationTime: new Date(),
+      $addToSet: { skippedDrivers: lastDriverId },
+    });
+
+    // Notify new driver
+    io.to(`user_${nextDriver._id}`).emit("ride_request", {
+      ...ride.toObject(),
+      passenger: {
+        _id: ride.passenger._id,
+        firstName: ride.passenger.firstName,
+        lastName: ride.passenger.lastName,
+        middleInitial: ride.passenger.middleInitial,
+        profileImage: ride.passenger.profileImage,
+        phoneNumber: ride.passenger.phoneNumber,
+        rating: ride.passenger.rating || 0,
+      },
+    });
+
+    // Set timeout for next driver
+    setTimeout(async () => {
+      const currentRide = await Ride.findById(ride._id);
+      if (currentRide && currentRide.status === "requested") {
+        notifyNextDriver(currentRide, nextDriver._id);
+      }
+    }, 20000);
+  } else {
+    // No more available drivers
+    await Ride.findByIdAndUpdate(ride._id, {
+      status: "cancelled",
+      cancellationReason: "No available drivers",
+      cancellationInitiator: "system",
+      cancellationTime: new Date(),
+    });
+
+    io.to(`user_${ride.passenger}`).emit("ride_cancelled", {
+      rideId: ride._id,
+      reason: "No available drivers at this time",
+      initiator: "system",
+    });
+  }
+};
+
+// function to handle when a driver doesn't respond
+const handleNoResponse = async (ride, currentDriverId) => {
+  const io = getIO();
+  const nextIndex = ride.currentDriverIndex + 1;
+
+  if (nextIndex < ride.driverQueue.length) {
+    const nextDriverId = ride.driverQueue[nextIndex];
+
+    // Update ride with next driver
+    await Ride.findByIdAndUpdate(ride._id, {
+      currentDriverIndex: nextIndex,
+      lastNotificationTime: new Date(),
+      $addToSet: { skippedDrivers: currentDriverId },
+    });
+
+    // Send "ride_taken" to previous driver to clear their request
+    io.to(`user_${currentDriverId}`).emit("ride_taken", {
+      rideId: ride._id,
+    });
+
+    // Notify the next driver
+    io.to(`user_${nextDriverId}`).emit("ride_request", {
+      ...ride.toObject(),
+      passenger: {
+        _id: ride.passenger._id,
+        firstName: ride.passenger.firstName,
+        lastName: ride.passenger.lastName,
+        middleInitial: ride.passenger.middleInitial,
+        profileImage: ride.passenger.profileImage,
+        phoneNumber: ride.passenger.phoneNumber,
+        rating: ride.passenger.rating || 0,
+      },
+    });
+
+    // Set another timeout for the next driver
+    setTimeout(async () => {
+      const currentRide = await Ride.findById(ride._id);
+      if (currentRide && currentRide.status === "requested") {
+        handleNoResponse(currentRide, nextDriverId);
+      }
+    }, 22000);
+  } else {
+    // No more drivers in queue
+    await Ride.findByIdAndUpdate(ride._id, {
+      status: "cancelled",
+      cancellationReason: "No available drivers",
+      cancellationInitiator: "system",
+      cancellationTime: new Date(),
+    });
+
+    // Notify passenger that no drivers are available
+    io.to(`user_${ride.passenger}`).emit("ride_cancelled", {
+      rideId: ride._id,
+      reason: "No available drivers at this time",
+      initiator: "system",
+    });
+  }
 };
 
 // Cancel a ride
