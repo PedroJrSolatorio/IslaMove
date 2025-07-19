@@ -724,7 +724,7 @@ export const googleSignup = async (req, res) => {
       });
     }
 
-    // --- NEW LOGIC: Auto-generate a unique username for new Google users ---
+    // Auto-generate a unique username for new Google users
     let generatedUsername;
     let counter = 0;
     let isUnique = false;
@@ -761,7 +761,6 @@ export const googleSignup = async (req, res) => {
     console.log(
       `Auto-generated username for new Google signup: ${generatedUsername}`
     );
-    // --- END NEW LOGIC ---
 
     // Create new user with Google info (minimal required fields only)
     const user = await User.create({

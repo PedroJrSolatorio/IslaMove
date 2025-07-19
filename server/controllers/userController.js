@@ -3,6 +3,12 @@ import Ride from "../models/Ride.js";
 import UserAgreement from "../models/UserAgreement.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const getUserByEmail = async (req, res) => {
   try {
@@ -532,48 +538,6 @@ export const removeAddress = async (req, res) => {
   }
 };
 
-// Request account deletion
-// export const requestAccountDeletion = async (req, res) => {
-//   try {
-//     const userId = req.params.id;
-//     const { reason } = req.body;
-
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ error: "User not found" });
-//     }
-
-//     // Check if deletion is already requested
-//     if (user.deletionRequested) {
-//       return res.status(400).json({
-//         error: "Account deletion already requested",
-//         scheduledFor: user.deletionScheduledFor,
-//       });
-//     }
-
-//     // Set deletion request
-//     const deletionDate = new Date();
-//     deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
-
-//     user.deletionRequested = true;
-//     user.deletionRequestedAt = new Date();
-//     user.deletionScheduledFor = deletionDate;
-//     user.deletionReason = reason || "User requested deletion";
-
-//     await user.save();
-
-//     res.json({
-//       message: "Account deletion requested successfully",
-//       scheduledFor: deletionDate,
-//       daysRemaining: 30,
-//       note: "Your account will be permanently deleted in 30 days. You can cancel this request by logging in before the deletion date.",
-//     });
-//   } catch (error) {
-//     console.error("Error requesting account deletion:", error);
-//     res.status(500).json({ error: "Failed to request account deletion" });
-//   }
-// };
-
 // Verify account deletion with password/Google
 export const verifyAccountDeletion = async (req, res) => {
   try {
@@ -585,9 +549,20 @@ export const verifyAccountDeletion = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if user already has a pending deletion
+    if (user.deletionRequested) {
+      const daysRemaining = Math.ceil(
+        (user.deletionScheduledFor - new Date()) / (1000 * 60 * 60 * 24)
+      );
+      return res.status(400).json({
+        error: "Account deletion already requested",
+        scheduledFor: user.deletionScheduledFor,
+        daysRemaining: Math.max(0, daysRemaining),
+      });
+    }
+
     // Verify authentication
     if (user.isGoogleUser) {
-      // Verify Google ID token
       if (!googleIdToken) {
         return res.status(400).json({
           error: "Google authentication required",
@@ -596,7 +571,7 @@ export const verifyAccountDeletion = async (req, res) => {
       }
 
       try {
-        // Verify Google ID token (you'll need to implement this)
+        // Verify Google ID token
         const payload = jwt.decode(googleIdToken);
         if (!payload || payload.email !== user.email) {
           return res
@@ -607,7 +582,6 @@ export const verifyAccountDeletion = async (req, res) => {
         return res.status(400).json({ error: "Invalid Google authentication" });
       }
     } else {
-      // Verify password
       if (!password) {
         return res.status(400).json({
           error: "Password required",
@@ -621,15 +595,15 @@ export const verifyAccountDeletion = async (req, res) => {
       }
     }
 
-    // Set deletion request
+    // Set deletion request with 30-day grace period
     const deletionDate = new Date();
-    // deletionDate.setDate(deletionDate.getDate() + 30);
+    // deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
     deletionDate.setDate(deletionDate.getDate() + 1); // test delete after 1 day
 
     user.deletionRequested = true;
     user.deletionRequestedAt = new Date();
     user.deletionScheduledFor = deletionDate;
-    user.deletionReason = reason || "User verified deletion";
+    user.deletionReason = reason || "User requested account deletion";
 
     await user.save();
 
@@ -637,7 +611,7 @@ export const verifyAccountDeletion = async (req, res) => {
       message: "Account deletion verified and scheduled",
       scheduledFor: deletionDate,
       daysRemaining: 30,
-      note: "Your account will be permanently deleted in 30 days. You can cancel this by logging in before the deletion date.",
+      note: "Your account will be permanently deleted in 30 days. You can cancel this by logging in before the deletion date. All your data will be permanently removed.",
     });
   } catch (error) {
     console.error("Error verifying account deletion:", error);
@@ -660,12 +634,14 @@ export const processScheduledDeletions = async () => {
 
     for (const user of usersToDelete) {
       try {
-        // Delete user's related data (rides, ratings, etc.)
         console.log(
           `Starting deletion process for user: ${user.email} (${user._id})`
         );
 
-        // 1. Delete user's rides (as passenger and driver)
+        // 1. Delete user's profile and document images
+        await deleteUserFiles(user);
+
+        // 2. Delete user's rides (as passenger and driver)
         const ridesDeleted = await Ride.deleteMany({
           $or: [{ passenger: user._id }, { driver: user._id }],
         });
@@ -673,7 +649,10 @@ export const processScheduledDeletions = async () => {
           `Deleted ${ridesDeleted.deletedCount} rides for user ${user._id}`
         );
 
-        // 2. Delete user agreements
+        // 3. Remove user from ride queues and update ride references
+        await cleanupRideReferences(user._id);
+
+        // 4. Delete user agreements
         const agreementsDeleted = await UserAgreement.deleteMany({
           userId: user._id,
         });
@@ -681,12 +660,12 @@ export const processScheduledDeletions = async () => {
           `Deleted ${agreementsDeleted.deletedCount} user agreements for user ${user._id}`
         );
 
-        // Delete the user
+        // 5. Delete the user
         await User.findByIdAndDelete(user._id);
-
-        console.log(`Deleted user: ${user.email} (${user._id})`);
+        console.log(`Successfully deleted user: ${user.email} (${user._id})`);
       } catch (error) {
         console.error(`Failed to delete user ${user._id}:`, error);
+        // Continue with other users even if one fails
       }
     }
     if (usersToDelete.length > 0) {
@@ -699,39 +678,106 @@ export const processScheduledDeletions = async () => {
   }
 };
 
-// Cancel account deletion
-export const cancelAccountDeletion = async (req, res) => {
+// Helper function to delete user files (photos and documents)
+const deleteUserFiles = async (user) => {
+  const filesToDelete = [];
+
   try {
-    const userId = req.params.id;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    // 1. Current profile image
+    if (user.profileImage) {
+      const profileImagePath = extractFilePath(user.profileImage);
+      if (profileImagePath) {
+        filesToDelete.push(profileImagePath);
+      }
     }
 
-    if (!user.deletionRequested) {
-      return res.status(400).json({ error: "No deletion request found" });
+    // 2. Pending profile image
+    if (user.pendingProfileImage && user.pendingProfileImage.imageUrl) {
+      const pendingImagePath = extractFilePath(
+        user.pendingProfileImage.imageUrl
+      );
+      if (pendingImagePath) {
+        filesToDelete.push(pendingImagePath);
+      }
     }
 
-    // Cancel deletion request
-    user.deletionRequested = false;
-    user.deletionRequestedAt = undefined;
-    user.deletionScheduledFor = undefined;
-    user.deletionReason = undefined;
+    // 3. ID document image
+    if (user.idDocument && user.idDocument.imageUrl) {
+      const idDocPath = extractFilePath(user.idDocument.imageUrl);
+      if (idDocPath) {
+        filesToDelete.push(idDocPath);
+      }
+    }
 
-    await user.save();
+    // 4. Driver documents (if user is a driver)
+    if (user.role === "driver" && user.documents && user.documents.length > 0) {
+      user.documents.forEach((doc) => {
+        if (doc.fileURL) {
+          const docPath = extractFilePath(doc.fileURL);
+          if (docPath) {
+            filesToDelete.push(docPath);
+          }
+        }
+      });
+    }
 
-    res.json({
-      message: "Account deletion cancelled successfully",
-      user: {
-        _id: user._id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      },
-    });
+    // Delete all collected files
+    for (const filePath of filesToDelete) {
+      try {
+        const fullPath = path.join(__dirname, "..", filePath);
+        if (fs.existsSync(fullPath)) {
+          await fs.promises.unlink(fullPath);
+          console.log(`Deleted file: ${filePath}`);
+        }
+      } catch (fileError) {
+        console.error(`Failed to delete file ${filePath}:`, fileError);
+        // Continue with other files
+      }
+    }
+
+    console.log(`Deleted ${filesToDelete.length} files for user ${user._id}`);
   } catch (error) {
-    console.error("Error cancelling account deletion:", error);
-    res.status(500).json({ error: "Failed to cancel account deletion" });
+    console.error(`Error deleting files for user ${user._id}:`, error);
+  }
+};
+
+// Helper function to extract file path from URL
+const extractFilePath = (fileUrl) => {
+  if (!fileUrl) return null;
+
+  try {
+    // Extract the path after the domain
+    // e.g., "http://localhost:5000/uploads/profiles/123456.jpg" -> "uploads/profiles/123456.jpg"
+    const url = new URL(fileUrl);
+    return url.pathname.startsWith("/")
+      ? url.pathname.substring(1)
+      : url.pathname;
+  } catch (error) {
+    console.error(`Invalid file URL: ${fileUrl}`, error);
+    return null;
+  }
+};
+
+// Helper function to clean up ride references
+const cleanupRideReferences = async (userId) => {
+  try {
+    // Remove user from driver queues in active rides
+    await Ride.updateMany(
+      { driverQueue: userId },
+      { $pull: { driverQueue: userId } }
+    );
+
+    // Remove user from skipped drivers in active rides
+    await Ride.updateMany(
+      { skippedDrivers: userId },
+      { $pull: { skippedDrivers: userId } }
+    );
+
+    console.log(`Cleaned up ride references for user ${userId}`);
+  } catch (error) {
+    console.error(
+      `Error cleaning up ride references for user ${userId}:`,
+      error
+    );
   }
 };

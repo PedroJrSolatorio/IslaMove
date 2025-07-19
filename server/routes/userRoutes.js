@@ -12,8 +12,6 @@ import {
   addNewAddress,
   updateAddresses,
   removeAddress,
-  // requestAccountDeletion,
-  cancelAccountDeletion,
   verifyAccountDeletion,
 } from "../controllers/userController.js";
 import { auth } from "../middleware/auth.js";
@@ -58,8 +56,6 @@ router.post(
   auth,
   uploadProfileImage
 );
-// router.post("/request-deletion/:id", auth, requestAccountDeletion);
-router.post("/cancel-deletion/:id", auth, cancelAccountDeletion);
 router.post("/verify-deletion/:id", auth, verifyAccountDeletion);
 
 export default router;
