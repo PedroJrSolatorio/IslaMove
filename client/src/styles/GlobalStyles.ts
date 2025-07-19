@@ -21,18 +21,30 @@ export const GlobalStyles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    backgroundColor: '#007bff',
-    paddingVertical: Spacing.small,
-    paddingHorizontal: Spacing.medium,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 16,
+    paddingHorizontal: Spacing.medium,
+    paddingTop: Spacing.large + 10, // Adjust for status bar and padding
+    paddingBottom: Spacing.small,
+    backgroundColor: Colors.background, // Match background for a seamless look
+    borderBottomWidth: 0, // No border for clean look
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1, // prevent it from overflowing the header width
   },
   headerTitle: {
     color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
+  },
+  headerDivider: {
+    height: 2,
+    backgroundColor: Colors.lightGray,
+    width: '100%',
+    marginTop: 10,
   },
   loadingContainer: {
     flex: 1,

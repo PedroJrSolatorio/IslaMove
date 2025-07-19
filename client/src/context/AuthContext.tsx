@@ -10,7 +10,6 @@ import axios from 'axios';
 import {BACKEND_URL} from '@env';
 import DeviceInfo from 'react-native-device-info';
 import SocketService from '../services/SocketService';
-import {Alert} from 'react-native';
 import Toast from 'react-native-toast-message';
 
 type Role = 'admin' | 'driver' | 'passenger' | null;

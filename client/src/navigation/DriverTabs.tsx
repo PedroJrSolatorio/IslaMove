@@ -24,7 +24,7 @@ const DriverTabs = () => {
         }}
       />
       <Tab.Screen
-        name="Profile"
+        name="Account"
         component={DriverProfile}
         options={{
           tabBarIcon: ({color, size}) => (

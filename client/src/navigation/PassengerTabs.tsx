@@ -24,7 +24,7 @@ const PassengerTabs = () => {
         }}
       />
       <Tab.Screen
-        name="Profile"
+        name="Account"
         component={PassengerProfile}
         options={{
           tabBarIcon: ({color, size}) => (

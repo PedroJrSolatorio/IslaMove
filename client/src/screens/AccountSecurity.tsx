@@ -18,9 +18,6 @@ import {
   TextInput,
   List,
 } from 'react-native-paper';
-import {useNavigation} from '@react-navigation/native';
-import {NativeStackNavigationProp} from '@react-navigation/native-stack';
-import {RootStackParamList} from '../navigation/types';
 import {
   GoogleSignin,
   statusCodes,
@@ -31,10 +28,7 @@ import {useProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import api from '../../utils/api';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-const SettingsScreen = () => {
-  const navigation = useNavigation<NavigationProp>();
+const AccountSecurity = () => {
   const {
     profileData,
     updatePassword,
@@ -475,7 +469,7 @@ const SettingsScreen = () => {
 
       <Card style={TabsStyles.sectionCard}>
         <Card.Content>
-          <Title>Legal</Title>
+          <Title>Terms & Policies</Title>
           <Divider style={TabsStyles.divider} />
           <Button
             mode="text"
@@ -698,4 +692,4 @@ const settingsStyles = StyleSheet.create({
   },
 });
 
-export default SettingsScreen;
+export default AccountSecurity;

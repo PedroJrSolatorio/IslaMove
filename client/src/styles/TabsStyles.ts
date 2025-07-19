@@ -5,39 +5,86 @@ import {Spacing} from './Spacing';
 
 export const TabsStyles = StyleSheet.create({
   profileCard: {
-    margin: 16,
-    elevation: 4,
+    marginHorizontal: Spacing.medium,
+    marginTop: Spacing.medium,
+    marginBottom: Spacing.medium,
+    borderRadius: 12,
+    elevation: 2, // Subtle shadow
+    backgroundColor: Colors.lightText,
   },
   profileContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: Spacing.medium,
+    paddingHorizontal: Spacing.medium,
   },
-  avatarContainer: {
+  avatarContainerModern: {
     position: 'relative',
-    marginRight: 16,
+    marginRight: Spacing.medium,
+    borderRadius: 50, // Half of size to make it circular
+    overflow: 'hidden', // Ensures the image is clipped to the border radius
   },
   avatar: {
     backgroundColor: '#e0e0e0',
+  },
+  avatarLabel: {
+    fontSize: 28, // Adjust font size for initials
   },
   editAvatarOverlay: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#f39c12',
+    left: 0,
+    top: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Darker overlay for pending
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editAvatarIconContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.lightText,
     borderRadius: 15,
     padding: 5,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   editAvatarText: {
     color: 'white',
     fontSize: 12,
   },
+  editAvatarIconButton: {
+    // New style for the IconButton itself
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: Colors.lightText,
+    borderRadius: 20, // Make it circular (half of size + padding)
+    padding: 0, // IconButton has default padding, reset it
+    margin: 0, // Reset default margin
+    borderWidth: 1,
+    borderColor: Colors.border,
+    elevation: 2, // Optional: add a subtle shadow
+  },
+  fullNameText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: Colors.text,
+    marginBottom: 5,
+  },
   profileInfo: {
     flex: 1,
   },
   nameText: {
-    fontSize: 20,
+    fontSize: Fonts.size.large,
     fontWeight: 'bold',
-    marginBottom: 4,
+    color: Colors.text,
+  },
+  phoneTextModern: {
+    fontSize: Fonts.size.medium,
+    color: Colors.darkGray,
+    marginTop: 2,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -48,12 +95,19 @@ export const TabsStyles = StyleSheet.create({
     backgroundColor: 'transparent',
     marginRight: 4,
   },
+  ratingAndRides: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
   ratingText: {
-    fontWeight: 'bold',
+    fontSize: Fonts.size.small,
+    color: Colors.text,
     marginRight: 4,
   },
   rideCount: {
-    color: '#666',
+    fontSize: Fonts.size.small,
+    color: Colors.darkGray,
   },
   saveButton: {
     marginTop: 8,
@@ -70,9 +124,11 @@ export const TabsStyles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
     elevation: 2,
+    borderRadius: 8, // Added for modern look
   },
   divider: {
     marginVertical: 8,
+    backgroundColor: '#eee', // Lighter divider
   },
   infoRow: {
     marginVertical: 8,
@@ -87,6 +143,7 @@ export const TabsStyles = StyleSheet.create({
   input: {
     marginTop: 4,
     backgroundColor: 'white',
+    borderRadius: 8, // Added for modern look
   },
   inputContainer: {
     flexDirection: 'row',
@@ -112,6 +169,11 @@ export const TabsStyles = StyleSheet.create({
   defaultText: {
     color: '#007bff',
     fontWeight: 'bold',
+  },
+  noDocumentsText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: Colors.gray,
   },
   buttonContainer: {
     margin: 16,
@@ -261,12 +323,6 @@ export const TabsStyles = StyleSheet.create({
     fontSize: 12,
     color: '#757575',
   },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
   modalContainer: {
     backgroundColor: 'white',
     padding: 20,
@@ -294,6 +350,11 @@ export const TabsStyles = StyleSheet.create({
     fontSize: 16,
     marginVertical: 16,
   },
+  profileHeaderContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: Colors.background,
+  },
   addressButtonsContainer: {
     marginTop: 16,
     flexDirection: 'column',
@@ -304,8 +365,10 @@ export const TabsStyles = StyleSheet.create({
     borderColor: '#3498db',
     borderWidth: 1,
   },
-  saveAddressesButton: {
-    backgroundColor: '#3498db',
+  noAddressesText: {
+    textAlign: 'center',
+    marginTop: 20,
+    color: Colors.gray,
   },
   editButtonText: {
     color: '#3498db', // or use theme color
@@ -324,5 +387,53 @@ export const TabsStyles = StyleSheet.create({
     marginTop: -10, // Adjust spacing as needed
     marginBottom: 10,
     textAlign: 'center',
+  },
+
+  // List Item Styles for settings
+  listSection: {
+    marginHorizontal: Spacing.medium,
+    marginTop: Spacing.medium,
+    paddingVertical: 8,
+    borderRadius: 12,
+    elevation: 2,
+    backgroundColor: Colors.background,
+  },
+  listItem: {
+    paddingVertical: 0,
+  },
+  logoutListItem: {
+    backgroundColor: Colors.lightText,
+    marginHorizontal: Spacing.medium,
+    marginTop: Spacing.small,
+    paddingVertical: 8,
+    borderRadius: 12,
+    elevation: 2,
+    marginBottom: Spacing.medium,
+  },
+  logoutText: {
+    color: '#e74c3c',
+    fontWeight: 'bold',
+  },
+  imagePreviewContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  idDocumentImage: {
+    width: '100%',
+    height: 200,
+    resizeMode: 'contain',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  imageDisclaimer: {
+    fontSize: 12,
+    color: Colors.gray,
+    textAlign: 'center',
+    marginTop: 5,
+    paddingHorizontal: 10,
   },
 });
