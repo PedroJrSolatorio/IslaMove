@@ -1419,11 +1419,22 @@ export const logoutUser = async (req, res) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const userId = decoded.userId;
 
-      // Update user status to offline
-      await User.findByIdAndUpdate(userId, {
-        driverStatus: "offline",
-        activeRefreshTokens: [], // Clear all refresh tokens
-      });
+      const user = await User.findById(userId);
+
+      if (user) {
+        // Prepare update object based on user role
+        const updateObj = {
+          activeRefreshTokens: [], // Clear all refresh tokens for all users
+        };
+
+        // Only set driverStatus for drivers
+        if (user.role === "driver") {
+          updateObj.driverStatus = "offline";
+        }
+
+        // Update user with role-appropriate fields
+        await User.findByIdAndUpdate(userId, updateObj);
+      }
 
       // Get Socket.IO instance
       const io = getIO();
