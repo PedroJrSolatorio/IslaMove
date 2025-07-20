@@ -16,6 +16,7 @@ import MapTypeSelector from './MapTypeSelector';
 import {styles} from '../styles/MapLocationPickerStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useGeocoding} from '../hooks/useGeocoding';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface Location {
   type: string;
@@ -29,6 +30,7 @@ const MapLocationPicker = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const mapRef = useRef<MapView | null>(null);
+  const insets = useSafeAreaInsets();
 
   // Use the enhanced geocoding hook
   const {
@@ -212,10 +214,10 @@ const MapLocationPicker = () => {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, {paddingBottom: insets.bottom}]}>
       <TouchableOpacity
         onPress={() => navigation.goBack()}
-        style={styles.backButton}>
+        style={[styles.backButton, {top: insets.top + 30}]}>
         <Icon name="arrow-left" size={24} color="black" />
       </TouchableOpacity>
 
@@ -223,7 +225,10 @@ const MapLocationPicker = () => {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         mapType={mapType}
-        style={styles.map}
+        style={[
+          styles.map,
+          {paddingTop: insets.top, paddingBottom: insets.bottom},
+        ]}
         showsUserLocation={true}
         showsCompass={true}
         showsMyLocationButton={true}
@@ -253,13 +258,13 @@ const MapLocationPicker = () => {
       </MapView>
 
       <TouchableOpacity
-        style={styles.mapTypeButton}
+        style={[styles.mapTypeButton, {top: insets.top + 30}]}
         onPress={() => setShowMapTypeSelector(true)}>
         <Icon name="layers" size={24} color="#000" />
       </TouchableOpacity>
 
       {/* Instructions Card */}
-      <Card style={styles.instructionsCard}>
+      <Card style={[styles.instructionsCard, {top: insets.top + 20}]}>
         <Card.Content>
           <Title style={styles.instructionsTitle}>
             {preselectedLocation ? 'Confirm or Adjust' : 'Select Location'}
@@ -274,7 +279,8 @@ const MapLocationPicker = () => {
 
       {/* Selected Location Card */}
       {selectedLocation && (
-        <Card style={styles.selectedLocationCard}>
+        <Card
+          style={[styles.selectedLocationCard, {bottom: insets.bottom + 10}]}>
           <Card.Content>
             <View style={styles.selectedLocationContent}>
               <Icon name="map-marker" size={24} color="#e74c3c" />

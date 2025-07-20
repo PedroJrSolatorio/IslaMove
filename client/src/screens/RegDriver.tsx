@@ -9,6 +9,7 @@ import {
   Platform,
   PermissionsAndroid,
   Linking,
+  StatusBar,
 } from 'react-native';
 import {Button, ProgressBar, List, TextInput} from 'react-native-paper';
 import {
@@ -26,6 +27,7 @@ import {styles} from '../styles/RegistrationStyles';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {jwtDecode} from 'jwt-decode';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface CustomJwtPayload {
   isTemp?: boolean;
@@ -100,6 +102,7 @@ const RegisterDriverScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Check if user came from Google Sign-Up
   useEffect(() => {
@@ -1556,33 +1559,44 @@ const RegisterDriverScreen = () => {
   };
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
-      contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
-        <Text style={styles.title}>Register as Driver</Text>
+    <View style={{flex: 1}}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={[
+          styles.scrollContainer,
+          {paddingTop: insets.top + 15},
+        ]}>
+        <View style={styles.container}>
+          <Text style={styles.title}>Register as Driver</Text>
 
-        <View style={styles.progressContainer}>
-          <ProgressBar
-            progress={currentStep / totalSteps}
-            color="#3498db"
-            style={styles.progressBar}
-          />
-          <Text style={styles.progressText}>
-            Step {currentStep} of {totalSteps}
-          </Text>
+          <View style={styles.progressContainer}>
+            <ProgressBar
+              progress={currentStep / totalSteps}
+              color="#3498db"
+              style={styles.progressBar}
+            />
+            <Text style={styles.progressText}>
+              Step {currentStep} of {totalSteps}
+            </Text>
+          </View>
+
+          {renderStepContent()}
+
+          <Button
+            mode="text"
+            onPress={() => navigation.navigate('RegisterSelection')}
+            disabled={isLoading}>
+            Cancel Registration
+          </Button>
         </View>
-
-        {renderStepContent()}
-
-        <Button
-          mode="text"
-          onPress={() => navigation.navigate('RegisterSelection')}
-          disabled={isLoading}>
-          Cancel Registration
-        </Button>
-      </View>
-    </ScrollView>
+        <View style={{height: insets.bottom}} />
+      </ScrollView>
+    </View>
   );
 };
 

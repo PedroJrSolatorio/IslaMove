@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import {
   Card,
@@ -25,6 +26,7 @@ import {useAuth} from '../../context/AuthContext';
 import {launchCamera, CameraOptions} from 'react-native-image-picker';
 import {BACKEND_URL} from '@env';
 import {Colors} from '../../styles/Colors';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -32,7 +34,7 @@ const ProfileInfoScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {userToken} = useAuth();
   const {profileData, loading, updateProfile, refreshProfile} = useProfile();
-
+  const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -252,15 +254,22 @@ const ProfileInfoScreen = () => {
   }
 
   return (
-    <>
+    <View style={[GlobalStyles.container, {backgroundColor: '#F0F2F5'}]}>
+      {/* Outer View to handle full background */}
+      <StatusBar
+        barStyle="dark-content" // Adjust based on your header's background color
+        backgroundColor="transparent"
+        translucent={true}
+      />
       <View
         style={{
-          height: 60,
+          height: 75 + insets.top,
           backgroundColor: '#f8f8f8',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 16,
+          paddingTop: insets.top,
           position: 'relative',
         }}>
         <IconButton
@@ -274,6 +283,9 @@ const ProfileInfoScreen = () => {
             position: 'absolute',
             left: 0,
             right: 0,
+            top: insets.top,
+            bottom: 0,
+            justifyContent: 'center',
             alignItems: 'center',
           }}>
           <Text style={{fontSize: 20, fontWeight: 'bold'}}>Profile Info</Text>
@@ -456,8 +468,9 @@ const ProfileInfoScreen = () => {
             )}
           </Card.Content>
         </Card>
+        <View style={{height: insets.bottom}} />
       </ScrollView>
-    </>
+    </View>
   );
 };
 

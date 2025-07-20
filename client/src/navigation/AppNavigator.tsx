@@ -11,203 +11,163 @@ import {IconButton} from 'react-native-paper';
 import DriverProfileInfoScreen from '../screens/driverScreens/ProfileInfoScreen';
 import DriverVehicleDocumentsScreen from '../screens/driverScreens/DriverVehicleDocumentsScreen';
 import PassengerProfileInfoScreen from '../screens/passengerScreens/ProfileInfoScreen';
-import {Text, View} from 'react-native';
+import {StatusBar, Text, View} from 'react-native';
 import DriverIDDocumentsScreen from '../screens/driverScreens/IDDocumentsScreen';
 import PassengerIDDocumentsScreen from '../screens/passengerScreens/IDDocumentsScreen';
 import SavedAddressesScreen from '../screens/passengerScreens/SavedAddressesScreen';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => {
   const {userRole} = useAuth();
+  const insets = useSafeAreaInsets();
+
+  type CustomHeaderProps = {
+    navigation: any; // Replace 'any' with a proper type if possible
+    title: string;
+  };
+
+  // A reusable custom header component to avoid repetition
+  const CustomHeader = ({navigation, title}: CustomHeaderProps) => (
+    <View
+      style={{
+        height: 75 + insets.top, // Add top inset to the header height
+        backgroundColor: '#f8f8f8', // Header background color
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingTop: insets.top, // Apply top padding to push content below status bar
+        position: 'relative', // Necessary for absolute positioning of title
+      }}>
+      <IconButton
+        icon="arrow-left"
+        iconColor="#000"
+        size={24}
+        onPress={() => navigation.goBack()}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: insets.top,
+          bottom: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+        <Text style={{fontSize: 20, fontWeight: 'bold'}}>{title}</Text>
+      </View>
+    </View>
+  );
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false, // This will hide the header for all screens in this navigator
-      }}>
-      {userRole === 'admin' && (
-        <Stack.Screen name="AdminTabs" component={AdminTabs} />
-      )}
+    <>
+      {/* Set global StatusBar style for screens within this navigator */}
+      <StatusBar
+        barStyle="dark-content" // Assuming light header background, so dark text is visible
+        backgroundColor="transparent" // Make status bar transparent
+        translucent={true} // Allow content to draw under status bar on Android
+      />
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false, // This will hide the header for all screens in this navigator
+        }}>
+        {userRole === 'admin' && (
+          <Stack.Screen name="AdminTabs" component={AdminTabs} />
+        )}
 
-      {userRole === 'driver' && (
-        <>
-          <Stack.Screen name="DriverTabs" component={DriverTabs} />
-          <Stack.Screen
-            name="ProfileInfo"
-            component={DriverProfileInfoScreen}
-          />
-          <Stack.Screen
-            name="AccountSecurity"
-            component={AccountSecurity}
-            options={({navigation, route}) => ({
-              headerShown: true,
-              header: () => (
-                <View
-                  style={{
-                    height: 60,
-                    backgroundColor: '#f8f8f8',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 16,
-                  }}>
-                  <IconButton
-                    icon="arrow-left"
-                    iconColor="#000"
-                    size={24}
-                    onPress={() => navigation.goBack()}
+        {userRole === 'driver' && (
+          <>
+            <Stack.Screen name="DriverTabs" component={DriverTabs} />
+            <Stack.Screen
+              name="ProfileInfo"
+              component={DriverProfileInfoScreen}
+            />
+            <Stack.Screen
+              name="AccountSecurity"
+              component={AccountSecurity}
+              options={({navigation}) => ({
+                headerShown: true,
+                header: () => (
+                  <CustomHeader
+                    navigation={navigation}
+                    title="Account & Security"
                   />
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      alignItems: 'center',
-                    }}>
-                    <Text style={{fontSize: 20, fontWeight: 'bold'}}>
-                      Account & Security
-                    </Text>
-                  </View>
-                </View>
-              ),
-            })}
-          />
-          <Stack.Screen
-            name="IDDocuments"
-            component={DriverIDDocumentsScreen}
-            options={({navigation, route}) => ({
-              headerShown: true,
-              header: () => (
-                <View
-                  style={{
-                    height: 60,
-                    backgroundColor: '#f8f8f8',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 16,
-                  }}>
-                  <IconButton
-                    icon="arrow-left"
-                    iconColor="#000"
-                    size={24}
-                    onPress={() => navigation.goBack()}
+                ),
+              })}
+            />
+            <Stack.Screen
+              name="IDDocuments"
+              component={DriverIDDocumentsScreen}
+              options={({navigation}) => ({
+                headerShown: true,
+                header: () => (
+                  <CustomHeader
+                    navigation={navigation}
+                    title="ID Document Details"
                   />
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      alignItems: 'center',
-                    }}>
-                    <Text style={{fontSize: 20, fontWeight: 'bold'}}>
-                      ID Document Details
-                    </Text>
-                  </View>
-                </View>
-              ),
-            })}
-          />
-          <Stack.Screen
-            name="DriverVehicleDocuments"
-            component={DriverVehicleDocumentsScreen}
-          />
-        </>
-      )}
+                ),
+              })}
+            />
+            <Stack.Screen
+              name="DriverVehicleDocuments"
+              component={DriverVehicleDocumentsScreen}
+            />
+          </>
+        )}
 
-      {userRole === 'passenger' && (
-        <>
-          <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
-          <Stack.Screen name="BookRide" component={BookRide} />
-          <Stack.Screen
-            name="MapLocationPicker"
-            component={MapLocationPicker}
-            options={{
-              headerShown: false,
-              presentation: 'modal',
-            }}
-          />
-          <Stack.Screen name="RideHistory" component={RideHistory} />
-          <Stack.Screen
-            name="ProfileInfo"
-            component={PassengerProfileInfoScreen}
-          />
-          <Stack.Screen
-            name="AccountSecurity"
-            component={AccountSecurity}
-            options={({navigation, route}) => ({
-              headerShown: true,
-              header: () => (
-                <View
-                  style={{
-                    height: 60,
-                    backgroundColor: '#f8f8f8',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 16,
-                  }}>
-                  <IconButton
-                    icon="arrow-left"
-                    iconColor="#000"
-                    size={24}
-                    onPress={() => navigation.goBack()}
+        {userRole === 'passenger' && (
+          <>
+            <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
+            <Stack.Screen name="BookRide" component={BookRide} />
+            <Stack.Screen
+              name="MapLocationPicker"
+              component={MapLocationPicker}
+              options={{
+                headerShown: false,
+                presentation: 'modal',
+              }}
+            />
+            <Stack.Screen name="RideHistory" component={RideHistory} />
+            <Stack.Screen
+              name="ProfileInfo"
+              component={PassengerProfileInfoScreen}
+            />
+            <Stack.Screen
+              name="AccountSecurity"
+              component={AccountSecurity}
+              options={({navigation, route}) => ({
+                headerShown: true,
+                header: () => (
+                  <CustomHeader
+                    navigation={navigation}
+                    title="Account & Security"
                   />
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      alignItems: 'center',
-                    }}>
-                    <Text style={{fontSize: 20, fontWeight: 'bold'}}>
-                      Account & Security
-                    </Text>
-                  </View>
-                </View>
-              ),
-            })}
-          />
-          <Stack.Screen
-            name="IDDocuments"
-            component={PassengerIDDocumentsScreen}
-            options={({navigation, route}) => ({
-              headerShown: true,
-              header: () => (
-                <View
-                  style={{
-                    height: 60,
-                    backgroundColor: '#f8f8f8',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingHorizontal: 16,
-                  }}>
-                  <IconButton
-                    icon="arrow-left"
-                    iconColor="#000"
-                    size={24}
-                    onPress={() => navigation.goBack()}
+                ),
+              })}
+            />
+            <Stack.Screen
+              name="IDDocuments"
+              component={PassengerIDDocumentsScreen}
+              options={({navigation, route}) => ({
+                headerShown: true,
+                header: () => (
+                  <CustomHeader
+                    navigation={navigation}
+                    title="ID Document Details"
                   />
-                  <View
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      alignItems: 'center',
-                    }}>
-                    <Text style={{fontSize: 20, fontWeight: 'bold'}}>
-                      ID Document Details
-                    </Text>
-                  </View>
-                </View>
-              ),
-            })}
-          />
-          <Stack.Screen
-            name="SavedAddresses"
-            component={SavedAddressesScreen}
-          />
-        </>
-      )}
-    </Stack.Navigator>
+                ),
+              })}
+            />
+            <Stack.Screen
+              name="SavedAddresses"
+              component={SavedAddressesScreen}
+            />
+          </>
+        )}
+      </Stack.Navigator>
+    </>
   );
 };
 

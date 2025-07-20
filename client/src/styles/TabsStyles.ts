@@ -20,15 +20,26 @@ export const TabsStyles = StyleSheet.create({
   },
   avatarContainerModern: {
     position: 'relative',
-    marginRight: Spacing.medium,
-    borderRadius: 50, // Half of size to make it circular
-    overflow: 'hidden', // Ensures the image is clipped to the border radius
+    marginRight: Spacing.medium, // Adjust as per your Spacing definition
+    borderRadius: 55, // Slightly larger than avatar size to create a border (e.g., 100px avatar + 5px border on each side = 110px total diameter, so borderRadius 55)
+    overflow: 'hidden', // Ensures the image is clipped to the circular shape
+    borderWidth: 3, // Adjust border width for desired thickness
+    borderColor: '#3498DB', // A vibrant, appealing blue
+    shadowColor: '#000', // For a subtle shadow
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3, // For Android shadow
   },
   avatar: {
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#e0e0e0', // Keep a neutral background for initials
+    width: 100, // Make sure this matches the `size` prop of Avatar.Image/Text
+    height: 100, // Make sure this matches the `size` prop of Avatar.Image/Text
+    borderRadius: 50, // Half of width/height to make it circular
   },
   avatarLabel: {
     fontSize: 28, // Adjust font size for initials
+    color: '#FFFFFF', // White text for initials for better contrast on a potentially darker initial background
   },
   editAvatarOverlay: {
     position: 'absolute',
@@ -79,11 +90,11 @@ export const TabsStyles = StyleSheet.create({
   nameText: {
     fontSize: Fonts.size.large,
     fontWeight: 'bold',
-    color: Colors.text,
+    color: '#34495E',
   },
   phoneTextModern: {
     fontSize: Fonts.size.medium,
-    color: Colors.darkGray,
+    color: '#7F8C8D',
     marginTop: 2,
   },
   ratingContainer: {

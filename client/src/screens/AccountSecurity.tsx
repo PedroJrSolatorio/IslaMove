@@ -27,6 +27,7 @@ import {TabsStyles} from '../styles/TabsStyles';
 import {useProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import api from '../../utils/api';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 const AccountSecurity = () => {
   const {
@@ -52,6 +53,7 @@ const AccountSecurity = () => {
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Handlers
   const handleChangePassword = async () => {
@@ -674,6 +676,7 @@ const AccountSecurity = () => {
           </Dialog.Actions>
         </Dialog>
       </Portal>
+      <View style={{height: insets.bottom}} />
     </ScrollView>
   );
 };

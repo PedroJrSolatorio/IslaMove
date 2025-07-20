@@ -5,6 +5,7 @@ import {
   Alert,
   TouchableOpacity,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import {
   Card,
@@ -26,6 +27,7 @@ import api from '../../../utils/api';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../../navigation/types';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 interface Location {
   type: string;
@@ -40,6 +42,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const SavedAddressesScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {profileData, loading, refreshProfile} = useProfile();
+  const insets = useSafeAreaInsets();
 
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
@@ -346,15 +349,22 @@ const SavedAddressesScreen = () => {
   }
 
   return (
-    <>
+    <View style={[GlobalStyles.container, {backgroundColor: '#F0F2F5'}]}>
+      {/* Outer View to handle full background */}
+      <StatusBar
+        barStyle="dark-content" // Adjust based on your header's background color
+        backgroundColor="transparent"
+        translucent={true}
+      />
       <View
         style={{
-          height: 60,
+          height: 75 + insets.top,
           backgroundColor: '#f8f8f8',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 16,
+          paddingTop: insets.top,
           position: 'relative',
         }}>
         <IconButton
@@ -368,9 +378,14 @@ const SavedAddressesScreen = () => {
             position: 'absolute',
             left: 0,
             right: 0,
+            top: insets.top,
+            bottom: 0,
+            justifyContent: 'center',
             alignItems: 'center',
           }}>
-          <Text style={{fontSize: 20, fontWeight: 'bold'}}>Profile Info</Text>
+          <Text style={{fontSize: 20, fontWeight: 'bold'}}>
+            Saved Addresses
+          </Text>
         </View>
         <IconButton
           icon={editingAddresses ? 'close' : 'pencil'}
@@ -687,8 +702,9 @@ const SavedAddressesScreen = () => {
             ) as any[]) || []
           }
         />
+        <View style={{height: insets.bottom}} />
       </ScrollView>
-    </>
+    </View>
   );
 };
 

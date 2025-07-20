@@ -7,6 +7,7 @@ import {
   Platform,
   ToastAndroid,
   BackHandler,
+  StatusBar,
 } from 'react-native';
 import {Button, TextInput, Divider} from 'react-native-paper';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
@@ -24,6 +25,7 @@ import {
 } from '@react-native-google-signin/google-signin';
 import {GOOGLE_CONFIG, debugGoogleConfig} from '../config/googleConfig';
 import DeviceInfo from 'react-native-device-info';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -38,6 +40,7 @@ const LoginScreen = ({navigation}: Props) => {
   const {login, userToken, userRole} = useAuth();
   const {refreshProfile} = useProfile();
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // Initialize Google Sign-In
   useEffect(() => {
@@ -350,88 +353,98 @@ const LoginScreen = ({navigation}: Props) => {
   };
 
   return (
-    <ImageBackground
-      source={require('../assets/images/IslaMove_background.png')}
-      style={GlobalStyles.background}>
-      <View style={GlobalStyles.overlay}>
-        <Text style={GlobalStyles.title}>Welcome to IslaMove</Text>
-        <Text style={GlobalStyles.subtitle}>Ready? Let's get moving.</Text>
+    <View style={{flex: 1}}>
+      {/* StatusBar Configuration */}
+      <StatusBar
+        barStyle="light-content" // Since having a background image, light content might work better
+        backgroundColor="transparent"
+        translucent={true}
+      />
+      <ImageBackground
+        source={require('../assets/images/IslaMove_background.png')}
+        style={GlobalStyles.background}>
+        <View style={[GlobalStyles.overlay, {paddingTop: insets.top}]}>
+          <Text style={GlobalStyles.title}>Welcome to IslaMove</Text>
+          <Text style={GlobalStyles.subtitle}>Ready? Let's get moving.</Text>
 
-        <View style={GlobalStyles.buttonContainer}>
-          <TextInput
-            label="Username"
-            value={username}
-            onChangeText={setUsername}
-            style={GlobalStyles.input}
-          />
-          <TextInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!passwordVisible}
-            style={GlobalStyles.input}
-            right={
-              <TextInput.Icon
-                icon={passwordVisible ? 'eye-off' : 'eye'}
-                onPress={() => setPasswordVisible(!passwordVisible)}
-              />
-            }
-          />
-          <Button
-            mode="contained"
-            onPress={handleLogin}
-            style={GlobalStyles.primaryButton}
-            loading={loading}
-            disabled={loading}>
-            Login
-          </Button>
-
-          <View style={GlobalStyles.dividerContainer}>
-            <Divider style={GlobalStyles.divider} />
-            <Text style={GlobalStyles.dividerText}>or</Text>
-            <Divider style={GlobalStyles.divider} />
-          </View>
-
-          <GoogleSigninButton
-            style={GlobalStyles.googleButton}
-            size={GoogleSigninButton.Size.Wide}
-            color={GoogleSigninButton.Color.Light}
-            onPress={handleGoogleSignIn}
-            disabled={loading || googleLoading}
-          />
-
-          {googleLoading && (
-            <Text style={GlobalStyles.loadingText}>
-              Signing in with Google...
-            </Text>
-          )}
-
-          {userToken && (
+          <View style={GlobalStyles.buttonContainer}>
+            <TextInput
+              label="Username"
+              value={username}
+              onChangeText={setUsername}
+              style={GlobalStyles.input}
+            />
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!passwordVisible}
+              style={GlobalStyles.input}
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? 'eye-off' : 'eye'}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                />
+              }
+            />
             <Button
-              mode="outlined"
-              onPress={handleRetryValidation}
-              style={GlobalStyles.secondaryButton}
-              labelStyle={GlobalStyles.resumeText}
-              loading={isValidating}
-              disabled={isValidating || loading || googleLoading}>
-              Resume Session
+              mode="contained"
+              onPress={handleLogin}
+              style={GlobalStyles.primaryButton}
+              loading={loading}
+              disabled={loading}>
+              Login
             </Button>
-          )}
 
-          <View style={GlobalStyles.noAccountContainer}>
-            <Text style={GlobalStyles.noAccountText}>
-              Don't have an account?
-            </Text>
-            <Button
-              mode="text"
-              labelStyle={GlobalStyles.registerButtonText}
-              onPress={() => navigation.navigate('RegisterSelection')}>
-              Register
-            </Button>
+            <View style={GlobalStyles.dividerContainer}>
+              <Divider style={GlobalStyles.divider} />
+              <Text style={GlobalStyles.dividerText}>or</Text>
+              <Divider style={GlobalStyles.divider} />
+            </View>
+
+            <GoogleSigninButton
+              style={GlobalStyles.googleButton}
+              size={GoogleSigninButton.Size.Wide}
+              color={GoogleSigninButton.Color.Light}
+              onPress={handleGoogleSignIn}
+              disabled={loading || googleLoading}
+            />
+
+            {googleLoading && (
+              <Text style={GlobalStyles.loadingText}>
+                Signing in with Google...
+              </Text>
+            )}
+
+            {userToken && (
+              <Button
+                mode="outlined"
+                onPress={handleRetryValidation}
+                style={GlobalStyles.secondaryButton}
+                labelStyle={GlobalStyles.resumeText}
+                loading={isValidating}
+                disabled={isValidating || loading || googleLoading}>
+                Resume Session
+              </Button>
+            )}
+
+            <View style={GlobalStyles.noAccountContainer}>
+              <Text style={GlobalStyles.noAccountText}>
+                Don't have an account?
+              </Text>
+              <Button
+                mode="text"
+                labelStyle={GlobalStyles.registerButtonText}
+                onPress={() => navigation.navigate('RegisterSelection')}>
+                Register
+              </Button>
+            </View>
           </View>
         </View>
-      </View>
-    </ImageBackground>
+        {/* Bottom safe area padding */}
+        <View style={{height: insets.bottom}} />
+      </ImageBackground>
+    </View>
   );
 };
 

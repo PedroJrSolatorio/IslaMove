@@ -1,5 +1,11 @@
 import React from 'react';
-import {View, ScrollView, Alert, ActivityIndicator} from 'react-native';
+import {
+  View,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  StatusBar,
+} from 'react-native';
 import {Avatar, Text, Divider, List, IconButton} from 'react-native-paper';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -9,6 +15,7 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isPassengerProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {Colors} from '../styles/Colors';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -16,6 +23,7 @@ const PassengerProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {logout} = useAuth();
   const {profileData, loading} = useProfile();
+  const insets = useSafeAreaInsets();
 
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
@@ -66,8 +74,14 @@ const PassengerProfileScreen = () => {
   }
 
   return (
-    <>
-      <View style={GlobalStyles.header}>
+    <View style={[GlobalStyles.container, {backgroundColor: '#F0F2F5'}]}>
+      {/* Configure the StatusBar */}
+      <StatusBar
+        barStyle="dark-content" // Or "light-content" if your background is dark
+        backgroundColor="transparent" // Make status bar transparent
+        translucent={true} // Allow content to draw under status bar on Android
+      />
+      <View style={[GlobalStyles.header, {paddingTop: insets.top + 20}]}>
         <View style={GlobalStyles.headerLeft}>
           {/* Avatar section */}
           <View style={TabsStyles.avatarContainerModern}>
@@ -178,8 +192,9 @@ const PassengerProfileScreen = () => {
           }}
           style={[TabsStyles.listItem, TabsStyles.logoutListItem]}
         />
+        <View style={{height: insets.bottom}} />
       </ScrollView>
-    </>
+    </View>
   );
 };
 

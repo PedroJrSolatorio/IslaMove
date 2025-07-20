@@ -4,6 +4,7 @@ import {AuthProvider, useAuth} from './src/context/AuthContext';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import AppNavigator from './src/navigation/AppNavigator';
 import {ProfileProvider} from './src/context/ProfileContext';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 const RootNavigation = () => {
   const {userToken, userRole} = useAuth();
@@ -14,13 +15,15 @@ const RootNavigation = () => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <ProfileProvider>
-        <NavigationContainer>
-          <RootNavigation />
-        </NavigationContainer>
-      </ProfileProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ProfileProvider>
+          <NavigationContainer>
+            <RootNavigation />
+          </NavigationContainer>
+        </ProfileProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 };
 

@@ -1,5 +1,12 @@
 import React, {useState} from 'react';
-import {View, Text, ImageBackground, StyleSheet, Alert} from 'react-native';
+import {
+  View,
+  Text,
+  ImageBackground,
+  StyleSheet,
+  Alert,
+  StatusBar,
+} from 'react-native';
 import {Button, Divider} from 'react-native-paper';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {useNavigation} from '@react-navigation/native';
@@ -12,6 +19,7 @@ import {
 } from '@react-native-google-signin/google-signin';
 import api, {CustomAxiosRequestConfig} from '../../utils/api';
 import {GlobalStyles} from '../styles/GlobalStyles';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -21,6 +29,7 @@ type NavigationProp = NativeStackNavigationProp<
 const RegisterSelectionScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const [googleLoading, setGoogleLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleGoogleSignUp = async (role: string) => {
     setGoogleLoading(true);
@@ -107,64 +116,74 @@ const RegisterSelectionScreen = () => {
   };
 
   return (
-    <ImageBackground
-      source={require('../assets/images/IslaMove_background.png')}
-      style={styles.background}>
-      <View style={styles.overlay}>
-        <Text style={styles.title}>Create an Account</Text>
-        <Text style={styles.subtitle}>Choose your role to continue.</Text>
+    <View style={{flex: 1}}>
+      <StatusBar
+        barStyle="light-content" // Since having a background image, light content might work better
+        backgroundColor="transparent"
+        translucent={true}
+      />
+      <ImageBackground
+        source={require('../assets/images/IslaMove_background.png')}
+        style={styles.background}>
+        <View style={[styles.overlay, {paddingTop: insets.top}]}>
+          <Text style={styles.title}>Create an Account</Text>
+          <Text style={styles.subtitle}>Choose your role to continue.</Text>
 
-        <View style={styles.buttonContainer}>
-          <Button
-            mode="contained"
-            style={GlobalStyles.primaryButton}
-            onPress={() => navigation.navigate('RegisterPassenger')}>
-            Register as Passenger (Email)
-          </Button>
+          <View style={styles.buttonContainer}>
+            <Button
+              mode="contained"
+              style={GlobalStyles.primaryButton}
+              onPress={() => navigation.navigate('RegisterPassenger')}>
+              Register as Passenger (Email)
+            </Button>
 
-          <GoogleSigninButton
-            style={styles.googleButton}
-            size={GoogleSigninButton.Size.Wide}
-            color={GoogleSigninButton.Color.Light}
-            onPress={() => handleGoogleSignUp('passenger')}
-            disabled={googleLoading}
-          />
+            <GoogleSigninButton
+              style={styles.googleButton}
+              size={GoogleSigninButton.Size.Wide}
+              color={GoogleSigninButton.Color.Light}
+              onPress={() => handleGoogleSignUp('passenger')}
+              disabled={googleLoading}
+            />
 
-          <View style={GlobalStyles.dividerContainer}>
-            <Divider style={GlobalStyles.divider} />
-            <Text style={GlobalStyles.dividerText}>or</Text>
-            <Divider style={GlobalStyles.divider} />
+            <View style={GlobalStyles.dividerContainer}>
+              <Divider style={GlobalStyles.divider} />
+              <Text style={GlobalStyles.dividerText}>or</Text>
+              <Divider style={GlobalStyles.divider} />
+            </View>
+
+            <Button
+              mode="contained"
+              style={styles.driverButton}
+              onPress={() => navigation.navigate('RegisterDriver')}>
+              Register as Driver (Email)
+            </Button>
+
+            <GoogleSigninButton
+              style={styles.googleButton}
+              size={GoogleSigninButton.Size.Wide}
+              color={GoogleSigninButton.Color.Light}
+              onPress={() => handleGoogleSignUp('driver')}
+              disabled={googleLoading}
+            />
+
+            <Button
+              mode="text"
+              icon="arrow-left"
+              labelStyle={GlobalStyles.registerButtonText}
+              onPress={() => navigation.navigate('Login')}>
+              Back
+            </Button>
+
+            {googleLoading && (
+              <Text style={styles.loadingText}>
+                Setting up Google account...
+              </Text>
+            )}
           </View>
-
-          <Button
-            mode="contained"
-            style={styles.driverButton}
-            onPress={() => navigation.navigate('RegisterDriver')}>
-            Register as Driver (Email)
-          </Button>
-
-          <GoogleSigninButton
-            style={styles.googleButton}
-            size={GoogleSigninButton.Size.Wide}
-            color={GoogleSigninButton.Color.Light}
-            onPress={() => handleGoogleSignUp('driver')}
-            disabled={googleLoading}
-          />
-
-          <Button
-            mode="text"
-            icon="arrow-left"
-            labelStyle={GlobalStyles.registerButtonText}
-            onPress={() => navigation.navigate('Login')}>
-            Back
-          </Button>
-
-          {googleLoading && (
-            <Text style={styles.loadingText}>Setting up Google account...</Text>
-          )}
         </View>
-      </View>
-    </ImageBackground>
+        <View style={{height: insets.bottom}} />
+      </ImageBackground>
+    </View>
   );
 };
 

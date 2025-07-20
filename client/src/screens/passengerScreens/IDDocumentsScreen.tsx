@@ -5,9 +5,11 @@ import {TabsStyles} from '../../styles/TabsStyles';
 import {GlobalStyles} from '../../styles/GlobalStyles';
 import {useProfile, isPassengerProfile} from '../../context/ProfileContext';
 import {Colors} from '../../styles/Colors';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 const IDDocumentsScreen = () => {
   const {profileData, loading} = useProfile();
+  const insets = useSafeAreaInsets();
 
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
@@ -136,6 +138,7 @@ const IDDocumentsScreen = () => {
           )}
         </Card.Content>
       </Card>
+      <View style={{height: insets.bottom}} />
     </ScrollView>
   );
 };

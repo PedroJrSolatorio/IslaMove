@@ -1,5 +1,11 @@
 import React from 'react';
-import {View, ScrollView, Alert, ActivityIndicator} from 'react-native';
+import {
+  View,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  StatusBar,
+} from 'react-native';
 import {Avatar, Text, Divider, List, IconButton} from 'react-native-paper';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
@@ -9,15 +15,16 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isDriverProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
-import api, {setLoggingOut, setManualLogout} from '../../utils/api';
-import axios from 'axios';
+import {setLoggingOut, setManualLogout} from '../../utils/api';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const DriverProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const {logout, userToken} = useAuth();
+  const {logout} = useAuth();
   const {profileData, loading} = useProfile();
+  const insets = useSafeAreaInsets();
 
   // Type guard to ensure we're working with driver profile
   const driverProfile = isDriverProfile(profileData) ? profileData : null;
@@ -92,8 +99,16 @@ const DriverProfileScreen = () => {
   }
 
   return (
-    <>
-      <View style={GlobalStyles.header}>
+    <View style={[GlobalStyles.container, {backgroundColor: '#F0F2F5'}]}>
+      {/* Configure the StatusBar */}
+      <StatusBar
+        barStyle="dark-content" // Or "light-content" if your background is dark
+        backgroundColor="transparent" // Make status bar transparent
+        translucent={true} // Allow content to draw under status bar on Android
+      />
+      {/* Header section with top padding from safe area insets */}
+      <View style={[GlobalStyles.header, {paddingTop: insets.top + 20}]}>
+        {/* Added 10 for extra visual padding below the status bar, adjust as needed */}
         <View style={GlobalStyles.headerLeft}>
           {/* Avatar section */}
           <View style={TabsStyles.avatarContainerModern}>
@@ -128,7 +143,6 @@ const DriverProfileScreen = () => {
             )}
           </View>
         </View>
-
         <IconButton
           icon="cog"
           iconColor={Colors.gray}
@@ -206,8 +220,10 @@ const DriverProfileScreen = () => {
           }}
           style={[TabsStyles.listItem, TabsStyles.logoutListItem]}
         />
+        {/* Add padding to the bottom of the ScrollView to account for bottom safe area insets (e.g., home indicator on iOS) */}
+        <View style={{height: insets.bottom}} />
       </ScrollView>
-    </>
+    </View>
   );
 };
 

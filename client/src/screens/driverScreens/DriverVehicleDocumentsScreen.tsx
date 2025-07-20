@@ -4,7 +4,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  TouchableOpacity,
+  StatusBar,
 } from 'react-native';
 import {
   Card,
@@ -24,12 +24,14 @@ import {Colors} from '../../styles/Colors';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../../navigation/types';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const DriverVehicleDocumentsScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {profileData, loading, updateProfile} = useProfile();
+  const insets = useSafeAreaInsets();
 
   // Type guard to ensure we're working with driver profile
   const driverProfile = isDriverProfile(profileData) ? profileData : null;
@@ -126,15 +128,22 @@ const DriverVehicleDocumentsScreen = () => {
   }
 
   return (
-    <>
+    <View style={[GlobalStyles.container, {backgroundColor: '#F0F2F5'}]}>
+      {/* Outer View to handle full background */}
+      <StatusBar
+        barStyle="dark-content" // Adjust based on your header's background color
+        backgroundColor="transparent"
+        translucent={true}
+      />
       <View
         style={{
-          height: 60,
+          height: 75 + insets.top,
           backgroundColor: '#f8f8f8',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 16,
+          paddingTop: insets.top,
           position: 'relative',
         }}>
         <IconButton
@@ -148,6 +157,9 @@ const DriverVehicleDocumentsScreen = () => {
             position: 'absolute',
             left: 0,
             right: 0,
+            top: insets.top,
+            bottom: 0,
+            justifyContent: 'center',
             alignItems: 'center',
           }}>
           <Text style={{fontSize: 20, fontWeight: 'bold'}}>
@@ -344,9 +356,9 @@ const DriverVehicleDocumentsScreen = () => {
             )}
           </Card.Content>
         </Card>
-        <View style={{height: 50}} />
+        <View style={{height: insets.bottom}} />
       </ScrollView>
-    </>
+    </View>
   );
 };
 
