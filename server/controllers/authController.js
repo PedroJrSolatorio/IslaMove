@@ -1403,3 +1403,41 @@ export const setPassword = async (req, res) => {
     res.status(500).json({ message: "Server error during password creation." });
   }
 };
+
+export const logoutUser = async (req, res) => {
+  try {
+    // Extract token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      // Don't treat this as an error - just complete the logout
+      return res.status(200).json({ message: "Logged out successfully" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.userId;
+
+      // Update user status to offline
+      await User.findByIdAndUpdate(userId, {
+        driverStatus: "offline",
+        activeRefreshTokens: [], // Clear all refresh tokens
+      });
+
+      // Get Socket.IO instance
+      const io = getIO();
+      // Emit session ended event to user's room
+      io.to(`user_${userId}`).emit("session_ended");
+    } catch (tokenError) {
+      // If token is invalid, still consider logout successful
+      console.log("Invalid token during logout (non-critical):", tokenError);
+    }
+
+    res.status(200).json({ message: "Logged out successfully" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    // Still return 200 even on error - we want the client to consider itself logged out
+    res.status(200).json({ message: "Logged out" });
+  }
+};

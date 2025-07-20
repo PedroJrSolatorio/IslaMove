@@ -255,7 +255,7 @@ const ProfileInfoScreen = () => {
     <>
       <View
         style={{
-          height: 80,
+          height: 60,
           backgroundColor: '#f8f8f8',
           flexDirection: 'row',
           alignItems: 'center',

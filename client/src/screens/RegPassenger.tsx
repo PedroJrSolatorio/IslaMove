@@ -812,6 +812,7 @@ const RegisterPassengerScreen = () => {
             />
             <TextInput
               mode="outlined"
+              maxLength={1}
               label="Middle Initial"
               style={styles.paperInput}
               outlineStyle={styles.paperInputOutline}

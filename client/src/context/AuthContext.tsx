@@ -11,6 +11,7 @@ import {BACKEND_URL} from '@env';
 import DeviceInfo from 'react-native-device-info';
 import SocketService from '../services/SocketService';
 import Toast from 'react-native-toast-message';
+import api, {setLoggingOut, setManualLogout} from '../../utils/api';
 
 type Role = 'admin' | 'driver' | 'passenger' | null;
 
@@ -98,7 +99,6 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
                   'Session revoked by another device (Socket.IO). Forcing logout.',
                 );
                 await logout(data.message); // Call logout with message
-                // The logout function will handle navigation to Login
               } else {
                 console.log(
                   'Received session_revoked event for current device, ignoring (Socket.IO).',
@@ -136,6 +136,10 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
     try {
       console.log('🔐 Starting login process...');
       const currentDeviceId = await DeviceInfo.getUniqueId();
+
+      // Reset the logout flag when logging in
+      setLoggingOut(false);
+      setManualLogout(false);
 
       // Save to AsyncStorage first
       await AsyncStorage.multiSet([
@@ -249,36 +253,61 @@ export const AuthProvider = ({children}: AuthProviderProps) => {
     message: string = 'You have been logged out.',
   ): Promise<void> => {
     try {
-      // Disconnect Socket.IO first
-      SocketService.disconnect();
-      SocketService.clearOnSessionRevoked(); // Clear the listener
+      console.log('🚪 Starting logout process:', message);
 
-      // Clear state
+      // Disconnect Socket.IO first to prevent any pending events
+      SocketService.disconnect();
+      SocketService.clearOnSessionRevoked();
+
+      // Clear state first
       setUserRole(null);
       setUserToken(null);
       setRefreshToken(null);
       setUserData(null);
 
-      // Clear ALL auth-related items from AsyncStorage
-      const keysToRemove = [
+      // Then clear storage
+      await AsyncStorage.multiRemove([
         'userToken',
         'refreshToken',
         'userRole',
         'userData',
         'userId',
         'recentLocations',
-      ];
-      await AsyncStorage.multiRemove(keysToRemove);
+      ]);
 
-      console.log('Auth data cleared and Socket.IO disconnected.');
+      // Only try to call logout endpoint if we had a token
+      const currentToken = userToken;
+      if (currentToken) {
+        try {
+          await api.post('/api/auth/logout', {}, {
+            headers: {Authorization: `Bearer ${currentToken}`},
+            timeout: 5000,
+            skipAuthInterceptor: true,
+          } as any);
+          console.log('Backend logout successful');
+        } catch (error) {
+          console.log('Logout endpoint error (non-critical):', error);
+        }
+      }
 
+      // Clear axios default headers
+      delete api.defaults.headers.common['Authorization'];
+
+      // Show toast message
       Toast.show({
         type: 'success',
         text1: message,
+        visibilityTime: 2000,
       });
+      console.log('✅ Logout completed successfully');
     } catch (error) {
       console.error('Error during logout:', error);
-      throw error;
+      // Even if logout fails, show a message
+      Toast.show({
+        type: 'info',
+        text1: 'Logged out',
+        visibilityTime: 1500,
+      });
     }
   };
 

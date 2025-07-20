@@ -136,11 +136,21 @@ class SocketService {
     });
   }
 
-  public disconnect() {
-    if (this.socket) {
-      console.log('Disconnecting socket...');
-      this.socket.disconnect();
-      this.socket = null;
+  public disconnect(): void {
+    try {
+      if (this.socket) {
+        // Remove all listeners first
+        this.socket.removeAllListeners();
+        // Then disconnect
+        this.socket.disconnect();
+        this.socket = null;
+      }
+      // Clear all stored listeners
+      this.listeners.clear();
+      // Clear session revoked callback
+      this.onSessionRevokedCallback = null;
+    } catch (error) {
+      console.error('Error during socket disconnect:', error);
     }
   }
 

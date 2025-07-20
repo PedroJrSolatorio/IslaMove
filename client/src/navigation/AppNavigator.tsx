@@ -42,24 +42,34 @@ const AppNavigator = () => {
             component={AccountSecurity}
             options={({navigation, route}) => ({
               headerShown: true,
-              headerTitle: 'Accoun & tSecurity',
-              headerBackVisible: false, // Hide the default back button
-              headerLeft: () => (
-                // Custom right component for the back arrow
-                <IconButton
-                  icon="arrow-left"
-                  iconColor="#000"
-                  size={24}
-                  onPress={() => navigation.goBack()}
-                />
+              header: () => (
+                <View
+                  style={{
+                    height: 60,
+                    backgroundColor: '#f8f8f8',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: 16,
+                  }}>
+                  <IconButton
+                    icon="arrow-left"
+                    iconColor="#000"
+                    size={24}
+                    onPress={() => navigation.goBack()}
+                  />
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      alignItems: 'center',
+                    }}>
+                    <Text style={{fontSize: 20, fontWeight: 'bold'}}>
+                      Account & Security
+                    </Text>
+                  </View>
+                </View>
               ),
-              headerTitleAlign: 'center',
-              headerShadowVisible: true,
-              headerStyle: {
-                // Optional: for custom header background color
-                backgroundColor: '#f8f8f8',
-              },
-              headerTintColor: '#000', // Optional: color for title and back button icon
             })}
           />
           <Stack.Screen
@@ -70,7 +80,7 @@ const AppNavigator = () => {
               header: () => (
                 <View
                   style={{
-                    height: 80,
+                    height: 60,
                     backgroundColor: '#f8f8f8',
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -129,7 +139,7 @@ const AppNavigator = () => {
               header: () => (
                 <View
                   style={{
-                    height: 80,
+                    height: 60,
                     backgroundColor: '#f8f8f8',
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -164,7 +174,7 @@ const AppNavigator = () => {
               header: () => (
                 <View
                   style={{
-                    height: 80,
+                    height: 60,
                     backgroundColor: '#f8f8f8',
                     flexDirection: 'row',
                     alignItems: 'center',

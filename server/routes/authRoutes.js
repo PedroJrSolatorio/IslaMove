@@ -15,6 +15,7 @@ import {
   linkGoogleAccount,
   unlinkGoogleAccount,
   setPassword,
+  logoutUser,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -83,5 +84,6 @@ router.post("/register", uploadFields, (req, res) => {
 router.post("/link-google", linkGoogleAccount);
 router.post("/unlink-google", unlinkGoogleAccount);
 router.post("/set-password", setPassword);
+router.post("/logout", logoutUser);
 
 export default router;

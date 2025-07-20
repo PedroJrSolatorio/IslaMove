@@ -470,7 +470,7 @@ export const initializeSocket = (server) => {
         });
       }
 
-      // Handle any active rides
+      // Notify ride participants about disconnect
       for (const [rideId, ride] of activeRides.entries()) {
         if (
           ride.passengerId === socket.userId ||

@@ -9,13 +9,15 @@ import {GlobalStyles} from '../styles/GlobalStyles';
 import {useProfile, isDriverProfile} from '../context/ProfileContext';
 import {useAuth} from '../context/AuthContext';
 import {Colors} from 'react-native/Libraries/NewAppScreen';
+import api, {setLoggingOut, setManualLogout} from '../../utils/api';
+import axios from 'axios';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const DriverProfileScreen = () => {
   const navigation = useNavigation<NavigationProp>();
-  const {logout} = useAuth();
-  const {profileData, loading, updateProfile} = useProfile();
+  const {logout, userToken} = useAuth();
+  const {profileData, loading} = useProfile();
 
   // Type guard to ensure we're working with driver profile
   const driverProfile = isDriverProfile(profileData) ? profileData : null;
@@ -36,15 +38,39 @@ const DriverProfileScreen = () => {
     return `${firstName?.[0] || ''}${lastName?.[0] || ''}`;
   };
 
-  const handleLogout = async (
-    message: string = 'You have been logged out.',
-  ) => {
+  const handleLogout = async () => {
     try {
-      await logout(message);
+      // Set flags to prevent API interceptor from interfering
+      setManualLogout(true);
+      setLoggingOut(true);
+
+      console.log('Manual logout initiated');
+
+      // Call the AuthContext logout function which handles everything
+      // including socket disconnection, storage clearing, etc.
+      await logout('Logged out successfully.');
+
+      // Navigate to login screen
       navigation.navigate('Login');
+
+      console.log('Manual logout completed successfully');
     } catch (error) {
-      console.error('Failed to clear AsyncStorage:', error);
-      Alert.alert('Error', 'Failed to log out.');
+      console.error('Manual logout error:', error);
+
+      // Force logout as last resort
+      try {
+        await logout('Logout completed.');
+        navigation.navigate('Login');
+      } catch (finalError) {
+        console.error('Final logout failed:', finalError);
+        Alert.alert('Error', 'Please restart the app to complete logout.');
+      }
+    } finally {
+      // Always reset flags after logout attempt
+      setTimeout(() => {
+        setManualLogout(false);
+        setLoggingOut(false);
+      }, 2000);
     }
   };
 

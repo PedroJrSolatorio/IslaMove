@@ -27,9 +27,21 @@ const refreshTokenInstance = axios.create({
 
 // Navigation reference
 let navigationRef: any = null;
+// Flags to prevent interceptor actions during logout
+let isLoggingOut = false;
+let isManualLogout = false; // New flag for manual logout
+let logoutInProgress = false; // Prevent multiple simultaneous logout attempts
 
 export const setNavigationRef = (ref: any) => {
   navigationRef = ref;
+};
+
+export const setLoggingOut = (value: boolean) => {
+  isLoggingOut = value;
+};
+
+export const setManualLogout = (value: boolean) => {
+  isManualLogout = value;
 };
 
 const api = axios.create({
@@ -46,15 +58,21 @@ api.interceptors.request.use(
   async config => {
     const customConfig = config as CustomAxiosRequestConfig;
 
-    if (customConfig.skipAuthInterceptor) {
-      return config; // Skip attaching Authorization header
+    // Skip if logging out or marked to skip
+    if (isLoggingOut || isManualLogout || customConfig.skipAuthInterceptor) {
+      return config;
     }
 
-    const token = await AsyncStorage.getItem('userToken');
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Error accessing AsyncStorage:', error);
     }
+
     return config;
   },
   error => {
@@ -66,10 +84,20 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   response => response,
   async (error: AxiosError<ApiErrorResponse>) => {
+    // Skip interceptor logic if we're logging out or if it's a manual logout
+    if (isLoggingOut || isManualLogout || logoutInProgress) {
+      return Promise.reject(error);
+    }
+
     // Get original request that failed
     const originalRequest = error.config as CustomAxiosRequestConfig;
 
     if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    // Don't retry logout requests - they should fail fast
+    if (originalRequest.url?.includes('/api/auth/logout')) {
       return Promise.reject(error);
     }
 
@@ -90,6 +118,14 @@ api.interceptors.response.use(
       try {
         // Get refresh token
         const refreshToken = await AsyncStorage.getItem('refreshToken');
+
+        if (!refreshToken) {
+          // No refresh token available - this could be normal after logout
+          // Don't show an alert, just reject silently
+          console.log('No refresh token available, request failed silently');
+          return Promise.reject(error);
+        }
+
         const deviceId = await DeviceInfo.getUniqueId(); // Get device ID
 
         if (!refreshToken) {
@@ -125,12 +161,19 @@ api.interceptors.response.use(
           return api(originalRequest);
         } else {
           // Refresh failed
-          return handleLogout('Token refresh failed');
+          return handleLogout('Session expired. Please log in again.');
         }
       } catch (refreshError: any) {
-        const backendMessage =
-          refreshError.response?.data?.message || 'Error refreshing token';
-        return handleLogout(backendMessage);
+        // Handle SESSION_REVOKED from refresh endpoint
+        if (refreshError.response?.data?.code === 'SESSION_REVOKED') {
+          return handleLogout(
+            refreshError.response.data.message ||
+              'Your session was revoked. Please log in again.',
+          );
+        }
+        // For other refresh errors, don't show alerts - just fail silently
+        console.log('Token refresh failed:', refreshError.message);
+        return Promise.reject(error);
       }
     }
 
@@ -159,8 +202,8 @@ api.interceptors.response.use(
           'Something went wrong on our end. Please try again later.',
         );
       }
-    } else if (error.request) {
-      // Network error
+    } else if (error.request && !isLoggingOut && !isManualLogout) {
+      // Only show network errors if we're not in the middle of logout
       Alert.alert(
         'Network Error',
         'Unable to connect to the server. Please check your internet connection.',
@@ -173,6 +216,13 @@ api.interceptors.response.use(
 
 // Helper function to handle logout
 const handleLogout = async (reason: string) => {
+  // Prevent multiple logout calls
+  if (logoutInProgress || isManualLogout) {
+    return Promise.reject(new Error('Logout already in progress'));
+  }
+
+  logoutInProgress = true;
+  isLoggingOut = true;
   console.log(`Logging out: ${reason}`);
 
   try {
@@ -190,15 +240,34 @@ const handleLogout = async (reason: string) => {
       Alert.alert('Session Expired', reason, [
         {
           text: 'OK',
-          onPress: () => navigationRef.navigate('Login'),
+          onPress: () => {
+            navigationRef.navigate('Login');
+            // Reset the flag after navigation
+            setTimeout(() => {
+              logoutInProgress = false;
+              isLoggingOut = false;
+            }, 1000);
+          },
         },
       ]);
     } else {
       // Show alert if we can't navigate
-      Alert.alert('Session Expired', reason);
+      Alert.alert('Session Expired', reason, [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Reset the flag
+            setTimeout(() => {
+              isLoggingOut = false;
+            }, 1000);
+          },
+        },
+      ]);
     }
   } catch (error) {
     console.error('Error during logout:', error);
+    logoutInProgress = false;
+    isLoggingOut = false;
   }
 
   return Promise.reject(new Error('Authentication failed'));
