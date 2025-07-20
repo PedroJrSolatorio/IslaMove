@@ -374,13 +374,14 @@ userSchema.index({ currentLocation: "2dsphere" });
 
 // Pre-save hook to validate role-specific fields
 userSchema.pre("save", function (next) {
-  // Validate that admin users don't have homeAddress or idDocument
+  // Clean up admin users - remove fields they shouldn't have
   if (this.role === "admin") {
-    if (this.homeAddress && Object.keys(this.homeAddress).length > 0) {
-      return next(new Error("Admin users cannot have home address"));
+    // Auto-remove invalid fields for admin users
+    if (this.homeAddress !== undefined) {
+      this.homeAddress = undefined;
     }
-    if (this.idDocument && Object.keys(this.idDocument).length > 0) {
-      return next(new Error("Admin users cannot have ID document"));
+    if (this.idDocument !== undefined) {
+      this.idDocument = undefined;
     }
   }
 
