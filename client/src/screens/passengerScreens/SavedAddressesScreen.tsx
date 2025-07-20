@@ -68,6 +68,9 @@ const SavedAddressesScreen = () => {
   );
   const [editAddressLocation, setEditAddressLocation] =
     useState<Location | null>(null);
+  const [expandedAddresses, setExpandedAddresses] = useState<Set<number>>(
+    new Set(),
+  );
 
   // Effect to clear form when modal is dismissed
   useEffect(() => {
@@ -84,6 +87,16 @@ const SavedAddressesScreen = () => {
       setEditAddressIndex(-1);
     }
   }, [editAddressModalVisible]);
+
+  const toggleAddressExpansion = (index: number) => {
+    const newExpanded = new Set(expandedAddresses);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedAddresses(newExpanded);
+  };
 
   const openEditAddressModal = (index: number) => {
     if (!passengerProfile?.savedAddresses) return;
@@ -371,40 +384,77 @@ const SavedAddressesScreen = () => {
           <Card.Content>
             {passengerProfile.savedAddresses &&
             passengerProfile.savedAddresses.length > 0 ? (
-              passengerProfile.savedAddresses.map((address, index) => (
-                <Card.Title
-                  key={index}
-                  title={address.label}
-                  subtitle={address.address}
-                  style={{paddingLeft: 0}}
-                  left={props => (
-                    <IconButton
-                      {...props}
-                      icon={
-                        address.label.toLowerCase() === 'home'
-                          ? 'home'
-                          : address.label.toLowerCase() === 'work'
-                          ? 'briefcase'
-                          : 'map-marker'
-                      }
-                      iconColor={Colors.primary}
-                      style={{marginLeft: 0}}
-                    />
-                  )}
-                  right={
-                    editingAddresses
-                      ? props => (
+              passengerProfile.savedAddresses.map((address, index) => {
+                const isExpanded = expandedAddresses.has(index);
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => toggleAddressExpansion(index)}
+                    activeOpacity={0.7}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'flex-start',
+                        paddingVertical: 12,
+                        borderBottomWidth:
+                          index < passengerProfile.savedAddresses.length - 1
+                            ? 1
+                            : 0,
+                        borderBottomColor: '#e0e0e0',
+                      }}>
+                      {/* Icon */}
+                      <IconButton
+                        icon={
+                          address.label.toLowerCase() === 'home'
+                            ? 'home'
+                            : address.label.toLowerCase() === 'work'
+                            ? 'briefcase'
+                            : 'map-marker'
+                        }
+                        iconColor={Colors.primary}
+                        size={24}
+                        style={{marginLeft: 0, marginTop: -8}}
+                      />
+
+                      {/* Content */}
+                      <View style={{flex: 1, marginLeft: 8}}>
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: '600',
+                            color: '#000000',
+                            marginBottom: 4,
+                          }}>
+                          {address.label}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: Colors.darkGray,
+                            lineHeight: 20,
+                          }}
+                          numberOfLines={isExpanded ? undefined : 1}>
+                          {address.address}
+                        </Text>
+                      </View>
+
+                      {/* Action buttons and expand icon */}
+                      <View
+                        style={{flexDirection: 'row', alignItems: 'center'}}>
+                        {editingAddresses && (
                           <View style={{flexDirection: 'row'}}>
                             <IconButton
-                              {...props}
                               icon="pencil"
-                              onPress={() => openEditAddressModal(index)}
-                              style={{marginRight: -10}}
+                              onPress={e => {
+                                e.stopPropagation(); // Prevent card expansion
+                                openEditAddressModal(index);
+                              }}
+                              size={20}
                             />
                             <IconButton
-                              {...props}
                               icon="delete"
-                              onPress={() => {
+                              onPress={e => {
+                                e.stopPropagation(); // Prevent card expansion
                                 Alert.alert(
                                   'Delete',
                                   'Are you sure you want to remove this address?',
@@ -417,13 +467,20 @@ const SavedAddressesScreen = () => {
                                   ],
                                 );
                               }}
+                              size={20}
                             />
                           </View>
-                        )
-                      : undefined
-                  }
-                />
-              ))
+                        )}
+                        <IconButton
+                          icon={isExpanded ? 'chevron-up' : 'chevron-down'}
+                          size={20}
+                          iconColor={Colors.gray}
+                        />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
             ) : (
               <Text style={TabsStyles.noAddressesText}>
                 No saved addresses yet.
