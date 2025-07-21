@@ -388,7 +388,8 @@ export const TabsStyles = StyleSheet.create({
   googleInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    alignSelf: 'center',
+    marginBottom: 4,
     gap: 8,
   },
   infoMessage: {
