@@ -119,7 +119,7 @@ const PassengerProfileScreen = () => {
 
         <IconButton
           icon="cog"
-          iconColor={Colors.gray}
+          iconColor={Colors.darkGray}
           size={24}
           onPress={() => navigation.navigate('ProfileInfo' as never)}
         />

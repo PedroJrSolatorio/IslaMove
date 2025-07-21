@@ -10,6 +10,7 @@ import {
   Modal,
   Vibration,
   AppState,
+  StatusBar,
 } from 'react-native';
 import {
   Text,
@@ -1856,6 +1857,11 @@ const BookRide = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent={true}
+        />
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={styles.loadingText}>Getting your location...</Text>
       </View>
@@ -1869,6 +1875,11 @@ const BookRide = () => {
           styles.container,
           {justifyContent: 'center', alignItems: 'center'},
         ]}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent={true}
+        />
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={{marginTop: 10}}>Restoring ride state...</Text>
       </View>
@@ -1877,6 +1888,11 @@ const BookRide = () => {
 
   return (
     <View style={[styles.container, {paddingBottom: insets.bottom}]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={[styles.backButton, {top: insets.top + 30}]}>

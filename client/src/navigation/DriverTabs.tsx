@@ -10,8 +10,8 @@ const DriverTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerShown: false, // hide header if you want
-        tabBarActiveTintColor: '#3498db',
+        headerShown: false,
+        tabBarActiveTintColor: '#1877F2',
         tabBarInactiveTintColor: 'gray',
       }}>
       <Tab.Screen

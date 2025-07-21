@@ -20,11 +20,11 @@ export const TabsStyles = StyleSheet.create({
   },
   avatarContainerModern: {
     position: 'relative',
-    marginRight: Spacing.medium, // Adjust as per your Spacing definition
+    marginRight: Spacing.medium,
     borderRadius: 55, // Slightly larger than avatar size to create a border (e.g., 100px avatar + 5px border on each side = 110px total diameter, so borderRadius 55)
     overflow: 'hidden', // Ensures the image is clipped to the circular shape
-    borderWidth: 3, // Adjust border width for desired thickness
-    borderColor: '#3498DB', // A vibrant, appealing blue
+    borderWidth: 2, // Adjust border width for desired thickness
+    // borderColor: Colors.primary, // A vibrant, appealing blue
     shadowColor: '#000', // For a subtle shadow
     shadowOffset: {width: 0, height: 2},
     shadowOpacity: 0.1,
@@ -38,7 +38,7 @@ export const TabsStyles = StyleSheet.create({
     borderRadius: 50, // Half of width/height to make it circular
   },
   avatarLabel: {
-    fontSize: 28, // Adjust font size for initials
+    fontSize: 28,
     color: '#FFFFFF', // White text for initials for better contrast on a potentially darker initial background
   },
   editAvatarOverlay: {
@@ -66,14 +66,13 @@ export const TabsStyles = StyleSheet.create({
     fontSize: 12,
   },
   editAvatarIconButton: {
-    // New style for the IconButton itself
     position: 'absolute',
     bottom: 0,
     right: 0,
     backgroundColor: Colors.lightText,
     borderRadius: 20, // Make it circular (half of size + padding)
-    padding: 0, // IconButton has default padding, reset it
-    margin: 0, // Reset default margin
+    padding: 0, // reset IconButton default padding
+    margin: 0, // reset default margin
     borderWidth: 1,
     borderColor: Colors.border,
     elevation: 2, // Optional: add a subtle shadow
@@ -90,7 +89,7 @@ export const TabsStyles = StyleSheet.create({
   nameText: {
     fontSize: Fonts.size.large,
     fontWeight: 'bold',
-    color: '#34495E',
+    // color: '#34495E',
   },
   phoneTextModern: {
     fontSize: Fonts.size.medium,

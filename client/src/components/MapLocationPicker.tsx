@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useRef, useCallback} from 'react';
+import React, {useState, useEffect, useRef} from 'react';
 import {
   View,
   TouchableOpacity,
@@ -6,6 +6,7 @@ import {
   Alert,
   Platform,
   PermissionsAndroid,
+  StatusBar,
 } from 'react-native';
 import {Text, Button, Card, Title} from 'react-native-paper';
 import MapView, {Marker, PROVIDER_GOOGLE, MapType} from 'react-native-maps';
@@ -207,6 +208,11 @@ const MapLocationPicker = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <StatusBar
+          barStyle="light-content"
+          backgroundColor="transparent"
+          translucent={true}
+        />
         <ActivityIndicator size="large" color="#3498db" />
         <Text style={styles.loadingText}>Loading map...</Text>
       </View>
@@ -215,6 +221,11 @@ const MapLocationPicker = () => {
 
   return (
     <View style={[styles.container, {paddingBottom: insets.bottom}]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent={true}
+      />
       <TouchableOpacity
         onPress={() => navigation.goBack()}
         style={[styles.backButton, {top: insets.top + 30}]}>
