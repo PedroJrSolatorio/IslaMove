@@ -875,28 +875,26 @@ export const updateExpiredStudentCategories = async () => {
       {
         role: "passenger",
         passengerCategory: "student",
-        age: { $gte: 19 }, // Target students aged 19 and above
-        "schoolIdValidation.expirationDate": { $lt: now }, // Expiration date is in the past
-        "schoolIdValidation.validated": false, // Not validated for the current period
+        age: { $gte: 19 },
+        "schoolIdValidation.expirationDate": { $lt: now },
+        "schoolIdValidation.validated": false,
       },
       {
         $set: { passengerCategory: "regular" },
         $push: {
           ageTransitions: {
-            fromAge: "$age", // Mongoose will use the current age from the document
-            toAge: "$age", // Age remains the same
+            fromAge: "$age",
+            toAge: "$age",
             transitionDate: now,
             categoryChanged: true,
             previousCategory: "student",
             newCategory: "regular",
           },
         },
-        // Optionally, reset schoolIdValidation fields if needed after conversion
-        // For example, to prevent re-triggering this logic on subsequent runs
         "schoolIdValidation.currentSchoolYear": null,
         "schoolIdValidation.lastUploadDate": null,
         "schoolIdValidation.expirationDate": null,
-        "schoolIdValidation.validated": false, // Keep as false or true depending on your desired state for 'regular' users
+        "schoolIdValidation.validated": false,
         "schoolIdValidation.validatedAt": null,
         "schoolIdValidation.validatedBy": null,
         "schoolIdValidation.reminderSent": false,
@@ -908,6 +906,76 @@ export const updateExpiredStudentCategories = async () => {
     return { modifiedCount: result.modifiedCount };
   } catch (error) {
     console.error("❌ Error updating expired student categories:", error);
-    throw error; // Re-throw to be caught by the cron job handler
+    throw error;
   }
+};
+
+export const checkAndTransitionPassengerCategory = async (user) => {
+  let userModified = false;
+  const now = new Date();
+
+  if (user.role === "passenger") {
+    // --- 1. Handle setting up schoolIdValidation if they are 19+ and student, but it's missing ---
+    // This covers cases where users jump from <19 to >=19 without a save at 19.
+    if (
+      user.age >= 19 &&
+      user.passengerCategory === "student" &&
+      !user.schoolIdValidation?.expirationDate
+    ) {
+      const currentYear = now.getFullYear();
+      const nextAugust = new Date(currentYear, 7, 31); // August 31st
+
+      user.schoolIdValidation = {
+        currentSchoolYear: `${currentYear}-${currentYear + 1}`,
+        expirationDate: nextAugust,
+        validated: false,
+        reminderSent: false,
+      };
+      userModified = true;
+      console.log(
+        `User ${user._id} (${user.email}) school ID validation requirement set up.`
+      );
+    }
+
+    // --- 2. Handle transition from student to regular if validation expires ---
+    // This part remains similar, but it relies on 'user.age' being correct *at this point*.
+    if (
+      user.passengerCategory === "student" &&
+      user.age >= 19 &&
+      user.schoolIdValidation &&
+      user.schoolIdValidation.expirationDate
+    ) {
+      if (
+        now > user.schoolIdValidation.expirationDate &&
+        !user.schoolIdValidation.validated
+      ) {
+        if (user.passengerCategory !== "regular") {
+          // Only change if not already regular
+          user.ageTransitions.push({
+            fromAge: user.age,
+            toAge: user.age, // Age remains the same
+            transitionDate: now,
+            categoryChanged: true,
+            previousCategory: "student",
+            newCategory: "regular",
+          });
+          user.passengerCategory = "regular";
+          // Clear validation fields as they are now 'regular' and don't need them
+          user.schoolIdValidation = undefined;
+          userModified = true;
+          console.log(
+            `User ${user._id} (${user.email}) automatically transitioned from 'student' to 'regular' due to expired school ID validation.`
+          );
+        }
+      }
+    }
+  }
+
+  if (userModified) {
+    // Save the changes. validateBeforeSave: false can prevent other schema validations
+    // if you're only concerned with this specific update. Use with caution.
+    await user.save({ validateBeforeSave: false });
+    return true;
+  }
+  return false;
 };

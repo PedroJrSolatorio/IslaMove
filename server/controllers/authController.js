@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { OAuth2Client } from "google-auth-library";
 import { getIO } from "../socket/socketManager.js";
+import { checkAndTransitionPassengerCategory } from "./userController.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -468,6 +469,15 @@ export const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "Invalid credentials" });
 
+    // --- Start: Age and Category Update on Login ---
+    // 1. Mark birthdate as modified to ensure pre-save age calculation always runs.
+    user.markModified("birthdate");
+    // 2. Save the user document. This triggers the pre('save') hook, updating user.age.
+    await user.save({ validateBeforeSave: false }); // Skip full validation for performance if only age/category is changing.
+    // 3. Now, with the user.age correctly updated, call the category transition helper.
+    await checkAndTransitionPassengerCategory(user);
+    // --- End: Age and Category Update on Login ---
+
     // Handle deletion cancellation
     let deletionCancelled = false;
     try {
@@ -507,6 +517,7 @@ export const loginUser = async (req, res) => {
       role: user.role,
       firstName: user.firstName,
       username: user.username,
+      passengerCategory: user.passengerCategory,
     };
 
     if (deletionCancelled) {
@@ -1091,6 +1102,13 @@ export const googleLogin = async (req, res) => {
 
     // Only allow login if user exists AND profile is complete
     if (user && user.isProfileComplete) {
+      // --- Start: Age and Category Update on Google Login ---
+      if (user.isProfileComplete) {
+        user.markModified("birthdate"); // Crucial for age recalculation
+        await user.save({ validateBeforeSave: false }); // Save to trigger pre('save') hook
+        await checkAndTransitionPassengerCategory(user); // Apply category logic
+      }
+      // --- End: Age and Category Update on Google Login ---
       // Handle deletion cancellation
       let deletionCancelled = false;
       try {
@@ -1134,6 +1152,7 @@ export const googleLogin = async (req, res) => {
         username: user.username,
         isProfileComplete: user.isProfileComplete,
         role: user.role,
+        passengerCategory: user.passengerCategory,
       };
 
       // Check if deletion was cancelled by middleware
