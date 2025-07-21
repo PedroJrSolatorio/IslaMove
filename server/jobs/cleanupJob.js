@@ -13,3 +13,18 @@ export const setupCleanupJobs = () => {
     }
   });
 };
+
+// // For testing, run every minute instead of daily
+// export const setupCleanupJobs = () => {
+//   console.log("Setting up TEST cleanup cron job (every minute)...");
+
+//   cron.schedule("* * * * *", async () => {
+//     // Every minute
+//     console.log(`[TEST] Running cleanup at ${new Date().toISOString()}`);
+//     try {
+//       await processScheduledDeletions();
+//     } catch (error) {
+//       console.error("Test cleanup failed:", error);
+//     }
+//   });
+// };

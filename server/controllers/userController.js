@@ -597,8 +597,7 @@ export const verifyAccountDeletion = async (req, res) => {
 
     // Set deletion request with 30-day grace period
     const deletionDate = new Date();
-    // deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now
-    deletionDate.setDate(deletionDate.getDate() + 1); // test delete after 1 day
+    deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now, uncomment to set it today
 
     user.deletionRequested = true;
     user.deletionRequestedAt = new Date();
@@ -641,13 +640,8 @@ export const processScheduledDeletions = async () => {
         // 1. Delete user's profile and document images
         await deleteUserFiles(user);
 
-        // 2. Delete user's rides (as passenger and driver)
-        const ridesDeleted = await Ride.deleteMany({
-          $or: [{ passenger: user._id }, { driver: user._id }],
-        });
-        console.log(
-          `Deleted ${ridesDeleted.deletedCount} rides for user ${user._id}`
-        );
+        // 2. ANONYMIZE rides instead of deleting them
+        await anonymizeUserRides(user._id);
 
         // 3. Remove user from ride queues and update ride references
         await cleanupRideReferences(user._id);
@@ -661,8 +655,16 @@ export const processScheduledDeletions = async () => {
         );
 
         // 5. Delete the user
-        await User.findByIdAndDelete(user._id);
-        console.log(`Successfully deleted user: ${user.email} (${user._id})`);
+        const deletedUser = await User.findByIdAndDelete(user._id);
+        if (deletedUser) {
+          console.log(
+            `[DEBUG] Successfully deleted user: ${user.email} (${user._id})`
+          );
+        } else {
+          console.log(
+            `[DEBUG] Failed to delete user: ${user.email} (${user._id}) - User not found`
+          );
+        }
       } catch (error) {
         console.error(`Failed to delete user ${user._id}:`, error);
         // Continue with other users even if one fails
@@ -675,6 +677,45 @@ export const processScheduledDeletions = async () => {
     }
   } catch (error) {
     console.error("Error processing scheduled deletions:", error);
+  }
+};
+
+// Anonymize user rides instead of deleting them
+const anonymizeUserRides = async (userId) => {
+  try {
+    console.log(`Anonymizing rides for user ${userId}`);
+
+    // Update rides where user was the passenger
+    const passengerRidesUpdated = await Ride.updateMany(
+      { passenger: userId },
+      {
+        $set: {
+          passenger: null, // Set to null to indicate deleted user
+          passengerRating: null,
+          passengerFeedback: "[User deleted]",
+        },
+      }
+    );
+
+    // Update rides where user was the driver
+    const driverRidesUpdated = await Ride.updateMany(
+      { driver: userId },
+      {
+        $set: {
+          driver: null, // Set to null to indicate deleted user
+          driverRating: null,
+          driverFeedback: "[User deleted]",
+          driverLocationUpdates: [], // Clear location history
+        },
+      }
+    );
+
+    console.log(
+      `Anonymized ${passengerRidesUpdated.modifiedCount} passenger rides`
+    );
+    console.log(`Anonymized ${driverRidesUpdated.modifiedCount} driver rides`);
+  } catch (error) {
+    console.error(`Error anonymizing rides for user ${userId}:`, error);
   }
 };
 
@@ -761,19 +802,64 @@ const extractFilePath = (fileUrl) => {
 // Helper function to clean up ride references
 const cleanupRideReferences = async (userId) => {
   try {
-    // Remove user from driver queues in active rides
-    await Ride.updateMany(
+    console.log(`Cleaning up ride references for user ${userId}`);
+
+    // 1. Remove from driver queues (all rides, not just active)
+    const queueCleanup = await Ride.updateMany(
       { driverQueue: userId },
       { $pull: { driverQueue: userId } }
     );
 
-    // Remove user from skipped drivers in active rides
-    await Ride.updateMany(
+    // 2. Remove from skipped drivers (all rides)
+    const skippedCleanup = await Ride.updateMany(
       { skippedDrivers: userId },
       { $pull: { skippedDrivers: userId } }
     );
 
-    console.log(`Cleaned up ride references for user ${userId}`);
+    // 3. Cancel active rides where the deleted user was passenger or driver
+    const activeStatuses = [
+      "requested",
+      "searching",
+      "accepted",
+      "arrived",
+      "inProgress",
+    ];
+
+    const cancelledRides = await Ride.updateMany(
+      {
+        $or: [{ passenger: userId }, { driver: userId }],
+        status: { $in: activeStatuses },
+      },
+      {
+        $set: {
+          status: "cancelled",
+          cancellationReason: "User account deleted",
+          cancellationInitiator: "system",
+          cancellationTime: new Date(),
+        },
+      }
+    );
+    // 4. Verification step - check for any remaining references
+    const remainingQueueRefs = await Ride.countDocuments({
+      driverQueue: userId,
+    });
+    const remainingSkippedRefs = await Ride.countDocuments({
+      skippedDrivers: userId,
+    });
+
+    if (remainingQueueRefs > 0 || remainingSkippedRefs > 0) {
+      console.warn(`⚠️  Cleanup incomplete for user ${userId}:`, {
+        remainingQueueRefs,
+        remainingSkippedRefs,
+      });
+    }
+
+    console.log(`✅ Cleanup completed for user ${userId}:`, {
+      queueUpdates: queueCleanup.modifiedCount,
+      skippedUpdates: skippedCleanup.modifiedCount,
+      cancelledRides: cancelledRides.modifiedCount,
+      remainingReferences: remainingQueueRefs + remainingSkippedRefs,
+    });
   } catch (error) {
     console.error(
       `Error cleaning up ride references for user ${userId}:`,

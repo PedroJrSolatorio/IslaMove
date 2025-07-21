@@ -1291,7 +1291,7 @@ const RegisterDriverScreen = () => {
             </Text>
 
             {/* ID Document Section */}
-            <View style={styles.documentItem}>
+            <View>
               <Text style={styles.documentLabel}>
                 ID Document (Driver's License)
               </Text>
@@ -1317,6 +1317,9 @@ const RegisterDriverScreen = () => {
                     style={styles.documentPreview}
                     resizeMode="contain"
                   />
+                  <Text style={styles.uploadedNote}>
+                    Uploaded – you can change it below
+                  </Text>
                   <View style={styles.documentButtonRow2}>
                     <Button
                       mode="outlined"
@@ -1352,11 +1355,12 @@ const RegisterDriverScreen = () => {
                   </Button>
                 </View>
               )}
+              <View style={styles.divider} />
             </View>
 
             {/* Driver Documents */}
             {documents.map((doc, index) => (
-              <View key={index} style={styles.documentItem}>
+              <View key={index}>
                 <Text style={styles.documentLabel}>{doc.documentType}</Text>
                 {doc.fileURL ? (
                   <View style={styles.documentPreviewContainer}>
@@ -1365,6 +1369,9 @@ const RegisterDriverScreen = () => {
                       style={styles.documentPreview}
                       resizeMode="contain"
                     />
+                    <Text style={styles.uploadedNote}>
+                      Uploaded – you can change it below
+                    </Text>
                     <View style={styles.documentButtonRow2}>
                       <Button
                         mode="outlined"
@@ -1400,6 +1407,7 @@ const RegisterDriverScreen = () => {
                     </Button>
                   </View>
                 )}
+                <View style={styles.divider} />
               </View>
             ))}
 

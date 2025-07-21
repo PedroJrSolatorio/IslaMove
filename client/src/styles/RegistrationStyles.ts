@@ -107,16 +107,13 @@ export const styles = StyleSheet.create({
     color: '#999',
   },
   // Document styles
-  documentItem: {
-    marginBottom: 24,
-  },
   documentLabel: {
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   documentPreviewContainer: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
   documentPreview: {
     width: '100%',
@@ -192,5 +189,18 @@ export const styles = StyleSheet.create({
   },
   paperInputContent: {
     paddingHorizontal: 15,
+  },
+  uploadedNote: {
+    fontSize: 12,
+    color: 'green',
+    marginVertical: 4,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#ccc',
+    marginVertical: 20,
+    opacity: 0.6,
   },
 });

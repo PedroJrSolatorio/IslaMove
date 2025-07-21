@@ -977,6 +977,9 @@ const RegisterPassengerScreen = () => {
                     style={styles.profilePreview}
                     resizeMode="cover"
                   />
+                  <Text style={styles.uploadedNote}>
+                    Uploaded – you can change it below
+                  </Text>
                   <View style={styles.documentButtonRow}>
                     <Button
                       mode="outlined"
@@ -995,7 +998,7 @@ const RegisterPassengerScreen = () => {
                   </View>
                 </View>
               ) : (
-                <View>
+                <View style={styles.profilePreviewContainer}>
                   <View style={styles.emptyProfileContainer}>
                     <Text style={styles.emptyProfileText}>No Photo</Text>
                   </View>
@@ -1020,7 +1023,7 @@ const RegisterPassengerScreen = () => {
             </View>
 
             {/* ID Document Section */}
-            <View style={styles.documentItem}>
+            <View>
               <Text style={styles.documentLabel}>ID Document</Text>
               <List.Accordion
                 title={`ID Type: ${idDocument.type.replace('_', ' ')}`}
@@ -1044,6 +1047,9 @@ const RegisterPassengerScreen = () => {
                     style={styles.documentPreview}
                     resizeMode="contain"
                   />
+                  <Text style={styles.uploadedNote}>
+                    Uploaded – you can change it below
+                  </Text>
                   <View style={styles.documentButtonRow}>
                     <Button
                       mode="outlined"
