@@ -161,6 +161,13 @@ export const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 10,
   },
+  infoText2: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+    marginBottom: 8,
+    marginLeft: 4,
+  },
   infoNote: {
     fontStyle: 'italic',
     color: '#666',

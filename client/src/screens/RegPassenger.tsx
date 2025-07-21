@@ -84,6 +84,7 @@ const RegisterPassengerScreen = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
   const insets = useSafeAreaInsets();
 
   // Check if user came from Google Sign-Up
@@ -861,7 +862,15 @@ const RegisterPassengerScreen = () => {
               keyboardType="email-address"
               value={personalInfo.email}
               onChangeText={value => handlePersonalInfoChange('email', value)}
+              onFocus={() => setEmailFocused(true)}
+              onBlur={() => setEmailFocused(false)}
             />
+            {emailFocused && (
+              <Text style={styles.infoText2}>
+                * Please use a valid Google account email to ensure you can
+                recover your account.
+              </Text>
+            )}
             <TextInput
               mode="outlined"
               label="Phone Number"

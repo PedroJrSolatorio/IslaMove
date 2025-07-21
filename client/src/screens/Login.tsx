@@ -183,7 +183,20 @@ const LoginScreen = ({navigation}: Props) => {
       const backendMessage =
         axiosError.response?.data?.message || 'Invalid username or password';
 
-      Alert.alert('Login Failed', backendMessage);
+      Alert.alert(
+        'Login Failed',
+        `${backendMessage}\n\nIf you forgot your password, try signing in with Google instead.`,
+        [
+          {
+            text: 'Try Google Sign-In',
+            onPress: () => handleGoogleSignIn(),
+          },
+          {
+            text: 'OK',
+            style: 'cancel',
+          },
+        ],
+      );
     } finally {
       setLoading(false);
     }
