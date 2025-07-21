@@ -344,6 +344,75 @@ const userSchema = new mongoose.Schema(
         return this.role === "passenger" ? [] : undefined;
       },
     },
+    // Parent/Guardian information for minors
+    parentGuardian: {
+      type: {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        email: { type: String },
+        firstName: { type: String },
+        lastName: { type: String },
+        relationship: { type: String, enum: ["parent", "guardian"] },
+        consentGiven: { type: Boolean, default: false },
+        consentDate: { type: Date },
+      },
+      required: function () {
+        return this.role === "passenger" && this.age && this.age < 18;
+      },
+    },
+    // Birth certificate for children 12-13 years old
+    birthCertificate: {
+      imageUrl: { type: String },
+      uploadedAt: { type: Date, default: Date.now },
+      verified: { type: Boolean, default: false },
+      verifiedAt: Date,
+      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      deletedAt: Date, // Track when it was deleted after verification
+      required: function () {
+        return this.role === "passenger" && this.age === 12;
+      },
+    },
+
+    // School ID validation tracking for students 19+
+    schoolIdValidation: {
+      currentSchoolYear: { type: String }, // e.g., "2024-2025"
+      lastUploadDate: { type: Date },
+      expirationDate: { type: Date }, // August of current school year
+      validated: { type: Boolean, default: false },
+      validatedAt: { type: Date },
+      validatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      reminderSent: { type: Boolean, default: false },
+    },
+    ageTransitions: [
+      {
+        fromAge: Number,
+        toAge: Number,
+        transitionDate: Date,
+        categoryChanged: { type: Boolean, default: false },
+        previousCategory: String,
+        newCategory: String,
+      },
+    ],
+    categoryChangeRequest: {
+      requestedCategory: {
+        type: String,
+        enum: ["regular", "student", "senior", "student_child"],
+      },
+      requestDate: { type: Date },
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+      },
+      supportingDocument: {
+        type: String,
+        imageUrl: String,
+        uploadedAt: { type: Date, default: Date.now },
+      },
+      reviewedAt: Date,
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      rejectionReason: String,
+    },
+
     activeRefreshTokens: [
       {
         token: { type: String, required: true },
@@ -351,7 +420,6 @@ const userSchema = new mongoose.Schema(
         loggedInAt: { type: Date, default: Date.now },
       },
     ],
-    // Account deletion fields
     deletionRequested: {
       type: Boolean,
       default: false,
@@ -371,6 +439,10 @@ const userSchema = new mongoose.Schema(
 
 // Add geospatial index for driver location queries
 userSchema.index({ currentLocation: "2dsphere" });
+
+// Add index for age-based queries
+userSchema.index({ birthdate: 1 });
+userSchema.index({ "schoolIdValidation.expirationDate": 1 });
 
 // Pre-save hook to validate role-specific fields
 userSchema.pre("save", function (next) {
@@ -438,9 +510,104 @@ userSchema.pre("save", function (next) {
       this.isProfileComplete = false; // Keep it false if anything is missing
     }
   }
-
   next();
 });
+
+// Pre-save hook to handle age transitions and category updates
+userSchema.pre("save", async function (next) {
+  // Calculate current age
+  if (this.birthdate) {
+    const today = new Date();
+    const birthDate = new Date(this.birthdate);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      age--;
+    }
+
+    const previousAge = this.age;
+    this.age = age;
+
+    // Handle age transitions for passengers
+    if (this.role === "passenger" && previousAge && previousAge !== age) {
+      this.ageTransitions.push({
+        fromAge: previousAge,
+        toAge: age,
+        transitionDate: new Date(),
+        categoryChanged: false,
+        previousCategory: this.passengerCategory,
+      });
+
+      // Auto-update category based on age transitions
+      if (previousAge === 12 && age === 13) {
+        // Transition from student_child to student
+        this.passengerCategory = "student";
+        this.ageTransitions[
+          this.ageTransitions.length - 1
+        ].categoryChanged = true;
+        this.ageTransitions[this.ageTransitions.length - 1].newCategory =
+          "student";
+      }
+
+      if (age === 19 && this.passengerCategory === "student") {
+        // Set school ID validation requirement
+        const currentYear = new Date().getFullYear();
+        const nextAugust = new Date(currentYear, 7, 31); // August 31st
+
+        this.schoolIdValidation = {
+          currentSchoolYear: `${currentYear}-${currentYear + 1}`,
+          expirationDate: nextAugust,
+          validated: false,
+          reminderSent: false,
+        };
+      }
+    }
+  }
+  next();
+});
+
+// Method to check if school ID validation is required
+userSchema.methods.requiresSchoolIdValidation = function () {
+  if (
+    this.role !== "passenger" ||
+    this.passengerCategory !== "student" ||
+    this.age < 19
+  ) {
+    return false;
+  }
+
+  if (!this.schoolIdValidation || !this.schoolIdValidation.expirationDate) {
+    return true;
+  }
+
+  return (
+    new Date() > this.schoolIdValidation.expirationDate &&
+    !this.schoolIdValidation.validated
+  );
+};
+
+// Method to check if user is eligible for category change
+userSchema.methods.canChangeCategory = function () {
+  const eligibleCategories = [];
+
+  if (this.age >= 18) {
+    eligibleCategories.push("regular");
+  }
+
+  if (this.age >= 12) {
+    eligibleCategories.push("student");
+  }
+
+  if (this.age >= 60) {
+    eligibleCategories.push("senior");
+  }
+
+  return eligibleCategories.filter((cat) => cat !== this.passengerCategory);
+};
 
 const User = mongoose.model("User", userSchema);
 

@@ -867,3 +867,47 @@ const cleanupRideReferences = async (userId) => {
     );
   }
 };
+
+export const updateExpiredStudentCategories = async () => {
+  const now = new Date();
+  try {
+    const result = await User.updateMany(
+      {
+        role: "passenger",
+        passengerCategory: "student",
+        age: { $gte: 19 }, // Target students aged 19 and above
+        "schoolIdValidation.expirationDate": { $lt: now }, // Expiration date is in the past
+        "schoolIdValidation.validated": false, // Not validated for the current period
+      },
+      {
+        $set: { passengerCategory: "regular" },
+        $push: {
+          ageTransitions: {
+            fromAge: "$age", // Mongoose will use the current age from the document
+            toAge: "$age", // Age remains the same
+            transitionDate: now,
+            categoryChanged: true,
+            previousCategory: "student",
+            newCategory: "regular",
+          },
+        },
+        // Optionally, reset schoolIdValidation fields if needed after conversion
+        // For example, to prevent re-triggering this logic on subsequent runs
+        "schoolIdValidation.currentSchoolYear": null,
+        "schoolIdValidation.lastUploadDate": null,
+        "schoolIdValidation.expirationDate": null,
+        "schoolIdValidation.validated": false, // Keep as false or true depending on your desired state for 'regular' users
+        "schoolIdValidation.validatedAt": null,
+        "schoolIdValidation.validatedBy": null,
+        "schoolIdValidation.reminderSent": false,
+      }
+    );
+    console.log(
+      `✅ Cleanup: Updated ${result.modifiedCount} expired student(s) to 'regular' passenger category.`
+    );
+    return { modifiedCount: result.modifiedCount };
+  } catch (error) {
+    console.error("❌ Error updating expired student categories:", error);
+    throw error; // Re-throw to be caught by the cron job handler
+  }
+};
