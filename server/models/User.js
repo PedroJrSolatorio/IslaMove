@@ -361,12 +361,14 @@ const userSchema = new mongoose.Schema(
     },
     // Birth certificate for children 12-13 years old
     birthCertificate: {
-      imageUrl: { type: String },
-      uploadedAt: { type: Date, default: Date.now },
-      verified: { type: Boolean, default: false },
-      verifiedAt: Date,
-      verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-      deletedAt: Date, // Track when it was deleted after verification
+      type: {
+        imageUrl: { type: String },
+        uploadedAt: { type: Date, default: Date.now },
+        verified: { type: Boolean, default: false },
+        verifiedAt: Date,
+        verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        deletedAt: Date, // Track when it was deleted after verification
+      },
       required: function () {
         return this.role === "passenger" && this.age === 12;
       },
