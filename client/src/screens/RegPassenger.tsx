@@ -738,6 +738,7 @@ const RegisterPassengerScreen = () => {
     });
     const [loginMethod, setLoginMethod] = useState('credentials');
     const [isLoading, setIsLoading] = useState(false);
+    const [parentPasswordVisible, setParentPasswordVisible] = useState(false);
 
     const handleParentLogin = async () => {
       if (
@@ -795,7 +796,10 @@ const RegisterPassengerScreen = () => {
             'Age Requirement Not Met',
             'Parent/guardian must be at least 19 years old to provide consent.',
           );
-        } else if (error.response?.status === 400 && error.response?.data?.error?.includes('birthdate')) {
+        } else if (
+          error.response?.status === 400 &&
+          error.response?.data?.error?.includes('birthdate')
+        ) {
           Alert.alert(
             'Missing Information',
             'Parent/guardian birthdate is required. Please update your profile first.',
@@ -875,7 +879,10 @@ const RegisterPassengerScreen = () => {
             'Age Requirement Not Met',
             'Parent/guardian must be at least 19 years old to provide consent.',
           );
-        } else if (error.response?.status === 400 && error.response?.data?.error?.includes('birthdate')) {
+        } else if (
+          error.response?.status === 400 &&
+          error.response?.data?.error?.includes('birthdate')
+        ) {
           Alert.alert(
             'Missing Information',
             'Parent/guardian birthdate is required. Please update your profile first.',
@@ -1018,12 +1025,20 @@ const RegisterPassengerScreen = () => {
             <TextInput
               mode="outlined"
               label="Parent/Guardian Password"
-              secureTextEntry
+              secureTextEntry={!parentPasswordVisible}
               value={parentInfo.password}
               onChangeText={value =>
                 setParentInfo({...parentInfo, password: value})
               }
               style={styles.paperInput}
+              right={
+                <TextInput.Icon
+                  icon={parentPasswordVisible ? 'eye-off' : 'eye'}
+                  onPress={() =>
+                    setParentPasswordVisible(!parentPasswordVisible)
+                  }
+                />
+              }
             />
             <Button
               mode="contained"
