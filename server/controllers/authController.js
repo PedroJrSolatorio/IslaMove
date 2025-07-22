@@ -1311,6 +1311,34 @@ export const verifyParentConsent = async (req, res) => {
       });
     }
 
+    // Calculate parent's current age
+    if (!parent.birthdate) {
+      return res.status(400).json({
+        error:
+          "Parent's birthdate is not available in the system. Please update your profile.",
+      });
+    }
+
+    const today = new Date();
+    const birthDate = new Date(parent.birthdate);
+    let parentAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      parentAge--;
+    }
+
+    // Check if parent is at least 19 years old
+    if (parentAge < 19) {
+      return res.status(403).json({
+        error:
+          "Parent/guardian must be at least 19 years old to provide consent.",
+      });
+    }
+
     // Create or update consent record
     const consentRecord = {
       parentId: parent._id,
@@ -1396,7 +1424,35 @@ export const parentGoogleConsent = async (req, res) => {
       });
     }
 
-    // 4. Ensure this is a Google user (has googleId)
+    // 4. Calculate parent's current age and validate
+    if (!parent.birthdate) {
+      return res.status(400).json({
+        error:
+          "Parent's birthdate is not available in the system. Please update your profile.",
+      });
+    }
+
+    const today = new Date();
+    const birthDate = new Date(parent.birthdate);
+    let parentAge = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birthDate.getDate())
+    ) {
+      parentAge--;
+    }
+
+    // Check if parent is at least 19 years old
+    if (parentAge < 19) {
+      return res.status(403).json({
+        error:
+          "Parent/guardian must be at least 19 years old to provide consent.",
+      });
+    }
+
+    // 5. Ensure this is a Google user (has googleId)
     if (!parent.googleId) {
       // Link Google account if not already linked
       parent.googleId = googleId;
@@ -1404,7 +1460,7 @@ export const parentGoogleConsent = async (req, res) => {
       await parent.save();
     }
 
-    // 5. Create consent record
+    // 6. Create consent record
     const consentRecord = {
       parentId: parent._id,
       parentName: `${parent.firstName} ${parent.lastName}`,

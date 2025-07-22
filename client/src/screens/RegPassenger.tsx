@@ -790,6 +790,16 @@ const RegisterPassengerScreen = () => {
           );
         } else if (error.response?.status === 401) {
           Alert.alert('Invalid Credentials', 'Incorrect email or password.');
+        } else if (error.response?.status === 403) {
+          Alert.alert(
+            'Age Requirement Not Met',
+            'Parent/guardian must be at least 19 years old to provide consent.',
+          );
+        } else if (error.response?.status === 400 && error.response?.data?.error?.includes('birthdate')) {
+          Alert.alert(
+            'Missing Information',
+            'Parent/guardian birthdate is required. Please update your profile first.',
+          );
         } else {
           Alert.alert(
             'Error',
@@ -859,6 +869,16 @@ const RegisterPassengerScreen = () => {
           Alert.alert(
             'Verification Failed',
             error.response?.data?.error || 'Google authentication failed.',
+          );
+        } else if (error.response?.status === 403) {
+          Alert.alert(
+            'Age Requirement Not Met',
+            'Parent/guardian must be at least 19 years old to provide consent.',
+          );
+        } else if (error.response?.status === 400 && error.response?.data?.error?.includes('birthdate')) {
+          Alert.alert(
+            'Missing Information',
+            'Parent/guardian birthdate is required. Please update your profile first.',
           );
         } else {
           Alert.alert(
