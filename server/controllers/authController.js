@@ -5,7 +5,7 @@ import fs from "fs";
 import path from "path";
 import { OAuth2Client } from "google-auth-library";
 import { getIO } from "../socket/socketManager.js";
-import { checkAndTransitionPassengerCategory } from "./userController.js";
+import { processAgeTransitions } from "./userController.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -542,7 +542,7 @@ export const loginUser = async (req, res) => {
     // 2. Save the user document. This triggers the pre('save') hook, updating user.age.
     await user.save({ validateBeforeSave: false }); // Skip full validation for performance if only age/category is changing.
     // 3. Now, with the user.age correctly updated, call the category transition helper.
-    await checkAndTransitionPassengerCategory(user);
+    await processAgeTransitions(user);
     // --- End: Age and Category Update on Login ---
 
     // Handle deletion cancellation
@@ -1173,7 +1173,7 @@ export const googleLogin = async (req, res) => {
       if (user.isProfileComplete) {
         user.markModified("birthdate"); // Crucial for age recalculation
         await user.save({ validateBeforeSave: false }); // Save to trigger pre('save') hook
-        await checkAndTransitionPassengerCategory(user); // Apply category logic
+        await processAgeTransitions(user); // Apply category logic
       }
       // --- End: Age and Category Update on Google Login ---
       // Handle deletion cancellation

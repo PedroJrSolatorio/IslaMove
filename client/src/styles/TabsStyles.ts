@@ -18,9 +18,16 @@ export const TabsStyles = StyleSheet.create({
     paddingVertical: Spacing.medium,
     paddingHorizontal: Spacing.medium,
   },
-  avatarContainerModern: {
+  avatarWrapper: {
     position: 'relative',
-    marginRight: Spacing.medium,
+    width: 110,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarContainerModern: {
+    width: 100,
+    height: 100,
     borderRadius: 55, // Slightly larger than avatar size to create a border (e.g., 100px avatar + 5px border on each side = 110px total diameter, so borderRadius 55)
     overflow: 'hidden', // Ensures the image is clipped to the circular shape
     borderWidth: 2, // Adjust border width for desired thickness
@@ -51,15 +58,16 @@ export const TabsStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  editAvatarIconContainer: {
+  editAvatarFloatingIcon: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: Colors.lightText,
-    borderRadius: 15,
-    padding: 5,
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 4,
     borderWidth: 1,
     borderColor: Colors.border,
+    elevation: 3,
   },
   editAvatarText: {
     color: 'white',
@@ -74,7 +82,7 @@ export const TabsStyles = StyleSheet.create({
     padding: 0, // reset IconButton default padding
     margin: 0, // reset default margin
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: 'black',
     elevation: 2, // Optional: add a subtle shadow
   },
   fullNameText: {
@@ -85,6 +93,7 @@ export const TabsStyles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
+    marginStart: 8,
   },
   nameText: {
     fontSize: Fonts.size.large,
@@ -395,7 +404,7 @@ export const TabsStyles = StyleSheet.create({
   infoMessage: {
     fontSize: 12,
     color: 'gray',
-    marginTop: -10, // Adjust spacing as needed
+    marginTop: 10,
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -446,5 +455,155 @@ export const TabsStyles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
     paddingHorizontal: 10,
+  },
+  modalTitle2: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+    color: Colors.text,
+  },
+  currentCategoryInfo: {
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  currentCategoryLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  currentCategoryValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: Colors.text,
+  },
+  noEligibleText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#666',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  selectCategoryLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: Colors.text,
+  },
+  categoryOption: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: Colors.background,
+  },
+  categoryOptionSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#e3f2fd',
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  categoryOptionTextSelected: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+  },
+  categoryRequirement: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  documentUploadSection: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+  },
+  documentUploadLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: Colors.text,
+  },
+  documentPreview: {
+    alignItems: 'center',
+  },
+  documentImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  uploadDocumentButton: {
+    borderColor: Colors.primary,
+    flex: 1,
+  },
+  changeDocumentButton: {
+    marginTop: 8,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalCancelButton: {
+    flex: 1,
+    marginRight: 8,
+    borderColor: '#666',
+  },
+  modalSubmitButton: {
+    flex: 1,
+    marginLeft: 8,
+    backgroundColor: Colors.primary,
+  },
+  changeCategoryButton: {
+    borderColor: Colors.primary,
+    marginLeft: 8,
+    paddingHorizontal: 12,
+  },
+  reminderTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#e65100',
+    marginBottom: 8,
+  },
+  reminderText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+  reminderButton: {
+    backgroundColor: '#ff9800',
+  },
+  reminderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+
+  dismissButton: {
+    margin: 0,
+    padding: 0,
+  },
+
+  reminderButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    gap: 8,
+  },
+
+  reminderDismissButton: {
+    flex: 1,
+    borderColor: '#666',
   },
 });

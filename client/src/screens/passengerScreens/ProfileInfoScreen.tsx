@@ -6,6 +6,7 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  Image,
 } from 'react-native';
 import {
   Card,
@@ -15,20 +16,447 @@ import {
   Text,
   IconButton,
   Divider,
+  Modal,
 } from 'react-native-paper';
 import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import {RootStackParamList} from '../../navigation/types';
 import {TabsStyles} from '../../styles/TabsStyles';
+import {styles} from '../../styles/RegistrationStyles';
 import {GlobalStyles} from '../../styles/GlobalStyles';
 import {useProfile, isPassengerProfile} from '../../context/ProfileContext';
 import {useAuth} from '../../context/AuthContext';
-import {launchCamera, CameraOptions} from 'react-native-image-picker';
+import {
+  launchCamera,
+  launchImageLibrary,
+  CameraOptions,
+  ImageLibraryOptions,
+  ImagePickerResponse,
+} from 'react-native-image-picker';
 import {BACKEND_URL} from '@env';
 import {Colors} from '../../styles/Colors';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Type definitions
+interface CategoryChangeRequest {
+  requestedCategory: string;
+  supportingDocument: {
+    imageUrl: string;
+    mimeType: string;
+  } | null;
+}
+
+interface CategoryChangeModalProps {
+  visible: boolean;
+  onDismiss: () => void;
+  currentCategory: string;
+  age: number;
+  onSubmit: (request: CategoryChangeRequest) => void;
+  loading: boolean;
+}
+
+interface SchoolIdValidationReminderProps {
+  user: {
+    role: string;
+    passengerCategory: string;
+    age: number;
+    schoolIdValidation?: {
+      validated: boolean;
+    };
+  };
+  onUpload: () => void;
+}
+
+// Category change modal component with senior eligibility notification
+const CategoryChangeModal: React.FC<CategoryChangeModalProps> = ({
+  visible,
+  onDismiss,
+  currentCategory,
+  age,
+  onSubmit,
+  loading,
+}) => {
+  const [selectedCategory, setSelectedCategory] = useState(currentCategory);
+  const [supportingDocument, setSupportingDocument] = useState({
+    imageUrl: '',
+    mimeType: '',
+  });
+
+  const getEligibleCategories = () => {
+    const categories = [];
+
+    if (age >= 18) {
+      categories.push({value: 'regular', label: 'Regular', requiresDoc: false});
+    }
+
+    if (age >= 12) {
+      categories.push({
+        value: 'student',
+        label: 'Student',
+        requiresDoc: age >= 19, // Requires school ID if 19 or older
+      });
+    }
+
+    if (age >= 60) {
+      categories.push({
+        value: 'senior',
+        label: 'Senior',
+        requiresDoc: true,
+        description:
+          'Requires Senior Citizen ID or valid government-issued ID showing age',
+      });
+    }
+
+    return categories.filter(cat => cat.value !== currentCategory);
+  };
+
+  const selectedCategoryInfo = getEligibleCategories().find(
+    cat => cat.value === selectedCategory,
+  );
+
+  const pickImage = async () => {
+    try {
+      const options: ImageLibraryOptions = {
+        mediaType: 'photo',
+        includeBase64: false,
+        maxHeight: 2000,
+        maxWidth: 2000,
+        quality: 1,
+      };
+
+      launchImageLibrary(options, (result: ImagePickerResponse) => {
+        if (result.assets && result.assets.length > 0) {
+          const selectedAsset = result.assets[0];
+          setSupportingDocument({
+            imageUrl: selectedAsset.uri || '',
+            mimeType: selectedAsset.type || 'image/jpeg',
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+    }
+  };
+
+  const takePicture = async () => {
+    try {
+      const options: CameraOptions = {
+        mediaType: 'photo',
+        quality: 1,
+        saveToPhotos: false,
+        includeBase64: false,
+        maxHeight: 2000,
+        maxWidth: 2000,
+      };
+
+      launchCamera(options, (result: ImagePickerResponse) => {
+        if (result.didCancel) {
+          console.log('User cancelled camera');
+          return;
+        } else if (result.errorCode) {
+          console.log('Camera Error: ', result.errorMessage);
+          Alert.alert('Error', result.errorMessage || 'Failed to take picture');
+          return;
+        }
+
+        if (result.assets && result.assets.length > 0) {
+          const selectedAsset = result.assets[0];
+          setSupportingDocument({
+            imageUrl: selectedAsset.uri || '',
+            mimeType: selectedAsset.type || 'image/jpeg',
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      Alert.alert('Error', 'Failed to take picture. Please try again.');
+    }
+  };
+
+  const handleSubmit = () => {
+    if (selectedCategoryInfo?.requiresDoc && !supportingDocument.imageUrl) {
+      const docType =
+        selectedCategory === 'senior'
+          ? 'Senior Citizen ID or government-issued ID showing age'
+          : 'school ID';
+
+      Alert.alert(
+        'Document Required',
+        `Please upload a ${docType} to verify your eligibility.`,
+      );
+      return;
+    }
+
+    onSubmit({
+      requestedCategory: selectedCategory,
+      supportingDocument: selectedCategoryInfo?.requiresDoc
+        ? supportingDocument
+        : null,
+    });
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      onDismiss={onDismiss}
+      contentContainerStyle={TabsStyles.modalContainer}>
+      <Text style={TabsStyles.modalTitle2}>Change Passenger Category</Text>
+
+      <View style={TabsStyles.currentCategoryInfo}>
+        <Text style={TabsStyles.currentCategoryLabel}>Current Category:</Text>
+        <Text style={TabsStyles.currentCategoryValue}>
+          {currentCategory.charAt(0).toUpperCase() + currentCategory.slice(1)}
+        </Text>
+      </View>
+
+      {getEligibleCategories().length === 0 ? (
+        <Text style={TabsStyles.noEligibleText}>
+          You are not eligible to change your category at this time.
+        </Text>
+      ) : (
+        <>
+          <Text style={TabsStyles.selectCategoryLabel}>
+            Select New Category:
+          </Text>
+          {getEligibleCategories().map(category => (
+            <TouchableOpacity
+              key={category.value}
+              style={[
+                TabsStyles.categoryOption,
+                selectedCategory === category.value &&
+                  TabsStyles.categoryOptionSelected,
+              ]}
+              onPress={() => setSelectedCategory(category.value)}>
+              <Text
+                style={[
+                  TabsStyles.categoryOptionText,
+                  selectedCategory === category.value &&
+                    TabsStyles.categoryOptionTextSelected,
+                ]}>
+                {category.label}
+              </Text>
+              {category.requiresDoc && (
+                <Text style={TabsStyles.categoryRequirement}>
+                  *{' '}
+                  {category.description ||
+                    `Requires ${
+                      category.value === 'senior' ? 'Senior ID' : 'School ID'
+                    }`}
+                </Text>
+              )}
+            </TouchableOpacity>
+          ))}
+
+          {selectedCategoryInfo?.requiresDoc && (
+            <View style={TabsStyles.documentUploadSection}>
+              <Text style={TabsStyles.documentUploadLabel}>
+                Upload{' '}
+                {selectedCategory === 'senior'
+                  ? 'Senior Citizen ID or Government ID'
+                  : 'School ID'}
+                :
+              </Text>
+
+              {supportingDocument.imageUrl ? (
+                <View style={TabsStyles.documentPreview}>
+                  <Image
+                    source={{uri: supportingDocument.imageUrl}}
+                    style={TabsStyles.documentImage}
+                    resizeMode="contain"
+                  />
+                  <View style={styles.documentButtonRow}>
+                    <Button
+                      mode="outlined"
+                      onPress={pickImage}
+                      style={TabsStyles.changeDocumentButton}>
+                      Gallery
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={takePicture}
+                      style={TabsStyles.changeDocumentButton}>
+                      Camera
+                    </Button>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.documentButtonRow}>
+                  <Button
+                    mode="outlined"
+                    onPress={pickImage}
+                    style={TabsStyles.uploadDocumentButton}>
+                    Gallery
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={takePicture}
+                    style={TabsStyles.uploadDocumentButton}>
+                    Camera
+                  </Button>
+                </View>
+              )}
+            </View>
+          )}
+
+          <View style={TabsStyles.modalButtonRow}>
+            <Button
+              mode="outlined"
+              style={TabsStyles.modalCancelButton}
+              onPress={onDismiss}
+              disabled={loading}>
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              style={TabsStyles.modalSubmitButton}
+              onPress={handleSubmit}
+              loading={loading}
+              disabled={loading}>
+              Submit
+            </Button>
+          </View>
+        </>
+      )}
+    </Modal>
+  );
+};
+
+// School ID validation reminder component
+const SchoolIdValidationReminder: React.FC<SchoolIdValidationReminderProps> = ({
+  user,
+  onUpload,
+}) => {
+  const [showReminder, setShowReminder] = useState(false);
+
+  useEffect(() => {
+    // Check if user requires school ID validation
+    if (
+      user.role === 'passenger' &&
+      user.passengerCategory === 'student' &&
+      user.age >= 19
+    ) {
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const augustDeadline = new Date(currentYear, 7, 31); // August 31st
+
+      // Check if validation is required or expired
+      if (
+        !user.schoolIdValidation ||
+        !user.schoolIdValidation.validated ||
+        currentDate > augustDeadline
+      ) {
+        setShowReminder(true);
+      }
+    }
+  }, [user]);
+
+  if (!showReminder) return null;
+
+  return (
+    <Card style={[TabsStyles.sectionCard, {backgroundColor: '#FFF3E0'}]}>
+      <Card.Content>
+        <Text style={TabsStyles.reminderTitle}>
+          School ID Validation Required
+        </Text>
+        <Text style={TabsStyles.reminderText}>
+          Since you're a student over 19 years old, you need to upload a valid
+          school ID annually by August 31st.
+        </Text>
+        <Button
+          mode="contained"
+          onPress={onUpload}
+          style={TabsStyles.reminderButton}>
+          Upload School ID
+        </Button>
+      </Card.Content>
+    </Card>
+  );
+};
+
+// Senior eligibility reminder component
+interface SeniorEligibilityReminderProps {
+  user: {
+    role: string;
+    passengerCategory: string;
+    age: number;
+    seniorEligibilityNotification?: {
+      eligible: boolean;
+      acknowledged: boolean;
+      notificationDate: string;
+    };
+  };
+  onChangeCategoryPress: () => void;
+  onDismissNotification: () => void;
+}
+
+const SeniorEligibilityReminder: React.FC<SeniorEligibilityReminderProps> = ({
+  user,
+  onChangeCategoryPress,
+  onDismissNotification,
+}) => {
+  const [showReminder, setShowReminder] = useState(false);
+
+  useEffect(() => {
+    // Show reminder if user is 60+, not already senior, and hasn't acknowledged
+    if (
+      user.role === 'passenger' &&
+      user.age >= 60 &&
+      user.passengerCategory !== 'senior' &&
+      user.seniorEligibilityNotification?.eligible &&
+      !user.seniorEligibilityNotification?.acknowledged
+    ) {
+      setShowReminder(true);
+    }
+  }, [user]);
+
+  const handleDismiss = async () => {
+    setShowReminder(false);
+    await onDismissNotification();
+  };
+
+  if (!showReminder) return null;
+
+  return (
+    <Card style={[TabsStyles.sectionCard, {backgroundColor: '#E8F5E8'}]}>
+      <Card.Content>
+        <View style={TabsStyles.reminderHeader}>
+          <Text style={TabsStyles.reminderTitle}>
+            🎉 You're Eligible for Senior Discount!
+          </Text>
+          <IconButton
+            icon="close"
+            size={20}
+            iconColor="#666"
+            onPress={handleDismiss}
+            style={TabsStyles.dismissButton}
+          />
+        </View>
+        <Text style={TabsStyles.reminderText}>
+          Congratulations! At {user.age} years old, you're now eligible for our
+          senior citizen discount. Change your category to "Senior" to enjoy
+          reduced fares on all rides.
+        </Text>
+        <View style={TabsStyles.reminderButtonRow}>
+          <Button
+            mode="contained"
+            onPress={onChangeCategoryPress}
+            style={TabsStyles.reminderButton}>
+            Change to Senior
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={handleDismiss}
+            style={TabsStyles.reminderDismissButton}>
+            Maybe Later
+          </Button>
+        </View>
+      </Card.Content>
+    </Card>
+  );
+};
 
 const ProfileInfoScreen = () => {
   const navigation = useNavigation<NavigationProp>();
@@ -37,6 +465,8 @@ const ProfileInfoScreen = () => {
   const insets = useSafeAreaInsets();
   const [editing, setEditing] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryChangeLoading, setCategoryChangeLoading] = useState(false);
 
   // Type guard to ensure we're working with passenger profile
   const passengerProfile = isPassengerProfile(profileData) ? profileData : null;
@@ -120,6 +550,112 @@ const ProfileInfoScreen = () => {
     return '';
   };
 
+  const handleCategoryChange = async (changeRequest: CategoryChangeRequest) => {
+    try {
+      setCategoryChangeLoading(true);
+
+      const formData = new FormData();
+      formData.append('requestedCategory', changeRequest.requestedCategory);
+
+      if (changeRequest.supportingDocument) {
+        const uriParts = changeRequest.supportingDocument.imageUrl.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+
+        formData.append('supportingDocument', {
+          uri: changeRequest.supportingDocument.imageUrl,
+          name: `supporting_document.${fileType}`,
+          type: changeRequest.supportingDocument.mimeType,
+        } as any);
+      }
+
+      const response = await fetch(
+        `${BACKEND_URL}/api/users/change-category/${profileData?._id}`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        },
+      );
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          'Request Submitted',
+          "Your category change request has been submitted for review. You will be notified once it's processed.",
+          [{text: 'OK', onPress: () => setShowCategoryModal(false)}],
+        );
+        refreshProfile(); // Refresh profile data
+      } else {
+        throw new Error(responseData?.error || 'Failed to submit request');
+      }
+    } catch (error) {
+      console.error('Category change error:', error);
+      Alert.alert(
+        'Error',
+        'Failed to submit category change request. Please try again.',
+      );
+    } finally {
+      setCategoryChangeLoading(false);
+    }
+  };
+
+  const handleSchoolIdUpload = async () => {
+    try {
+      const options: ImageLibraryOptions = {
+        mediaType: 'photo',
+        includeBase64: false,
+        maxHeight: 2000,
+        maxWidth: 2000,
+        quality: 1,
+      };
+
+      launchImageLibrary(options, async (result: ImagePickerResponse) => {
+        if (result.assets && result.assets.length > 0) {
+          const selectedAsset = result.assets[0];
+
+          const formData = new FormData();
+          const uriParts = selectedAsset.uri!.split('.');
+          const fileType = uriParts[uriParts.length - 1];
+
+          formData.append('schoolId', {
+            uri: selectedAsset.uri,
+            name: `school_id.${fileType}`,
+            type: selectedAsset.type || 'image/jpeg',
+          } as any);
+
+          const response = await fetch(
+            `${BACKEND_URL}/api/users/upload-school-id/${profileData?._id}`,
+            {
+              method: 'POST',
+              body: formData,
+              headers: {
+                Authorization: `Bearer ${userToken}`,
+                'Content-Type': 'multipart/form-data',
+              },
+            },
+          );
+
+          if (response.ok) {
+            Alert.alert(
+              'School ID Uploaded',
+              'Your school ID has been uploaded successfully and will be reviewed.',
+            );
+            refreshProfile();
+          } else {
+            throw new Error('Failed to upload school ID');
+          }
+        }
+      });
+    } catch (error) {
+      console.error('School ID upload error:', error);
+      Alert.alert('Error', 'Failed to upload school ID. Please try again.');
+    }
+  };
+
   const toggleEdit = () => {
     if (editing) {
       // Reset form if canceling edit
@@ -146,7 +682,7 @@ const ProfileInfoScreen = () => {
     }
   };
 
-  const pickImage = async () => {
+  const takePicture = async () => {
     // Check if there's already a pending validation
     if (isProfileImagePending()) {
       const message = getPendingImageStatusMessage();
@@ -236,6 +772,29 @@ const ProfileInfoScreen = () => {
     }
   };
 
+  const handleDismissSeniorNotification = async () => {
+    try {
+      const response = await fetch(
+        `${BACKEND_URL}/api/users/acknowledge-senior-eligibility/${profileData?._id}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      if (response.ok) {
+        refreshProfile(); // Refresh to update the notification state
+      } else {
+        console.error('Failed to acknowledge senior notification');
+      }
+    } catch (error) {
+      console.error('Error acknowledging senior notification:', error);
+    }
+  };
+
   if (loading) {
     return (
       <View style={GlobalStyles.loadingContainer}>
@@ -299,48 +858,60 @@ const ProfileInfoScreen = () => {
       </View>
       <ScrollView style={GlobalStyles.container}>
         <View style={TabsStyles.profileHeaderContainer}>
-          <TouchableOpacity
-            style={TabsStyles.avatarContainerModern}
-            onPress={pickImage}
-            disabled={uploadingImage}>
-            {/* Show current active profile image, not pending one */}
-            {profileData.profileImage ? (
-              <Avatar.Image
-                size={100}
-                source={{uri: profileData.profileImage}}
-                style={TabsStyles.avatar}
-              />
-            ) : (
-              <Avatar.Text
-                size={100} // Increased size for prominence on a dedicated screen
-                label={getInitials()}
-                style={TabsStyles.avatar}
-                labelStyle={TabsStyles.avatarLabel}
-              />
-            )}
-            {(uploadingImage || isProfileImagePending()) && (
-              <View style={TabsStyles.editAvatarOverlay}>
-                {uploadingImage ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={TabsStyles.editAvatarText}>Pending</Text>
-                )}
-              </View>
-            )}
+          <View style={TabsStyles.avatarWrapper}>
+            <TouchableOpacity
+              style={TabsStyles.avatarContainerModern}
+              onPress={takePicture}
+              disabled={uploadingImage}>
+              {/* Show current active profile image, not pending one */}
+              {profileData.profileImage ? (
+                <Avatar.Image
+                  size={100}
+                  source={{uri: profileData.profileImage}}
+                  style={TabsStyles.avatar}
+                />
+              ) : (
+                <Avatar.Text
+                  size={100} // Increased size for prominence on a dedicated screen
+                  label={getInitials()}
+                  style={TabsStyles.avatar}
+                  labelStyle={TabsStyles.avatarLabel}
+                />
+              )}
+              {(uploadingImage || isProfileImagePending()) && (
+                <View style={TabsStyles.editAvatarOverlay}>
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={TabsStyles.editAvatarText}>Pending</Text>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
             {!uploadingImage && !isProfileImagePending() && (
-              <View style={TabsStyles.editAvatarIconContainer}>
+              <View style={TabsStyles.editAvatarFloatingIcon}>
                 <IconButton
                   icon="pencil"
                   size={20}
                   iconColor={Colors.primary}
                   style={TabsStyles.editAvatarIconButton}
-                  onPress={pickImage}
+                  onPress={takePicture}
                 />
               </View>
             )}
-          </TouchableOpacity>
+          </View>
         </View>
-
+        {/* School ID Validation Reminder */}
+        <SchoolIdValidationReminder
+          user={passengerProfile}
+          onUpload={handleSchoolIdUpload}
+        />
+        {/* Senior Eligibility Reminder */}
+        <SeniorEligibilityReminder
+          user={passengerProfile}
+          onChangeCategoryPress={() => setShowCategoryModal(true)}
+          onDismissNotification={handleDismissSeniorNotification}
+        />
         <Card style={TabsStyles.sectionCard}>
           <Card.Content>
             {editing ? (
@@ -455,19 +1026,47 @@ const ProfileInfoScreen = () => {
                   </Text>
                 </View>
                 <Divider style={TabsStyles.divider} />
-                <View style={TabsStyles.infoRow}>
-                  <Text style={TabsStyles.infoLabel}>Category</Text>
-                  <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
-                    {passengerProfile.passengerCategory
-                      ?.charAt(0)
-                      .toUpperCase() +
-                      passengerProfile.passengerCategory?.slice(1) || 'Not set'}
-                  </Text>
+                <View
+                  style={[
+                    TabsStyles.infoRow,
+                    {
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    },
+                  ]}>
+                  <View>
+                    <Text style={TabsStyles.infoLabel}>Category</Text>
+                    <Text style={[TabsStyles.infoValue, {color: '#666'}]}>
+                      {passengerProfile.passengerCategory
+                        ?.charAt(0)
+                        .toUpperCase() +
+                        passengerProfile.passengerCategory?.slice(1) ||
+                        'Not set'}
+                    </Text>
+                  </View>
+                  <Button
+                    mode="text"
+                    compact
+                    onPress={() => setShowCategoryModal(true)}
+                    style={TabsStyles.changeCategoryButton}
+                    labelStyle={{fontSize: 13, color: Colors.primary}}>
+                    Change
+                  </Button>
                 </View>
               </>
             )}
           </Card.Content>
         </Card>
+        {/* Category Change Modal */}
+        <CategoryChangeModal
+          visible={showCategoryModal}
+          onDismiss={() => setShowCategoryModal(false)}
+          currentCategory={passengerProfile.passengerCategory}
+          age={passengerProfile.age}
+          onSubmit={handleCategoryChange}
+          loading={categoryChangeLoading}
+        />
         <View style={{height: insets.bottom}} />
       </ScrollView>
     </View>

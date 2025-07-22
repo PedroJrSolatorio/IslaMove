@@ -394,10 +394,38 @@ const userSchema = new mongoose.Schema(
         newCategory: String,
       },
     ],
+    seniorEligibilityNotification: {
+      eligible: { type: Boolean, default: false },
+      notificationDate: Date,
+      acknowledged: { type: Boolean, default: false },
+      acknowledgedDate: Date,
+    },
+    seniorIdValidation: {
+      imageUrl: String,
+      uploadDate: Date,
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+      },
+      validated: { type: Boolean, default: false },
+      validatedDate: Date,
+      rejectionReason: String,
+    },
     categoryChangeRequest: {
       requestedCategory: {
         type: String,
+        enum: ["regular", "student", "senior"],
+      },
+      currentCategory: {
+        type: String,
         enum: ["regular", "student", "senior", "student_child"],
+        required: function () {
+          return (
+            this.categoryChangeRequest &&
+            this.categoryChangeRequest.requestedCategory
+          );
+        },
       },
       requestDate: { type: Date },
       status: {
@@ -410,7 +438,9 @@ const userSchema = new mongoose.Schema(
         imageUrl: String,
         uploadedAt: { type: Date, default: Date.now },
       },
+      processed: { type: Boolean, default: false },
       reviewedAt: Date,
+      adminNotes: String,
       reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       rejectionReason: String,
     },

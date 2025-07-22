@@ -1546,17 +1546,10 @@ const RegisterPassengerScreen = () => {
                   <View style={styles.documentButtonRow}>
                     <Button
                       mode="outlined"
-                      onPress={() => pickImage()}
-                      style={styles.documentButton}
-                      icon="folder">
-                      Gallery
-                    </Button>
-                    <Button
-                      mode="outlined"
                       onPress={() => takePicture()}
                       style={styles.documentButton}
                       icon="camera">
-                      Camera
+                      Change
                     </Button>
                   </View>
                 </View>
@@ -1566,13 +1559,6 @@ const RegisterPassengerScreen = () => {
                     <Text style={styles.emptyProfileText}>No Photo</Text>
                   </View>
                   <View style={styles.documentButtonRow}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => pickImage()}
-                      style={styles.documentButton}
-                      icon="folder">
-                      Gallery
-                    </Button>
                     <Button
                       mode="outlined"
                       onPress={() => takePicture()}

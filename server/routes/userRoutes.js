@@ -13,6 +13,9 @@ import {
   updateAddresses,
   removeAddress,
   verifyAccountDeletion,
+  uploadSchoolId,
+  acknowledgeSeniorEligibility,
+  requestCategoryChange,
 } from "../controllers/userController.js";
 import { auth } from "../middleware/auth.js";
 
@@ -57,5 +60,22 @@ router.post(
   uploadProfileImage
 );
 router.post("/verify-deletion/:id", auth, verifyAccountDeletion);
+router.post(
+  "/upload-school-id/:id",
+  upload.single("schoolId"),
+  auth,
+  uploadSchoolId
+);
+router.post(
+  "/acknowledge-senior-eligibility/:id",
+  auth,
+  acknowledgeSeniorEligibility
+);
+router.post(
+  "/change-category/:id",
+  upload.single("supportingDocument"),
+  auth,
+  requestCategoryChange
+);
 
 export default router;

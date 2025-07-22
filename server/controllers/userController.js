@@ -56,15 +56,23 @@ export const getProfileById = async (req, res) => {
 };
 
 export const uploadProfileImage = async (req, res) => {
+  let uploadedFilePath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
+    // Store the file path for cleanup if needed
+    uploadedFilePath = req.file.path;
+
     const userId = req.params.id;
     const user = await User.findById(userId);
 
     if (!user) {
+      // Clean up uploaded file before returning error
+      if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+        fs.unlinkSync(uploadedFilePath);
+      }
       return res.status(404).json({ error: "User not found" });
     }
 
@@ -73,6 +81,10 @@ export const uploadProfileImage = async (req, res) => {
       user.pendingProfileImage &&
       user.pendingProfileImage.status === "pending"
     ) {
+      // Clean up uploaded file before returning error
+      if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+        fs.unlinkSync(uploadedFilePath);
+      }
       return res.status(403).json({
         error:
           "A profile image is already pending approval. You cannot upload another.",
@@ -90,7 +102,8 @@ export const uploadProfileImage = async (req, res) => {
       status: "pending",
     };
 
-    await user.save();
+    // Save with validation disabled for other fields
+    await user.save({ validateModifiedOnly: true });
 
     return res.json({
       success: true,
@@ -99,6 +112,15 @@ export const uploadProfileImage = async (req, res) => {
     });
   } catch (error) {
     console.error("Error uploading profile image:", error);
+    // Clean up uploaded file on any error
+    if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
+      try {
+        fs.unlinkSync(uploadedFilePath);
+        console.log("Cleaned up uploaded file due to error:", uploadedFilePath);
+      } catch (cleanupError) {
+        console.error("Failed to clean up uploaded file:", cleanupError);
+      }
+    }
     return res.status(500).json({ error: "Failed to upload image" });
   }
 };
@@ -597,7 +619,7 @@ export const verifyAccountDeletion = async (req, res) => {
 
     // Set deletion request with 30-day grace period
     const deletionDate = new Date();
-    deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now, uncomment to set it today
+    deletionDate.setDate(deletionDate.getDate() + 30); // 30 days from now, comment this to set date as today
 
     user.deletionRequested = true;
     user.deletionRequestedAt = new Date();
@@ -868,114 +890,497 @@ const cleanupRideReferences = async (userId) => {
   }
 };
 
-export const updateExpiredStudentCategories = async () => {
-  const now = new Date();
+// Function to process age transitions and category updates
+export const processAgeTransitions = async () => {
   try {
-    const result = await User.updateMany(
-      {
-        role: "passenger",
-        passengerCategory: "student",
-        age: { $gte: 19 },
-        "schoolIdValidation.expirationDate": { $lt: now },
-        "schoolIdValidation.validated": false,
-      },
-      {
-        $set: { passengerCategory: "regular" },
-        $push: {
-          ageTransitions: {
-            fromAge: "$age",
-            toAge: "$age",
-            transitionDate: now,
-            categoryChanged: true,
-            previousCategory: "student",
-            newCategory: "regular",
-          },
-        },
-        "schoolIdValidation.currentSchoolYear": null,
-        "schoolIdValidation.lastUploadDate": null,
-        "schoolIdValidation.expirationDate": null,
-        "schoolIdValidation.validated": false,
-        "schoolIdValidation.validatedAt": null,
-        "schoolIdValidation.validatedBy": null,
-        "schoolIdValidation.reminderSent": false,
+    const today = new Date();
+
+    // Find all passengers who might need age/category updates
+    const passengers = await User.find({
+      role: "passenger",
+      birthdate: { $exists: true },
+      deletionRequested: { $ne: true },
+    });
+
+    let updatedCount = 0;
+
+    for (const passenger of passengers) {
+      // Calculate current age
+      const birthDate = new Date(passenger.birthdate);
+      let currentAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+
+      if (
+        monthDiff < 0 ||
+        (monthDiff === 0 && today.getDate() < birthDate.getDate())
+      ) {
+        currentAge--;
       }
-    );
+
+      // Check if age has changed
+      if (passenger.age !== currentAge) {
+        const previousAge = passenger.age;
+        const previousCategory = passenger.passengerCategory;
+        let categoryChanged = false;
+        let newCategory = passenger.passengerCategory;
+
+        // Handle specific age transitions
+        if (previousAge === 12 && currentAge === 13) {
+          // Transition from student_child to student
+          if (passenger.passengerCategory === "student_child") {
+            newCategory = "student";
+            categoryChanged = true;
+          }
+        }
+
+        // Handle transition to senior eligibility at age 60
+        if (currentAge === 60 && passenger.passengerCategory !== "senior") {
+          // Create notification/flag for senior eligibility
+          // Don't auto-change to senior - let them choose via category change modal
+          passenger.seniorEligibilityNotification = {
+            eligible: true,
+            notificationDate: today,
+            acknowledged: false,
+          };
+
+          console.log(
+            `Passenger ${passenger._id} is now eligible for senior category at age ${currentAge}`
+          );
+        }
+
+        // Update age
+        passenger.age = currentAge;
+        passenger.passengerCategory = newCategory;
+
+        // Record age transition
+        passenger.ageTransitions.push({
+          fromAge: previousAge,
+          toAge: currentAge,
+          transitionDate: today,
+          categoryChanged: categoryChanged,
+          previousCategory: previousCategory,
+          newCategory: categoryChanged ? newCategory : undefined,
+        });
+
+        // Set school ID validation requirement for 19+ students
+        if (currentAge === 19 && passenger.passengerCategory === "student") {
+          const currentYear = today.getFullYear();
+          const augustDeadline = new Date(currentYear, 7, 31); // August 31st
+
+          passenger.schoolIdValidation = {
+            currentSchoolYear: `${currentYear}-${currentYear + 1}`,
+            expirationDate: augustDeadline,
+            validated: false,
+            reminderSent: false,
+          };
+        }
+
+        await passenger.save();
+        updatedCount++;
+
+        console.log(
+          `Updated passenger ${passenger._id}: ${previousAge} → ${currentAge}${
+            categoryChanged
+              ? `, category: ${previousCategory} → ${newCategory}`
+              : ""
+          }`
+        );
+      }
+    }
+
     console.log(
-      `✅ Cleanup: Updated ${result.modifiedCount} expired student(s) to 'regular' passenger category.`
+      `Age transitions processed: ${updatedCount} passengers updated`
     );
-    return { modifiedCount: result.modifiedCount };
+    return { success: true, updatedCount };
   } catch (error) {
-    console.error("❌ Error updating expired student categories:", error);
+    console.error("Error processing age transitions:", error);
     throw error;
   }
 };
 
-export const checkAndTransitionPassengerCategory = async (user) => {
-  let userModified = false;
-  const now = new Date();
+// Function to send senior eligibility notifications
+export const processSeniorEligibilityNotifications = async () => {
+  try {
+    const today = new Date();
 
-  if (user.role === "passenger") {
-    // --- 1. Handle setting up schoolIdValidation if they are 19+ and student, but it's missing ---
-    // This covers cases where users jump from <19 to >=19 without a save at 19.
-    if (
-      user.age >= 19 &&
-      user.passengerCategory === "student" &&
-      !user.schoolIdValidation?.expirationDate
-    ) {
-      const currentYear = now.getFullYear();
-      const nextAugust = new Date(currentYear, 7, 31); // August 31st
+    // Find passengers who are eligible for senior category but haven't been notified
+    const eligiblePassengers = await User.find({
+      role: "passenger",
+      age: { $gte: 60 },
+      passengerCategory: { $in: ["regular", "student"] },
+      "seniorEligibilityNotification.acknowledged": { $ne: true },
+      deletionRequested: { $ne: true },
+    });
 
-      user.schoolIdValidation = {
+    let notificationCount = 0;
+
+    for (const passenger of eligiblePassengers) {
+      // Set or update senior eligibility notification
+      if (!passenger.seniorEligibilityNotification) {
+        passenger.seniorEligibilityNotification = {
+          eligible: true,
+          notificationDate: today,
+          acknowledged: false,
+        };
+
+        await passenger.save();
+        notificationCount++;
+
+        console.log(
+          `Set senior eligibility notification for passenger ${passenger._id} (age: ${passenger.age})`
+        );
+      }
+    }
+
+    console.log(
+      `Senior eligibility notifications processed: ${notificationCount} passengers notified`
+    );
+    return { success: true, notificationCount };
+  } catch (error) {
+    console.error("Error processing senior eligibility notifications:", error);
+    throw error;
+  }
+};
+
+// Function to handle school ID validation requirements
+export const processSchoolIdValidations = async () => {
+  try {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const augustDeadline = new Date(currentYear, 7, 31); // August 31st of current year
+
+    // Find students 19+ who need school ID validation
+    const studentsNeedingValidation = await User.find({
+      role: "passenger",
+      passengerCategory: "student",
+      age: { $gte: 19 },
+      deletionRequested: { $ne: true },
+      $or: [
+        // No school ID validation record
+        { schoolIdValidation: { $exists: false } },
+        // Expired validation
+        {
+          "schoolIdValidation.expirationDate": { $lt: today },
+          "schoolIdValidation.validated": false,
+        },
+        // Validation for previous school year
+        {
+          "schoolIdValidation.currentSchoolYear": {
+            $ne: `${currentYear}-${currentYear + 1}`,
+          },
+        },
+      ],
+    });
+
+    let updatedCount = 0;
+
+    for (const student of studentsNeedingValidation) {
+      // Set or update school ID validation requirement
+      student.schoolIdValidation = {
         currentSchoolYear: `${currentYear}-${currentYear + 1}`,
-        expirationDate: nextAugust,
+        expirationDate: augustDeadline,
         validated: false,
         reminderSent: false,
+        // Preserve existing validation data if it exists
+        ...(student.schoolIdValidation && student.schoolIdValidation.validated
+          ? {
+              lastUploadDate: student.schoolIdValidation.lastUploadDate,
+            }
+          : {}),
       };
-      userModified = true;
+
+      await student.save();
+      updatedCount++;
+
       console.log(
-        `User ${user._id} (${user.email}) school ID validation requirement set up.`
+        `Set school ID validation requirement for student ${student._id} (age: ${student.age})`
       );
     }
 
-    // --- 2. Handle transition from student to regular if validation expires ---
-    // This part remains similar, but it relies on 'user.age' being correct *at this point*.
-    if (
-      user.passengerCategory === "student" &&
-      user.age >= 19 &&
-      user.schoolIdValidation &&
-      user.schoolIdValidation.expirationDate
-    ) {
-      if (
-        now > user.schoolIdValidation.expirationDate &&
-        !user.schoolIdValidation.validated
-      ) {
-        if (user.passengerCategory !== "regular") {
-          // Only change if not already regular
-          user.ageTransitions.push({
-            fromAge: user.age,
-            toAge: user.age, // Age remains the same
-            transitionDate: now,
-            categoryChanged: true,
-            previousCategory: "student",
-            newCategory: "regular",
-          });
-          user.passengerCategory = "regular";
-          // Clear validation fields as they are now 'regular' and don't need them
-          user.schoolIdValidation = undefined;
-          userModified = true;
-          console.log(
-            `User ${user._id} (${user.email}) automatically transitioned from 'student' to 'regular' due to expired school ID validation.`
-          );
-        }
-      }
-    }
+    console.log(
+      `School ID validation requirements processed: ${updatedCount} students updated`
+    );
+    return { success: true, updatedCount };
+  } catch (error) {
+    console.error("Error processing school ID validations:", error);
+    throw error;
   }
+};
 
-  if (userModified) {
-    // Save the changes. validateBeforeSave: false can prevent other schema validations
-    // if you're only concerned with this specific update. Use with caution.
-    await user.save({ validateBeforeSave: false });
-    return true;
+// Function to send reminders for expired school ID validations
+export const sendSchoolIdReminders = async () => {
+  try {
+    const today = new Date();
+    const reminderDate = new Date();
+    reminderDate.setDate(today.getDate() + 30); // 30 days before expiration
+
+    // Find students whose school ID will expire soon and haven't been reminded
+    const studentsNeedingReminder = await User.find({
+      role: "passenger",
+      passengerCategory: "student",
+      age: { $gte: 19 },
+      "schoolIdValidation.validated": false,
+      "schoolIdValidation.reminderSent": false,
+      "schoolIdValidation.expirationDate": {
+        $lte: reminderDate,
+        $gte: today,
+      },
+      deletionRequested: { $ne: true },
+    });
+
+    let reminderCount = 0;
+
+    for (const student of studentsNeedingReminder) {
+      // Mark reminder as sent
+      student.schoolIdValidation.reminderSent = true;
+      await student.save();
+
+      // Here you would typically send a notification/email
+      // For now, we'll just log it
+      console.log(
+        `Reminder sent to student ${student._id} for school ID validation`
+      );
+      reminderCount++;
+    }
+
+    console.log(`School ID reminders sent: ${reminderCount} students notified`);
+    return { success: true, reminderCount };
+  } catch (error) {
+    console.error("Error sending school ID reminders:", error);
+    throw error;
   }
-  return false;
+};
+
+// Function to handle students who haven't uploaded school ID by deadline
+export const processExpiredSchoolIdValidations = async () => {
+  try {
+    const today = new Date();
+
+    // Find students whose school ID validation has expired
+    const expiredStudents = await User.find({
+      role: "passenger",
+      passengerCategory: "student",
+      age: { $gte: 19 },
+      "schoolIdValidation.validated": false,
+      "schoolIdValidation.expirationDate": { $lt: today },
+      deletionRequested: { $ne: true },
+    });
+
+    let processedCount = 0;
+
+    for (const student of expiredStudents) {
+      // Change category to regular since they didn't validate as student
+      const previousCategory = student.passengerCategory;
+      student.passengerCategory = "regular";
+
+      // Record the category change due to expired validation
+      student.ageTransitions.push({
+        fromAge: student.age,
+        toAge: student.age,
+        transitionDate: today,
+        categoryChanged: true,
+        previousCategory: previousCategory,
+        newCategory: "regular",
+      });
+
+      // Clear school ID validation requirement
+      student.schoolIdValidation = undefined;
+
+      await student.save();
+      processedCount++;
+
+      console.log(
+        `Student ${student._id} category changed from student to regular due to expired school ID validation`
+      );
+    }
+
+    console.log(
+      `Expired school ID validations processed: ${processedCount} students updated`
+    );
+    return { success: true, processedCount };
+  } catch (error) {
+    console.error("Error processing expired school ID validations:", error);
+    throw error;
+  }
+};
+
+export const acknowledgeSeniorEligibility = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Update the senior eligibility notification
+    if (user.seniorEligibilityNotification) {
+      user.seniorEligibilityNotification.acknowledged = true;
+      user.seniorEligibilityNotification.acknowledgedDate = new Date();
+    }
+
+    await user.save();
+    res.json({ message: "Senior eligibility notification acknowledged" });
+  } catch (error) {
+    console.error("Error acknowledging senior eligibility:", error);
+    res.status(500).json({ error: "Failed to acknowledge notification" });
+  }
+};
+
+export const uploadSchoolId = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No school ID file provided" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Verify user is a student and 19 or older
+    if (user.role !== "passenger" || user.passengerCategory !== "student") {
+      return res.status(400).json({
+        error: "School ID upload is only available for student passengers",
+      });
+    }
+
+    if (user.age < 19) {
+      return res.status(400).json({
+        error:
+          "School ID validation is only required for students 19 years or older",
+      });
+    }
+
+    const imageUrl = `${req.protocol}://${req.get("host")}/uploads/profiles/${
+      req.file.filename
+    }`;
+
+    // Get current school year
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const schoolYear =
+      currentDate.getMonth() >= 7 // August or later
+        ? `${currentYear}-${currentYear + 1}`
+        : `${currentYear - 1}-${currentYear}`;
+
+    // Calculate expiration date (August 31st of current school year)
+    const expirationYear =
+      currentDate.getMonth() >= 7 ? currentYear + 1 : currentYear;
+    const expirationDate = new Date(expirationYear, 7, 31); // August 31st
+
+    // Update or create school ID validation record
+    user.schoolIdValidation = {
+      currentSchoolYear: schoolYear,
+      lastUploadDate: new Date(),
+      expirationDate: expirationDate,
+      validated: false, // Will be set to true by admin during approval
+      reminderSent: false,
+    };
+
+    // Also update the idDocument field for admin review
+    user.idDocument = {
+      type: "school_id",
+      imageUrl: imageUrl,
+      uploadedAt: new Date(),
+      verified: false, // Will be verified by admin
+    };
+
+    // Set verification status to under review
+    user.verificationStatus = "under_review";
+
+    await user.save();
+
+    res.json({
+      message: "School ID uploaded successfully and is pending admin approval",
+      imageUrl: imageUrl,
+      schoolYear: schoolYear,
+      expirationDate: expirationDate,
+    });
+  } catch (error) {
+    console.error("Error uploading school ID:", error);
+    res.status(500).json({ error: "Failed to upload school ID" });
+  }
+};
+
+// Update existing requestCategoryChange function to handle senior category
+export const requestCategoryChange = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { requestedCategory } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Validate category change eligibility
+    const currentAge = user.age;
+    const validCategories = [];
+
+    if (currentAge >= 18) validCategories.push("regular");
+    if (currentAge >= 12) validCategories.push("student");
+    if (currentAge >= 60) validCategories.push("senior");
+
+    if (!validCategories.includes(requestedCategory)) {
+      return res.status(400).json({
+        error: `You are not eligible for ${requestedCategory} category`,
+      });
+    }
+
+    let supportingDocumentUrl = null;
+    if (req.file) {
+      supportingDocumentUrl = `${req.protocol}://${req.get(
+        "host"
+      )}/uploads/profiles/${req.file.filename}`;
+    }
+
+    // Check if supporting document is required
+    const requiresDocument =
+      (requestedCategory === "student" && currentAge >= 19) ||
+      requestedCategory === "senior";
+
+    if (requiresDocument && !supportingDocumentUrl) {
+      const docType =
+        requestedCategory === "senior" ? "Senior Citizen ID" : "School ID";
+      return res.status(400).json({
+        error: `${docType} is required for ${requestedCategory} category`,
+      });
+    }
+
+    // Create category change request
+    const categoryChangeRequest = {
+      requestedCategory,
+      currentCategory: user.passengerCategory,
+      supportingDocument: supportingDocumentUrl
+        ? {
+            imageUrl: supportingDocumentUrl,
+            uploadDate: new Date(),
+          }
+        : null,
+      requestDate: new Date(),
+      status: "pending",
+      processed: false,
+    };
+
+    // Add to user's category change requests
+    if (!user.categoryChangeRequests) {
+      user.categoryChangeRequests = [];
+    }
+    user.categoryChangeRequests.push(categoryChangeRequest);
+
+    await user.save();
+
+    res.json({
+      message: "Category change request submitted successfully",
+      request: categoryChangeRequest,
+    });
+  } catch (error) {
+    console.error("Error processing category change request:", error);
+    res
+      .status(500)
+      .json({ error: "Failed to process category change request" });
+  }
 };

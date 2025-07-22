@@ -1224,14 +1224,10 @@ const RegisterDriverScreen = () => {
                     style={styles.profilePreview}
                     resizeMode="cover"
                   />
+                  <Text style={styles.uploadedNote}>
+                    Uploaded – you can change it below
+                  </Text>
                   <View style={styles.documentButtonRow}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => pickImage()}
-                      style={styles.documentButton}
-                      icon="folder">
-                      Gallery
-                    </Button>
                     <Button
                       mode="outlined"
                       onPress={() => takePicture()}
@@ -1247,13 +1243,6 @@ const RegisterDriverScreen = () => {
                     <Text style={styles.emptyProfileText}>No Photo</Text>
                   </View>
                   <View style={styles.documentButtonRow}>
-                    <Button
-                      mode="outlined"
-                      onPress={() => pickImage()}
-                      style={styles.documentButton}
-                      icon="folder">
-                      Gallery
-                    </Button>
                     <Button
                       mode="outlined"
                       onPress={() => takePicture()}

@@ -50,7 +50,6 @@ interface IdDocument {
   verifiedBy?: string;
 }
 
-// NEW: Interface for pending profile image
 interface PendingProfileImage {
   imageUrl: string;
   uploadedAt: string;
@@ -101,7 +100,7 @@ interface BaseProfile {
   homeAddress: HomeAddress;
   role: 'passenger' | 'driver' | 'admin';
   profileImage: string; // Current active profile image
-  pendingProfileImage?: PendingProfileImage; // NEW: Pending profile image
+  pendingProfileImage?: PendingProfileImage;
   isBlocked: boolean;
   blockReason: string;
   warnings: Warning[];
