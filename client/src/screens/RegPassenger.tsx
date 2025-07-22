@@ -28,6 +28,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {jwtDecode} from 'jwt-decode';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {GoogleSignin} from '@react-native-google-signin/google-signin';
 
 interface CustomJwtPayload {
   isTemp?: boolean;
@@ -40,6 +41,19 @@ interface HomeAddress {
   city: string;
   state: string;
   zipCode: string;
+}
+
+interface ParentInfo {
+  userId?: any;
+  consentGiven?: boolean;
+  consentDate?: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  relationship: string;
+  password: string;
+  isExistingUser: boolean;
+  consentMethod?: 'password_verification' | 'google_oauth';
 }
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -86,6 +100,20 @@ const RegisterPassengerScreen = () => {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const insets = useSafeAreaInsets();
+  const [parentConsent, setParentConsent] = useState<{
+    given: boolean;
+    parentInfo: ParentInfo | null;
+  }>({
+    given: false,
+    parentInfo: null,
+  });
+  const [birthCertificate, setBirthCertificate] = useState<{
+    imageUrl: string;
+    mimeType: string;
+  }>({
+    imageUrl: '',
+    mimeType: '',
+  });
 
   // Check if user came from Google Sign-Up
   useEffect(() => {
@@ -253,7 +281,9 @@ const RegisterPassengerScreen = () => {
     }
   };
 
-  const pickImage = async (isIdDocument?: boolean) => {
+  const pickImage = async (
+    imageType?: 'profile' | 'idDocument' | 'birthCertificate',
+  ) => {
     try {
       const options: ImageLibraryOptions = {
         mediaType: 'photo',
@@ -276,21 +306,40 @@ const RegisterPassengerScreen = () => {
       if (result.assets && result.assets.length > 0) {
         const selectedAsset = result.assets[0];
 
+        // Determine compression settings based on image type
+        let quality = 0.5;
+        let maxSize = 600; // default for profile
+
+        if (imageType === 'idDocument' || imageType === 'birthCertificate') {
+          maxSize = 1200; // higher quality for documents
+        }
+
         const compressed = await compressImage(
           selectedAsset.uri || '',
-          0.5,
-          isIdDocument ? 1200 : 600,
+          quality,
+          maxSize,
         );
 
-        if (isIdDocument) {
-          setIdDocument({
-            ...idDocument,
-            imageUrl: compressed.uri,
-            mimeType: compressed.mime,
-          });
-        } else {
-          setProfileImage(compressed.uri);
-          setProfileImageMime(compressed.mime);
+        // Set the appropriate state based on image type
+        switch (imageType) {
+          case 'idDocument':
+            setIdDocument({
+              ...idDocument,
+              imageUrl: compressed.uri,
+              mimeType: compressed.mime,
+            });
+            break;
+          case 'birthCertificate':
+            setBirthCertificate({
+              imageUrl: compressed.uri,
+              mimeType: compressed.mime,
+            });
+            break;
+          case 'profile':
+          default:
+            setProfileImage(compressed.uri);
+            setProfileImageMime(compressed.mime);
+            break;
         }
       }
     } catch (error) {
@@ -299,7 +348,9 @@ const RegisterPassengerScreen = () => {
     }
   };
 
-  const takePicture = async (isIdDocument?: boolean) => {
+  const takePicture = async (
+    imageType?: 'profile' | 'idDocument' | 'birthCertificate',
+  ) => {
     try {
       // Request camera permission first
       const hasPermission = await requestCameraPermission();
@@ -331,7 +382,6 @@ const RegisterPassengerScreen = () => {
         maxWidth: 2000,
         quality: 1 as PhotoQuality,
         saveToPhotos: false,
-        // Add these options for better camera handling
         storageOptions: {
           skipBackup: true,
           path: 'images',
@@ -361,18 +411,37 @@ const RegisterPassengerScreen = () => {
             return;
           }
 
+          // Determine compression settings based on image type
+          let quality = 0.5;
+          let maxSize = 600; // default for profile
+
+          if (imageType === 'idDocument' || imageType === 'birthCertificate') {
+            maxSize = 1200; // higher quality for documents
+          }
+
           // Process the image
-          compressImage(selectedAsset.uri, 0.5, isIdDocument ? 1200 : 600)
+          compressImage(selectedAsset.uri, quality, maxSize)
             .then(compressed => {
-              if (isIdDocument) {
-                setIdDocument({
-                  ...idDocument,
-                  imageUrl: compressed.uri,
-                  mimeType: compressed.mime,
-                });
-              } else {
-                setProfileImage(compressed.uri);
-                setProfileImageMime(compressed.mime);
+              // Set the appropriate state based on image type
+              switch (imageType) {
+                case 'idDocument':
+                  setIdDocument({
+                    ...idDocument,
+                    imageUrl: compressed.uri,
+                    mimeType: compressed.mime,
+                  });
+                  break;
+                case 'birthCertificate':
+                  setBirthCertificate({
+                    imageUrl: compressed.uri,
+                    mimeType: compressed.mime,
+                  });
+                  break;
+                case 'profile':
+                default:
+                  setProfileImage(compressed.uri);
+                  setProfileImageMime(compressed.mime);
+                  break;
               }
             })
             .catch(error => {
@@ -437,6 +506,32 @@ const RegisterPassengerScreen = () => {
         'You must be at least 12 years old to register.',
       );
       return false;
+    }
+
+    // Special validation for minors (under 18)
+    if (age < 18 && !parentConsent.given) {
+      Alert.alert(
+        'Parental Consent Required',
+        'Since you are under 18 years old, parental consent is required to proceed.',
+      );
+      return false;
+    }
+
+    // Check birth certificate for 12-year-olds
+    if (age === 12 && !birthCertificate.imageUrl) {
+      Alert.alert(
+        'Birth Certificate Required',
+        'A birth certificate is required for 12-year-old registration. This document will be deleted after verification for privacy protection.',
+      );
+      return false;
+    }
+
+    // Auto-assign student_child category for 12-year-olds
+    if (age === 12) {
+      setPersonalInfo(prev => ({
+        ...prev,
+        passengerCategory: 'student_child',
+      }));
     }
 
     if (passengerCategory === 'senior' && age < 60) {
@@ -626,6 +721,380 @@ const RegisterPassengerScreen = () => {
     return true;
   };
 
+  const ParentGuardianConsent = ({
+    age,
+    onConsentGiven,
+  }: {
+    age: number;
+    onConsentGiven: (granted: boolean) => void;
+  }) => {
+    const [parentInfo, setParentInfo] = useState({
+      email: '',
+      firstName: '',
+      lastName: '',
+      relationship: 'parent',
+      password: '',
+      isExistingUser: false,
+    });
+    const [loginMethod, setLoginMethod] = useState('credentials');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleParentLogin = async () => {
+      if (
+        !parentInfo.email ||
+        !parentInfo.password ||
+        !parentInfo.firstName ||
+        !parentInfo.lastName
+      ) {
+        Alert.alert('Error', 'Please fill in all parent/guardian information.');
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+
+        // Verify parent credentials
+        const response = await api.post('/api/auth/verify-parent-consent', {
+          email: parentInfo.email,
+          password: parentInfo.password,
+          firstName: parentInfo.firstName,
+          lastName: parentInfo.lastName,
+          relationship: parentInfo.relationship,
+          childAge: age,
+        });
+
+        if (response.status === 200) {
+          // Parent verified successfully
+          setParentConsent({
+            given: true,
+            parentInfo: {
+              ...parentInfo,
+              userId: response.data.parentId,
+              consentGiven: true,
+              consentDate: new Date().toISOString(),
+            },
+          });
+
+          Alert.alert(
+            'Consent Granted',
+            'Parental consent has been successfully verified. You may now proceed with registration.',
+            [{text: 'OK', onPress: () => onConsentGiven(true)}],
+          );
+        }
+      } catch (error: any) {
+        console.error('Parent verification error:', error);
+        if (error.response?.status === 404) {
+          Alert.alert(
+            'Parent Not Found',
+            'No account found with these credentials. The parent/guardian needs to create an account first or use Google sign-in.',
+          );
+        } else if (error.response?.status === 401) {
+          Alert.alert('Invalid Credentials', 'Incorrect email or password.');
+        } else {
+          Alert.alert(
+            'Error',
+            'Failed to verify parent credentials. Please try again.',
+          );
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const handleGoogleParentAuth = async () => {
+      try {
+        setIsLoading(true);
+
+        if (!parentInfo.firstName?.trim() || !parentInfo.lastName?.trim()) {
+          Alert.alert('Missing Info', "Fill out parent's name first.");
+          return;
+        }
+
+        await GoogleSignin.hasPlayServices();
+        await GoogleSignin.signOut();
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken;
+
+        if (!idToken) {
+          Alert.alert('Error', 'Failed to get Google authentication token.');
+          return;
+        }
+
+        // Trigger Google authentication for parent
+        const response = await api.post('/api/auth/parent-google-consent', {
+          idToken: idToken,
+          firstName: parentInfo.firstName,
+          lastName: parentInfo.lastName,
+          relationship: parentInfo.relationship,
+          childAge: age,
+        });
+
+        if (response.status === 200) {
+          setParentConsent({
+            given: true,
+            parentInfo: {
+              ...parentInfo,
+              userId: response.data.parentId,
+              email: response.data.parentEmail,
+              consentGiven: true,
+              consentDate: new Date().toISOString(),
+              consentMethod: 'google_oauth',
+            },
+          });
+          Alert.alert(
+            'Consent Granted',
+            'Parental consent has been successfully verified via Google. You may now proceed with registration.',
+            [{text: 'OK', onPress: () => onConsentGiven(true)}],
+          );
+        }
+      } catch (error: any) {
+        console.error('Google parent auth error:', error);
+
+        if (error.response?.status === 404) {
+          Alert.alert(
+            'Parent Not Found',
+            'No account found with this Google account. The parent/guardian needs to create an account first.',
+          );
+        } else if (error.response?.status === 401) {
+          Alert.alert(
+            'Verification Failed',
+            error.response?.data?.error || 'Google authentication failed.',
+          );
+        } else {
+          Alert.alert(
+            'Error',
+            'Failed to verify parent credentials via Google. Please try again.',
+          );
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Show success message if consent is already granted
+    if (parentConsent.given && parentConsent.parentInfo) {
+      return (
+        <View style={styles.parentConsentContainer}>
+          <View style={styles.consentGrantedContainer}>
+            <Text style={styles.consentGrantedTitle}>
+              ✅ Parent Consent Granted
+            </Text>
+            <Text style={styles.consentGrantedText}>
+              Consent has been successfully verified by:
+            </Text>
+            <View style={styles.parentInfoDisplay}>
+              <Text style={styles.parentInfoText}>
+                <Text style={styles.parentInfoLabel}>Name:</Text>{' '}
+                {parentConsent.parentInfo.firstName}{' '}
+                {parentConsent.parentInfo.lastName}
+              </Text>
+              <Text style={styles.parentInfoText}>
+                <Text style={styles.parentInfoLabel}>Relationship:</Text>{' '}
+                {parentConsent.parentInfo.relationship.charAt(0).toUpperCase() +
+                  parentConsent.parentInfo.relationship.slice(1)}
+              </Text>
+              <Text style={styles.parentInfoText}>
+                <Text style={styles.parentInfoLabel}>Email:</Text>{' '}
+                {parentConsent.parentInfo.email}
+              </Text>
+              <Text style={styles.parentInfoText}>
+                <Text style={styles.parentInfoLabel}>Date:</Text>{' '}
+                {new Date(
+                  parentConsent.parentInfo.consentDate || '',
+                ).toLocaleDateString()}
+              </Text>
+              {parentConsent.parentInfo.consentMethod && (
+                <Text style={styles.parentInfoText}>
+                  <Text style={styles.parentInfoLabel}>Method:</Text>{' '}
+                  {parentConsent.parentInfo.consentMethod === 'google_oauth'
+                    ? 'Google Authentication'
+                    : 'Email & Password'}
+                </Text>
+              )}
+            </View>
+            <Text style={styles.proceedText}>
+              You may now proceed with the registration process.
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Show the consent form if consent is not yet granted
+    return (
+      <View style={styles.parentConsentContainer}>
+        <Text style={styles.parentConsentTitle}>Parental Consent Required</Text>
+        <Text style={styles.parentConsentText}>
+          Since the user is under 18 years old ({age} years), a parent or
+          guardian must provide consent.
+        </Text>
+
+        {/* Parent/Guardian information form */}
+        <TextInput
+          mode="outlined"
+          label="Parent/Guardian First Name"
+          value={parentInfo.firstName}
+          onChangeText={value =>
+            setParentInfo({...parentInfo, firstName: value})
+          }
+        />
+
+        <TextInput
+          mode="outlined"
+          label="Parent/Guardian Last Name"
+          value={parentInfo.lastName}
+          onChangeText={value =>
+            setParentInfo({...parentInfo, lastName: value})
+          }
+        />
+
+        <List.Accordion
+          title={`Relationship: ${parentInfo.relationship}`}
+          style={styles.dropdown}>
+          {['parent', 'guardian'].map(relationship => (
+            <List.Item
+              key={relationship}
+              title={
+                relationship.charAt(0).toUpperCase() + relationship.slice(1)
+              }
+              onPress={() => {
+                setParentInfo({...parentInfo, relationship});
+              }}
+            />
+          ))}
+        </List.Accordion>
+
+        {/* Login method selection */}
+        <View style={styles.loginMethodContainer}>
+          <Text style={styles.loginMethodTitle}>
+            Parent/Guardian Login Method:
+          </Text>
+          <Button
+            mode={loginMethod === 'credentials' ? 'contained' : 'outlined'}
+            onPress={() => setLoginMethod('credentials')}
+            style={styles.loginMethodButton}>
+            Email & Password
+          </Button>
+          <Button
+            mode={loginMethod === 'google' ? 'contained' : 'outlined'}
+            onPress={() => setLoginMethod('google')}
+            style={styles.loginMethodButton}>
+            Google Account
+          </Button>
+        </View>
+
+        {loginMethod === 'credentials' ? (
+          <>
+            <TextInput
+              mode="outlined"
+              label="Parent/Guardian Email"
+              keyboardType="email-address"
+              value={parentInfo.email}
+              onChangeText={value =>
+                setParentInfo({...parentInfo, email: value})
+              }
+              style={styles.paperInput}
+            />
+            <TextInput
+              mode="outlined"
+              label="Parent/Guardian Password"
+              secureTextEntry
+              value={parentInfo.password}
+              onChangeText={value =>
+                setParentInfo({...parentInfo, password: value})
+              }
+              style={styles.paperInput}
+            />
+            <Button
+              mode="contained"
+              onPress={handleParentLogin}
+              style={styles.consentButton}
+              loading={isLoading}
+              disabled={isLoading}>
+              {isLoading ? 'Verifying...' : 'Verify & Give Consent'}
+            </Button>
+          </>
+        ) : (
+          <Button
+            mode="contained"
+            onPress={handleGoogleParentAuth}
+            style={styles.consentButton}
+            loading={isLoading}
+            disabled={isLoading}>
+            {isLoading
+              ? 'Authenticating...'
+              : 'Sign in with Google to Give Consent'}
+          </Button>
+        )}
+        <Text style={styles.consentText}>
+          * The parent/guardian must have an existing account or create one to
+          provide consent.
+        </Text>
+      </View>
+    );
+  };
+
+  const BirthCertificateUpload = ({age}: {age: number}) => {
+    if (age !== 12) return null;
+    return (
+      <View style={styles.birthCertificateContainer}>
+        <Text style={styles.documentLabel}>
+          Birth Certificate (Required for 12-year-olds)
+        </Text>
+        <Text style={styles.privacyNote}>
+          🔒 Privacy Protection: Your birth certificate will be automatically
+          deleted after verification for your safety and privacy.
+        </Text>
+
+        {birthCertificate.imageUrl ? (
+          <View style={styles.documentPreviewContainer}>
+            <Image
+              source={{uri: birthCertificate.imageUrl}}
+              style={styles.documentPreview}
+              resizeMode="contain"
+            />
+            <Text style={styles.uploadedNote}>
+              Uploaded – you can change it below
+            </Text>
+            <View style={styles.documentButtonRow}>
+              <Button
+                mode="outlined"
+                onPress={() => pickImage('birthCertificate')}
+                style={styles.documentButton}
+                icon="folder">
+                Gallery
+              </Button>
+              <Button
+                mode="outlined"
+                onPress={() => takePicture('birthCertificate')}
+                style={styles.documentButton}
+                icon="camera">
+                Camera
+              </Button>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.documentButtonRow}>
+            <Button
+              mode="outlined"
+              onPress={() => pickImage('birthCertificate')}
+              style={styles.documentButton}
+              icon="folder">
+              Gallery
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={() => takePicture('birthCertificate')}
+              style={styles.documentButton}
+              icon="camera">
+              Camera
+            </Button>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const nextStep = async () => {
     let isValid = false;
 
@@ -684,6 +1153,29 @@ const RegisterPassengerScreen = () => {
       formData.append('phone', personalInfo.phone);
       formData.append('role', 'passenger');
       formData.append('passengerCategory', personalInfo.passengerCategory);
+
+      // Add parent consent for minors
+      if (age < 18 && parentConsent.given) {
+        formData.append(
+          'parentGuardian',
+          JSON.stringify(parentConsent.parentInfo),
+        );
+      }
+
+      // Add birth certificate for 12-year-olds
+      if (age === 12 && birthCertificate.imageUrl) {
+        const uriParts = birthCertificate.imageUrl.split('.');
+        const fileType = uriParts[uriParts.length - 1];
+
+        formData.append('birthCertificate', {
+          uri:
+            Platform.OS === 'android'
+              ? birthCertificate.imageUrl
+              : birthCertificate.imageUrl.replace('file://', ''),
+          name: `birth_certificate.${fileType}`,
+          type: birthCertificate.mimeType || `image/${fileType}`,
+        } as any);
+      }
 
       // Handle Google vs regular users
       if (isGoogleUser) {
@@ -771,11 +1263,15 @@ const RegisterPassengerScreen = () => {
           await AsyncStorage.removeItem('tempToken');
           await AsyncStorage.removeItem('googleUserData');
         }
-        Alert.alert(
-          'Registration Successful',
-          'Your account has been created successfully. You can now log in and start booking rides!',
-          [{text: 'OK', onPress: () => navigation.navigate('Login')}],
-        );
+        let successMessage = 'Your account has been created successfully!';
+        if (age === 12) {
+          successMessage +=
+            '\n\nNote: Your birth certificate will be deleted after verification for privacy protection.';
+        }
+
+        Alert.alert('Registration Successful', successMessage, [
+          {text: 'OK', onPress: () => navigation.navigate('Login')},
+        ]);
       } else {
         Alert.alert('Error', response.data?.error || 'Registration failed');
       }
@@ -885,16 +1381,39 @@ const RegisterPassengerScreen = () => {
             <List.Accordion
               title={`Passenger Category: ${personalInfo.passengerCategory}`}
               style={styles.dropdown}>
-              {['regular', 'student', 'senior'].map(category => (
-                <List.Item
-                  key={category}
-                  title={category.charAt(0).toUpperCase() + category.slice(1)}
-                  onPress={() => {
-                    handlePersonalInfoChange('passengerCategory', category);
+              {['regular', 'student', 'student_child', 'senior'].map(
+                category => (
+                  <List.Item
+                    key={category}
+                    title={category.charAt(0).toUpperCase() + category.slice(1)}
+                    onPress={() => {
+                      handlePersonalInfoChange('passengerCategory', category);
+                    }}
+                  />
+                ),
+              )}
+            </List.Accordion>
+
+            {/* Add Parental Consent for minors */}
+            {calculateAge(personalInfo.birthdate) < 18 &&
+              calculateAge(personalInfo.birthdate) >= 12 && (
+                <ParentGuardianConsent
+                  age={calculateAge(personalInfo.birthdate)}
+                  onConsentGiven={granted => {
+                    if (!granted) {
+                      Alert.alert(
+                        'Error',
+                        'Parental consent is required to proceed.',
+                      );
+                    }
                   }}
                 />
-              ))}
-            </List.Accordion>
+              )}
+
+            {/* Add Birth Certificate upload for 12-year-olds */}
+            <BirthCertificateUpload
+              age={calculateAge(personalInfo.birthdate)}
+            />
 
             <Text style={styles.categoryInfo}>
               • Regular: Standard passenger rates
@@ -1062,14 +1581,14 @@ const RegisterPassengerScreen = () => {
                   <View style={styles.documentButtonRow}>
                     <Button
                       mode="outlined"
-                      onPress={() => pickImage(true)}
+                      onPress={() => pickImage('idDocument')}
                       style={styles.documentButton}
                       icon="folder">
                       Gallery
                     </Button>
                     <Button
                       mode="outlined"
-                      onPress={() => takePicture()}
+                      onPress={() => takePicture('idDocument')}
                       style={styles.documentButton}
                       icon="camera">
                       Camera
@@ -1080,14 +1599,14 @@ const RegisterPassengerScreen = () => {
                 <View style={styles.documentButtonRow}>
                   <Button
                     mode="outlined"
-                    onPress={() => pickImage(true)}
+                    onPress={() => pickImage('idDocument')}
                     style={styles.documentButton}
                     icon="folder">
                     Gallery
                   </Button>
                   <Button
                     mode="outlined"
-                    onPress={() => takePicture(true)}
+                    onPress={() => takePicture('idDocument')}
                     style={styles.documentButton}
                     icon="camera">
                     Camera

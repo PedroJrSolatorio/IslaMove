@@ -12,6 +12,8 @@ import {
   googleSignup,
   completeGoogleRegistration,
   googleLogin,
+  verifyParentConsent,
+  parentGoogleConsent,
   linkGoogleAccount,
   unlinkGoogleAccount,
   setPassword,
@@ -62,6 +64,7 @@ const upload = multer({
 const uploadFields = upload.fields([
   { name: "profileImage", maxCount: 1 },
   { name: "idDocumentImage", maxCount: 1 },
+  { name: "birthCertificate", maxCount: 1 },
   { name: "document_OfficialReceipt(OR)", maxCount: 1 },
   { name: "document_CertificateofRegistration(CR)", maxCount: 1 },
   { name: "document_MODACertificate", maxCount: 1 },
@@ -81,6 +84,8 @@ router.post("/complete-google-registration", uploadFields, (req, res) => {
 router.post("/register", uploadFields, (req, res) => {
   registerUser(req, res);
 });
+router.post("/verify-parent-consent", verifyParentConsent);
+router.post("/parent-google-consent", parentGoogleConsent);
 router.post("/link-google", linkGoogleAccount);
 router.post("/unlink-google", unlinkGoogleAccount);
 router.post("/set-password", setPassword);

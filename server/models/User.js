@@ -321,7 +321,7 @@ const userSchema = new mongoose.Schema(
     // Passenger-only field
     passengerCategory: {
       type: String,
-      enum: ["regular", "student", "senior"],
+      enum: ["regular", "student", "student_child", "senior"],
       required: function () {
         return this.role === "passenger" && this.isProfileComplete;
       },
@@ -547,12 +547,14 @@ userSchema.pre("save", async function (next) {
       // Auto-update category based on age transitions
       if (previousAge === 12 && age === 13) {
         // Transition from student_child to student
-        this.passengerCategory = "student";
-        this.ageTransitions[
-          this.ageTransitions.length - 1
-        ].categoryChanged = true;
-        this.ageTransitions[this.ageTransitions.length - 1].newCategory =
-          "student";
+        if (this.passengerCategory === "student_child") {
+          this.passengerCategory = "student";
+          this.ageTransitions[
+            this.ageTransitions.length - 1
+          ].categoryChanged = true;
+          this.ageTransitions[this.ageTransitions.length - 1].newCategory =
+            "student";
+        }
       }
 
       if (age === 19 && this.passengerCategory === "student") {

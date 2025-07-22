@@ -203,6 +203,11 @@ export const registerUser = async (req, res) => {
         ? JSON.parse(req.body.idDocument)
         : req.body.idDocument
       : null;
+    let parentGuardian = req.body.parentGuardian
+      ? typeof req.body.parentGuardian === "string"
+        ? JSON.parse(req.body.parentGuardian)
+        : req.body.parentGuardian
+      : null;
 
     // --- Pre-database Validations ---
     // Use 'throw new Error' to ensure errors jump to the catch block for file cleanup.
@@ -262,7 +267,9 @@ export const registerUser = async (req, res) => {
     } else if (role === "passenger") {
       if (
         !passengerCategory ||
-        !["regular", "student", "senior"].includes(passengerCategory)
+        !["regular", "student", "student_child", "senior"].includes(
+          passengerCategory
+        )
       ) {
         throw new Error("Valid passenger category is required for passengers.");
       }
@@ -274,6 +281,37 @@ export const registerUser = async (req, res) => {
         !parsedHomeAddress.zipCode
       ) {
         throw new Error("Complete home address is required for passengers.");
+      }
+
+      // Check for required fields based on age
+      const userAge = parseInt(age);
+
+      // Validate parent guardian for minors
+      if (userAge < 18) {
+        if (!parentGuardian) {
+          throw new Error(
+            "Parent guardian information is required for minors."
+          );
+        }
+        if (
+          !parentGuardian.email ||
+          !parentGuardian.firstName ||
+          !parentGuardian.lastName ||
+          !parentGuardian.relationship
+        ) {
+          throw new Error(
+            "Complete parent guardian information is required for minors."
+          );
+        }
+      }
+
+      // Validate birth certificate for 12-year-olds
+      if (userAge === 12) {
+        if (!req.files || !req.files.birthCertificate) {
+          throw new Error(
+            "Birth certificate is required for 12-year-old users."
+          );
+        }
       }
     }
 
@@ -392,6 +430,35 @@ export const registerUser = async (req, res) => {
         userData.idDocument = {
           type: idDocument.type,
           imageUrl: `${baseUrl}/uploads/documents/${idDocumentFile.filename}`,
+          uploadedAt: new Date(),
+          verified: false,
+        };
+      }
+
+      // HANDLE PASSENGER-SPECIFIC REQUIREMENTS
+      const userAge = parseInt(age);
+
+      // Add parent guardian for minors
+      if (userAge < 18 && parentGuardian) {
+        userData.parentGuardian = {
+          userId: parentGuardian.userId || null,
+          email: parentGuardian.email,
+          firstName: parentGuardian.firstName,
+          lastName: parentGuardian.lastName,
+          relationship: parentGuardian.relationship,
+          consentGiven: parentGuardian.consentGiven || true,
+          consentDate: parentGuardian.consentDate
+            ? new Date(parentGuardian.consentDate)
+            : new Date(),
+        };
+      }
+
+      // Add birth certificate for 12-year-olds
+      if (userAge === 12 && req.files && req.files.birthCertificate) {
+        const birthCertFile = req.files.birthCertificate[0];
+        uploadedFilePaths.push(birthCertFile.path);
+        userData.birthCertificate = {
+          imageUrl: `${baseUrl}/uploads/documents/${birthCertFile.filename}`,
           uploadedAt: new Date(),
           verified: false,
         };
@@ -1183,6 +1250,208 @@ export const googleLogin = async (req, res) => {
     res
       .status(500)
       .json({ message: "Server error during Google authentication." });
+  }
+};
+
+export const verifyParentConsent = async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, relationship, childAge } =
+      req.body;
+
+    // Validate required fields
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        error: "All fields are required",
+      });
+    }
+
+    // Find parent user
+    const parent = await User.findOne({ email });
+
+    if (!parent) {
+      return res.status(404).json({
+        error: "Parent account not found. Please create an account first.",
+      });
+    }
+
+    // Check if parent has a password (in case they signed up with Google)
+    if (!parent.password) {
+      return res.status(401).json({
+        error:
+          "This account was created with Google sign-in. Please use the Google authentication option.",
+      });
+    }
+
+    if (!password || password.trim() === "") {
+      return res.status(400).json({
+        error: "Password is required",
+      });
+    }
+
+    // Verify password
+    try {
+      const isValidPassword = await bcrypt.compare(
+        password.trim(),
+        parent.password
+      );
+      console.log("bcrypt.compare result:", isValidPassword);
+
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Invalid credentials." });
+      }
+    } catch (bcryptError) {
+      console.error("Password verification error:", bcryptError.message);
+      return res.status(500).json({ error: "Password verification failed" });
+    }
+
+    // Verify parent name matches
+    if (parent.firstName !== firstName || parent.lastName !== lastName) {
+      return res.status(401).json({
+        error: "Name does not match account records.",
+      });
+    }
+
+    // Create or update consent record
+    const consentRecord = {
+      parentId: parent._id,
+      parentName: `${parent.firstName} ${parent.lastName}`,
+      parentEmail: parent.email,
+      relationship: relationship,
+      childAge: childAge,
+      consentGiven: true,
+      consentDate: new Date(),
+      ipAddress: req.ip || req.connection.remoteAddress,
+    };
+
+    // You might want to save this to a ParentConsent collection for audit purposes
+    // const consent = new ParentConsent(consentRecord);
+    // await consent.save();
+
+    // Log the consent for audit purposes
+    console.log(
+      `Parent consent granted: ${parent._id} (${relationship}) for ${childAge}-year-old child`
+    );
+
+    res.status(200).json({
+      message: "Parent verified successfully",
+      parentId: parent._id,
+      parentName: `${parent.firstName} ${parent.lastName}`,
+      relationship: relationship,
+      consentRecord: consentRecord,
+    });
+  } catch (error) {
+    console.error("Parent verification error:", error);
+
+    // More specific error handling
+    if (error.name === "ValidationError") {
+      return res.status(400).json({ error: "Invalid input data" });
+    }
+
+    res.status(500).json({ error: "Failed to verify parent consent" });
+  }
+};
+
+export const parentGoogleConsent = async (req, res) => {
+  try {
+    const { idToken, firstName, lastName, relationship, childAge } = req.body;
+
+    // Validate required fields
+    if (!idToken || !firstName || !lastName || !relationship || !childAge) {
+      return res.status(400).json({
+        error: "All fields are required including Google ID token",
+      });
+    }
+
+    // 1. Verify Google ID token directly with Google
+    const ticket = await client.verifyIdToken({
+      idToken: idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    const googleId = payload["sub"];
+    const googleEmail = payload.email;
+
+    if (!payload || !googleId || !googleEmail) {
+      return res.status(401).json({
+        error: "Invalid Google token or missing essential data.",
+      });
+    }
+
+    // 2. Find parent user by googleId or email in database
+    let parent = await User.findOne({
+      $or: [{ googleId: googleId }, { email: googleEmail }],
+    });
+
+    if (!parent) {
+      return res.status(404).json({
+        error: "Parent account not found. Please create an account first.",
+      });
+    }
+
+    // 3. Verify parent name matches (optional - you might want to be more flexible with Google users)
+    if (parent.firstName !== firstName || parent.lastName !== lastName) {
+      return res.status(401).json({
+        error: "Name does not match account records.",
+      });
+    }
+
+    // 4. Ensure this is a Google user (has googleId)
+    if (!parent.googleId) {
+      // Link Google account if not already linked
+      parent.googleId = googleId;
+      parent.isGoogleUser = true;
+      await parent.save();
+    }
+
+    // 5. Create consent record
+    const consentRecord = {
+      parentId: parent._id,
+      parentName: `${parent.firstName} ${parent.lastName}`,
+      parentEmail: parent.email,
+      relationship: relationship,
+      childAge: childAge,
+      consentGiven: true,
+      consentDate: new Date(),
+      consentMethod: "google_oauth",
+      ipAddress: req.ip || req.connection.remoteAddress,
+      userAgent: req.get("User-Agent"),
+    };
+
+    // Optional: Save to ParentConsent collection for audit purposes
+    // const consent = new ParentConsent(consentRecord);
+    // await consent.save();
+
+    // 6. Log the consent for audit purposes
+    console.log(
+      `Parent Google consent granted: ${parent._id} (${relationship}) for ${childAge}-year-old child`
+    );
+
+    res.status(200).json({
+      message: "Parent verified successfully via Google",
+      parentId: parent._id,
+      parentName: `${parent.firstName} ${parent.lastName}`,
+      parentEmail: parent.email,
+      relationship: relationship,
+      consentRecord: consentRecord,
+    });
+  } catch (error) {
+    console.error("Google parent auth error:", error);
+
+    // Handle specific Google token errors
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError" ||
+      (error.message && error.message.includes("Invalid ID token"))
+    ) {
+      return res.status(401).json({
+        error: "Google token verification failed. Please try again.",
+      });
+    }
+
+    res.status(500).json({
+      error: "Failed to verify parent consent via Google",
+    });
   }
 };
 
