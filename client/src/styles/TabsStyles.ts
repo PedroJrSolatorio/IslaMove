@@ -26,8 +26,8 @@ export const TabsStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarContainerModern: {
-    width: 100,
-    height: 100,
+    // width: 100,
+    // height: 100,
     borderRadius: 55, // Slightly larger than avatar size to create a border (e.g., 100px avatar + 5px border on each side = 110px total diameter, so borderRadius 55)
     overflow: 'hidden', // Ensures the image is clipped to the circular shape
     borderWidth: 2, // Adjust border width for desired thickness

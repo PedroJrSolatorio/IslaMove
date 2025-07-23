@@ -362,8 +362,9 @@ const SchoolIdValidationReminder: React.FC<SchoolIdValidationReminderProps> = ({
           School ID Validation Required
         </Text>
         <Text style={TabsStyles.reminderText}>
-          Since you're a student over 19 years old, you need to upload a valid
-          school ID annually by August 31st.
+          Students aged 19 and above must upload a valid school ID yearly by
+          August 31. If not validated, the student discount will no longer be
+          available.
         </Text>
         <Button
           mode="contained"

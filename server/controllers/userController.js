@@ -893,7 +893,9 @@ const cleanupRideReferences = async (userId) => {
 // Function to process age transitions and category updates
 export const processAgeTransitions = async () => {
   try {
+    console.log("Starting age transitions processing...");
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
 
     // Find all passengers who might need age/category updates
     const passengers = await User.find({
@@ -902,9 +904,12 @@ export const processAgeTransitions = async () => {
       deletionRequested: { $ne: true },
     });
 
-    let updatedCount = 0;
+    let transitionsProcessed = 0;
+    let schoolIdValidationsSet = 0;
 
     for (const passenger of passengers) {
+      let hasChanges = false;
+
       // Calculate current age
       const birthDate = new Date(passenger.birthdate);
       let currentAge = today.getFullYear() - birthDate.getFullYear();
@@ -919,81 +924,115 @@ export const processAgeTransitions = async () => {
 
       // Check if age has changed
       if (passenger.age !== currentAge) {
-        const previousAge = passenger.age;
-        const previousCategory = passenger.passengerCategory;
-        let categoryChanged = false;
-        let newCategory = passenger.passengerCategory;
+        console.log(
+          `Age transition detected for user ${passenger._id}: ${passenger.age} -> ${currentAge}`
+        );
 
-        // Handle specific age transitions
-        if (previousAge === 12 && currentAge === 13) {
-          // Transition from student_child to student
+        passenger.ageTransitions.push({
+          fromAge: passenger.age,
+          toAge: currentAge,
+          transitionDate: today,
+          categoryChanged: false,
+          previousCategory: passenger.passengerCategory,
+        });
+
+        passenger.age = currentAge;
+        hasChanges = true;
+        transitionsProcessed++;
+
+        // Handle category transitions
+        if (passenger.age === 12 && currentAge === 13) {
           if (passenger.passengerCategory === "student_child") {
-            newCategory = "student";
-            categoryChanged = true;
+            passenger.passengerCategory = "student";
+            passenger.ageTransitions[
+              passenger.ageTransitions.length - 1
+            ].categoryChanged = true;
+            passenger.ageTransitions[
+              passenger.ageTransitions.length - 1
+            ].newCategory = "student";
+            console.log(
+              `Category changed for passenger ${passenger._id}: student_child -> student`
+            );
           }
         }
 
-        // Handle transition to senior eligibility at age 60
-        if (currentAge === 60 && passenger.passengerCategory !== "senior") {
-          // Create notification/flag for senior eligibility
-          // Don't auto-change to senior - let them choose via category change modal
-          passenger.seniorEligibilityNotification = {
-            eligible: true,
-            notificationDate: today,
-            acknowledged: false,
-          };
-
-          console.log(
-            `Passenger ${passenger._id} is now eligible for senior category at age ${currentAge}`
-          );
-        }
-
-        // Update age
-        passenger.age = currentAge;
-        passenger.passengerCategory = newCategory;
-
-        // Record age transition
-        passenger.ageTransitions.push({
-          fromAge: previousAge,
-          toAge: currentAge,
-          transitionDate: today,
-          categoryChanged: categoryChanged,
-          previousCategory: previousCategory,
-          newCategory: categoryChanged ? newCategory : undefined,
-        });
-
-        // Set school ID validation requirement for 19+ students
-        if (currentAge === 19 && passenger.passengerCategory === "student") {
+        // Set up school ID validation when transitioning to 19
+        if (
+          passenger.age === 18 &&
+          currentAge === 19 &&
+          passenger.passengerCategory === "student"
+        ) {
           const currentYear = today.getFullYear();
-          const augustDeadline = new Date(currentYear, 7, 31); // August 31st
+          const nextAugust = new Date(currentYear, 7, 31);
 
           passenger.schoolIdValidation = {
             currentSchoolYear: `${currentYear}-${currentYear + 1}`,
-            expirationDate: augustDeadline,
+            expirationDate: nextAugust,
             validated: false,
             reminderSent: false,
           };
+          schoolIdValidationsSet++;
+          console.log(
+            `School ID validation set up for passenger ${passenger._id} transitioning to age 19`
+          );
+        }
+      }
+
+      // Also check for existing students 19+ who don't have school ID validation set up
+      if (
+        passenger.passengerCategory === "student" &&
+        currentAge >= 19 &&
+        (!passenger.schoolIdValidation ||
+          !passenger.schoolIdValidation.currentSchoolYear ||
+          !passenger.schoolIdValidation.expirationDate)
+      ) {
+        const currentYear = today.getFullYear();
+        const currentYearAugust = new Date(currentYear, 7, 31);
+
+        let expirationDate;
+        let schoolYear;
+
+        if (today > currentYearAugust) {
+          // We're past this year's August 31st, so set next year's August 31st
+          expirationDate = new Date(currentYear + 1, 7, 31);
+          schoolYear = `${currentYear + 1}-${currentYear + 2}`;
+        } else {
+          // We're before or on this year's August 31st
+          expirationDate = currentYearAugust;
+          schoolYear = `${currentYear}-${currentYear + 1}`;
         }
 
-        await passenger.save();
-        updatedCount++;
+        passenger.schoolIdValidation = {
+          currentSchoolYear: schoolYear,
+          expirationDate: expirationDate,
+          validated: false,
+          reminderSent: false,
+        };
 
+        hasChanges = true;
+        schoolIdValidationsSet++;
         console.log(
-          `Updated passenger ${passenger._id}: ${previousAge} → ${currentAge}${
-            categoryChanged
-              ? `, category: ${previousCategory} → ${newCategory}`
-              : ""
-          }`
+          `School ID validation set up for existing student passenger ${passenger._id} (age ${currentAge})`
         );
+      }
+
+      // Save changes if any were made
+      if (hasChanges) {
+        await passenger.save();
       }
     }
 
     console.log(
-      `Age transitions processed: ${updatedCount} passengers updated`
+      `Age transitions processing completed. Processed ${transitionsProcessed} transitions, set up ${schoolIdValidationsSet} school ID validations.`
     );
-    return { success: true, updatedCount };
+
+    return {
+      transitionsProcessed,
+      schoolIdValidationsSet,
+      message: "Age transitions processing completed successfully",
+    };
   } catch (error) {
-    console.error("Error processing age transitions:", error);
+    console.error("Error in processAgeTransitions:", error);
     throw error;
   }
 };
@@ -1004,6 +1043,7 @@ export const processSchoolIdValidations = async () => {
     const today = new Date();
     const currentYear = today.getFullYear();
     const augustDeadline = new Date(currentYear, 7, 31); // August 31st of current year
+    // const augustDeadline = today; // for testing, set today
 
     // Find students 19+ who need school ID validation
     const studentsNeedingValidation = await User.find({
@@ -1055,8 +1095,11 @@ export const processSchoolIdValidations = async () => {
 export const sendSchoolIdReminders = async () => {
   try {
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+
     const reminderDate = new Date();
     reminderDate.setDate(today.getDate() + 30); // 30 days before expiration
+    reminderDate.setHours(23, 59, 59, 999); // Set to end of day
 
     // Find students whose school ID will expire soon and haven't been reminded
     const studentsNeedingReminder = await User.find({

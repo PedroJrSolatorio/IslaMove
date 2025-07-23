@@ -579,8 +579,12 @@ userSchema.pre("save", async function (next) {
         }
       }
 
-      if (age === 19 && this.passengerCategory === "student") {
-        // Set school ID validation requirement
+      // Set up school ID validation when transitioning to 19
+      if (
+        previousAge === 18 &&
+        age === 19 &&
+        this.passengerCategory === "student"
+      ) {
         const currentYear = new Date().getFullYear();
         const nextAugust = new Date(currentYear, 7, 31); // August 31st
 
@@ -591,6 +595,43 @@ userSchema.pre("save", async function (next) {
           reminderSent: false,
         };
       }
+    }
+    // Set up school ID validation for students 19+ who don't have it yet
+    // This handles cases where users register as students already being 19+ years old
+    if (
+      this.role === "passenger" &&
+      this.passengerCategory === "student" &&
+      age >= 19 &&
+      (!this.schoolIdValidation ||
+        !this.schoolIdValidation.currentSchoolYear ||
+        !this.schoolIdValidation.expirationDate)
+    ) {
+      const currentYear = new Date().getFullYear();
+      const today = new Date();
+      const currentYearAugust = new Date(currentYear, 7, 31); // August 31st of current year
+      // const currentYearAugust = today; // for testing, set it today
+
+      // If we're past August 31st of current year, set expiration to next year's August 31st
+      let expirationDate;
+      let schoolYear;
+
+      if (today > currentYearAugust) {
+        // We're past this year's August 31st, so set next year's August 31st
+        expirationDate = new Date(currentYear + 1, 7, 31);
+        schoolYear = `${currentYear + 1}-${currentYear + 2}`;
+      } else {
+        // We're before or on this year's August 31st
+        expirationDate = currentYearAugust;
+        schoolYear = `${currentYear}-${currentYear + 1}`;
+        // schoolYear = `${currentYear - 1}-${currentYear}`; // for testing, set last year
+      }
+
+      this.schoolIdValidation = {
+        currentSchoolYear: schoolYear,
+        expirationDate: expirationDate,
+        validated: false,
+        reminderSent: false,
+      };
     }
   }
   next();
