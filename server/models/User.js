@@ -132,7 +132,6 @@ const userSchema = new mongoose.Schema(
         return this.isProfileComplete;
       },
     },
-
     // Google authentication fields
     isGoogleUser: {
       type: Boolean,
@@ -149,8 +148,7 @@ const userSchema = new mongoose.Schema(
         return !this.isGoogleUser; // Regular users start with complete profiles
       },
     },
-
-    // Only for drivers and passengers (not admin)
+    // homeAddress and idDocument are only for drivers and passengers (not admin)
     homeAddress: {
       street: { type: String },
       city: { type: String },
@@ -160,8 +158,6 @@ const userSchema = new mongoose.Schema(
         type: [Number], // [longitude, latitude]
       },
     },
-
-    // Only for drivers and passengers (not admin)
     idDocument: {
       type: {
         type: String,
@@ -173,19 +169,16 @@ const userSchema = new mongoose.Schema(
       verifiedAt: Date,
       verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
     },
-
     role: {
       type: String,
       enum: ["passenger", "driver", "admin"],
       required: true,
     },
-
     // Current active profile image
     profileImage: {
       type: String,
       default: "",
     },
-
     // Pending profile image awaiting admin approval
     pendingProfileImage: {
       imageUrl: { type: String },
@@ -196,7 +189,7 @@ const userSchema = new mongoose.Schema(
         default: "pending",
       },
       reviewedAt: { type: Date },
-      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Admin who reviewed
+      reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       rejectionReason: { type: String },
     },
 
@@ -373,7 +366,6 @@ const userSchema = new mongoose.Schema(
         return this.role === "passenger" && this.age === 12;
       },
     },
-
     // School ID validation tracking for students 19+
     schoolIdValidation: {
       currentSchoolYear: { type: String }, // e.g., "2024-2025"

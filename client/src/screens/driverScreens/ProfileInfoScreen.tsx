@@ -300,36 +300,38 @@ const ProfileInfoScreen = () => {
       </View>
       <ScrollView style={GlobalStyles.container}>
         <View style={TabsStyles.profileHeaderContainer}>
-          <TouchableOpacity
-            style={TabsStyles.avatarContainerModern}
-            onPress={pickImage}
-            disabled={uploadingImage}>
-            {/* Show current active profile image, not pending one */}
-            {profileData.profileImage ? (
-              <Avatar.Image
-                size={100}
-                source={{uri: profileData.profileImage}}
-                style={TabsStyles.avatar}
-              />
-            ) : (
-              <Avatar.Text
-                size={100} // Increased size for prominence on a dedicated screen
-                label={getInitials()}
-                style={TabsStyles.avatar}
-                labelStyle={TabsStyles.avatarLabel}
-              />
-            )}
-            {(uploadingImage || isProfileImagePending()) && (
-              <View style={TabsStyles.editAvatarOverlay}>
-                {uploadingImage ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={TabsStyles.editAvatarText}>Pending</Text>
-                )}
-              </View>
-            )}
+          <View style={TabsStyles.avatarWrapper}>
+            <TouchableOpacity
+              style={TabsStyles.avatarContainerModern}
+              onPress={pickImage}
+              disabled={uploadingImage}>
+              {/* Show current active profile image, not pending one */}
+              {profileData.profileImage ? (
+                <Avatar.Image
+                  size={100}
+                  source={{uri: profileData.profileImage}}
+                  style={TabsStyles.avatar}
+                />
+              ) : (
+                <Avatar.Text
+                  size={100} // Increased size for prominence on a dedicated screen
+                  label={getInitials()}
+                  style={TabsStyles.avatar}
+                  labelStyle={TabsStyles.avatarLabel}
+                />
+              )}
+              {(uploadingImage || isProfileImagePending()) && (
+                <View style={TabsStyles.editAvatarOverlay}>
+                  {uploadingImage ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={TabsStyles.editAvatarText}>Pending</Text>
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
             {!uploadingImage && !isProfileImagePending() && (
-              <View style={TabsStyles.editAvatarIconContainer}>
+              <View style={TabsStyles.editAvatarFloatingIcon}>
                 <IconButton
                   icon="pencil"
                   size={20}
@@ -339,7 +341,7 @@ const ProfileInfoScreen = () => {
                 />
               </View>
             )}
-          </TouchableOpacity>
+          </View>
         </View>
 
         <Card style={TabsStyles.sectionCard}>
