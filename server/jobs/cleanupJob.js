@@ -21,10 +21,10 @@ import {
 //     }
 //   });
 
-// Run cleanup job daily at 2 AM
+// Run cleanup job daily at 1 AM
 export const setupCleanupJobs = () => {
   // job for account deletion
-  cron.schedule("0 2 * * *", async () => {
+  cron.schedule("0 1 * * *", async () => {
     console.log("Running scheduled account deletion cleanup...");
     try {
       await processScheduledDeletions();
@@ -34,8 +34,8 @@ export const setupCleanupJobs = () => {
     }
   });
 
-  // Job for processing age transitions (runs daily at 1:00 AM)
-  cron.schedule("0 1 * * *", async () => {
+  // Job for processing age transitions (runs daily at 2:00 AM)
+  cron.schedule("0 2 * * *", async () => {
     console.log("Running scheduled age transitions processing...");
     try {
       await processAgeTransitions();
@@ -45,19 +45,24 @@ export const setupCleanupJobs = () => {
     }
   });
 
-  // Job for setting school ID validation requirements (runs daily at 4:00 AM)
-  cron.schedule("0 4 * * *", async () => {
-    console.log("Running scheduled school ID validation setup...");
+  // Job specifically for August school year school ID validation (runs daily at 3 am during August)
+  cron.schedule("0 3 1-31 8 *", async () => {
+    console.log("Running August school year transition checks...");
     try {
       await processSchoolIdValidations();
-      console.log("School ID validation setup completed successfully.");
+      console.log(
+        "August school year School ID validation checks completed successfully."
+      );
     } catch (error) {
-      console.error("School ID validation setup failed:", error);
+      console.error(
+        "August school year School ID validation checks failed:",
+        error
+      );
     }
   });
 
-  // Job for sending school ID reminders (runs weekly on Sundays at 10:00 AM)
-  cron.schedule("0 10 * * 0", async () => {
+  // Job for sending school ID reminders (runs daily at 4 am during August)
+  cron.schedule("0 4 1-31 8 *", async () => {
     console.log("Running scheduled school ID reminders...");
     try {
       await sendSchoolIdReminders();
@@ -67,8 +72,8 @@ export const setupCleanupJobs = () => {
     }
   });
 
-  // Job for processing expired school ID validations (runs daily at 5:00 AM)
-  cron.schedule("0 5 * * *", async () => {
+  // Job for processing expired school ID validations (runs daily at 5:00 AM during September)
+  cron.schedule("0 5 * 9 *", async () => {
     console.log(
       "Running scheduled expired school ID validations processing..."
     );
@@ -79,19 +84,6 @@ export const setupCleanupJobs = () => {
       );
     } catch (error) {
       console.error("Expired school ID validations processing failed:", error);
-    }
-  });
-
-  // Job specifically for August school year transitions (runs daily during August)
-  cron.schedule("0 6 1-31 8 *", async () => {
-    console.log("Running August school year transition checks...");
-    try {
-      await processSchoolIdValidations();
-      console.log(
-        "August school year transition checks completed successfully."
-      );
-    } catch (error) {
-      console.error("August school year transition checks failed:", error);
     }
   });
 };

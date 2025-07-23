@@ -998,50 +998,6 @@ export const processAgeTransitions = async () => {
   }
 };
 
-// Function to send senior eligibility notifications
-export const processSeniorEligibilityNotifications = async () => {
-  try {
-    const today = new Date();
-
-    // Find passengers who are eligible for senior category but haven't been notified
-    const eligiblePassengers = await User.find({
-      role: "passenger",
-      age: { $gte: 60 },
-      passengerCategory: { $in: ["regular", "student"] },
-      "seniorEligibilityNotification.acknowledged": { $ne: true },
-      deletionRequested: { $ne: true },
-    });
-
-    let notificationCount = 0;
-
-    for (const passenger of eligiblePassengers) {
-      // Set or update senior eligibility notification
-      if (!passenger.seniorEligibilityNotification) {
-        passenger.seniorEligibilityNotification = {
-          eligible: true,
-          notificationDate: today,
-          acknowledged: false,
-        };
-
-        await passenger.save();
-        notificationCount++;
-
-        console.log(
-          `Set senior eligibility notification for passenger ${passenger._id} (age: ${passenger.age})`
-        );
-      }
-    }
-
-    console.log(
-      `Senior eligibility notifications processed: ${notificationCount} passengers notified`
-    );
-    return { success: true, notificationCount };
-  } catch (error) {
-    console.error("Error processing senior eligibility notifications:", error);
-    throw error;
-  }
-};
-
 // Function to handle school ID validation requirements
 export const processSchoolIdValidations = async () => {
   try {
@@ -1055,21 +1011,9 @@ export const processSchoolIdValidations = async () => {
       passengerCategory: "student",
       age: { $gte: 19 },
       deletionRequested: { $ne: true },
-      $or: [
-        // No school ID validation record
-        { schoolIdValidation: { $exists: false } },
-        // Expired validation
-        {
-          "schoolIdValidation.expirationDate": { $lt: today },
-          "schoolIdValidation.validated": false,
-        },
-        // Validation for previous school year
-        {
-          "schoolIdValidation.currentSchoolYear": {
-            $ne: `${currentYear}-${currentYear + 1}`,
-          },
-        },
-      ],
+      "schoolIdValidation.currentSchoolYear": {
+        $ne: `${currentYear}-${currentYear + 1}`,
+      },
     });
 
     let updatedCount = 0;
@@ -1200,6 +1144,50 @@ export const processExpiredSchoolIdValidations = async () => {
     return { success: true, processedCount };
   } catch (error) {
     console.error("Error processing expired school ID validations:", error);
+    throw error;
+  }
+};
+
+// Function to send senior eligibility notifications
+export const processSeniorEligibilityNotifications = async () => {
+  try {
+    const today = new Date();
+
+    // Find passengers who are eligible for senior category but haven't been notified
+    const eligiblePassengers = await User.find({
+      role: "passenger",
+      age: { $gte: 60 },
+      passengerCategory: { $in: ["regular", "student"] },
+      "seniorEligibilityNotification.acknowledged": { $ne: true },
+      deletionRequested: { $ne: true },
+    });
+
+    let notificationCount = 0;
+
+    for (const passenger of eligiblePassengers) {
+      // Set or update senior eligibility notification
+      if (!passenger.seniorEligibilityNotification) {
+        passenger.seniorEligibilityNotification = {
+          eligible: true,
+          notificationDate: today,
+          acknowledged: false,
+        };
+
+        await passenger.save();
+        notificationCount++;
+
+        console.log(
+          `Set senior eligibility notification for passenger ${passenger._id} (age: ${passenger.age})`
+        );
+      }
+    }
+
+    console.log(
+      `Senior eligibility notifications processed: ${notificationCount} passengers notified`
+    );
+    return { success: true, notificationCount };
+  } catch (error) {
+    console.error("Error processing senior eligibility notifications:", error);
     throw error;
   }
 };
