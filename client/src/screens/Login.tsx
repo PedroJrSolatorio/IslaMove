@@ -102,13 +102,13 @@ const LoginScreen = ({navigation}: Props) => {
   const navigateBasedOnRole = (role: string) => {
     switch (role) {
       case 'driver':
-        navigation.replace('DriverHome');
+        navigation.replace('DriverTabs');
         break;
       case 'passenger':
-        navigation.replace('PassengerHome');
+        navigation.replace('PassengerTabs');
         break;
       case 'admin':
-        navigation.replace('AdminHome');
+        navigation.replace('AdminTabs');
         break;
       default:
         Alert.alert('Error', 'Unknown user role');

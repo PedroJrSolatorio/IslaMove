@@ -26,22 +26,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, "../uploads/profiles");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const profilesDir = path.join(__dirname, "../uploads/profiles");
+const documentsDir = path.join(__dirname, "../uploads/documents");
+
+if (!fs.existsSync(profilesDir)) {
+  fs.mkdirSync(profilesDir, { recursive: true });
 }
 
-// Configure storage
-const storage = multer.diskStorage({
+if (!fs.existsSync(documentsDir)) {
+  fs.mkdirSync(documentsDir, { recursive: true });
+}
+
+// Configure storage for profile images
+const profileStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadsDir);
+    cb(null, profilesDir);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 
-const upload = multer({ storage: storage });
+// Configure storage for documents (schoolId, supportingDocument, etc.)
+const documentStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, documentsDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+
+const uploadProfile = multer({ storage: profileStorage });
+const uploadDocument = multer({ storage: documentStorage });
 
 // Public routes
 router.get("/:email", getUserByEmail);
@@ -55,14 +72,14 @@ router.delete("/addresses/:id/:addressIndex", auth, removeAddress);
 router.put("/profile/:id", auth, updateProfile);
 router.post(
   "/upload-image/:id",
-  upload.single("profileImage"),
+  uploadProfile.single("profileImage"),
   auth,
   uploadProfileImage
 );
 router.post("/verify-deletion/:id", auth, verifyAccountDeletion);
 router.post(
   "/upload-school-id/:id",
-  upload.single("schoolId"),
+  uploadDocument.single("schoolId"),
   auth,
   uploadSchoolId
 );
@@ -73,7 +90,7 @@ router.post(
 );
 router.post(
   "/change-category/:id",
-  upload.single("supportingDocument"),
+  uploadDocument.single("supportingDocument"),
   auth,
   requestCategoryChange
 );

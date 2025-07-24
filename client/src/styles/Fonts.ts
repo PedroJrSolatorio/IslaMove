@@ -1,6 +1,6 @@
 export const Fonts = {
-  regular: "Roboto-Regular",
-  bold: "Roboto-Bold",
+  regular: 'Roboto-Regular',
+  bold: 'Roboto-Bold',
   size: {
     small: 12,
     medium: 16,

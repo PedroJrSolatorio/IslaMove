@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import Ride from "../models/Ride.js";
 import UserAgreement from "../models/UserAgreement.js";
+import NotificationService from "../services/NotificationService.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import fs from "fs";
@@ -9,6 +10,20 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Helper function for file cleanup
+const cleanupFile = (filePath) => {
+  if (!filePath) return;
+
+  try {
+    fs.unlinkSync(filePath);
+    console.log("Cleaned up uploaded file:", filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Failed to clean up uploaded file:", error);
+    }
+  }
+};
 
 export const getUserByEmail = async (req, res) => {
   try {
@@ -70,9 +85,7 @@ export const uploadProfileImage = async (req, res) => {
 
     if (!user) {
       // Clean up uploaded file before returning error
-      if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
-        fs.unlinkSync(uploadedFilePath);
-      }
+      cleanupFile(uploadedFilePath);
       return res.status(404).json({ error: "User not found" });
     }
 
@@ -82,9 +95,7 @@ export const uploadProfileImage = async (req, res) => {
       user.pendingProfileImage.status === "pending"
     ) {
       // Clean up uploaded file before returning error
-      if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
-        fs.unlinkSync(uploadedFilePath);
-      }
+      cleanupFile(uploadedFilePath);
       return res.status(403).json({
         error:
           "A profile image is already pending approval. You cannot upload another.",
@@ -113,14 +124,7 @@ export const uploadProfileImage = async (req, res) => {
   } catch (error) {
     console.error("Error uploading profile image:", error);
     // Clean up uploaded file on any error
-    if (uploadedFilePath && fs.existsSync(uploadedFilePath)) {
-      try {
-        fs.unlinkSync(uploadedFilePath);
-        console.log("Cleaned up uploaded file due to error:", uploadedFilePath);
-      } catch (cleanupError) {
-        console.error("Failed to clean up uploaded file:", cleanupError);
-      }
-    }
+    cleanupFile(uploadedFilePath);
     return res.status(500).json({ error: "Failed to upload image" });
   }
 };
@@ -1116,22 +1120,44 @@ export const sendSchoolIdReminders = async () => {
     });
 
     let reminderCount = 0;
+    let failedReminders = 0;
 
     for (const student of studentsNeedingReminder) {
-      // Mark reminder as sent
-      student.schoolIdValidation.reminderSent = true;
-      await student.save();
+      try {
+        // Create notification
+        await NotificationService.createSchoolIdReminderNotification(
+          student._id,
+          student.schoolIdValidation.expirationDate
+        );
 
-      // Here you would typically send a notification/email
-      // For now, we'll just log it
-      console.log(
-        `Reminder sent to student ${student._id} for school ID validation`
-      );
-      reminderCount++;
+        // Mark reminder as sent
+        student.schoolIdValidation.reminderSent = true;
+        await student.save();
+
+        console.log(
+          `School ID reminder notification created for student ${student._id}`
+        );
+        reminderCount++;
+      } catch (notificationError) {
+        console.error(
+          `Failed to create notification for student ${student._id}:`,
+          notificationError
+        );
+        failedReminders++;
+        // Don't mark reminder as sent if notification creation failed
+      }
     }
 
-    console.log(`School ID reminders sent: ${reminderCount} students notified`);
-    return { success: true, reminderCount };
+    console.log(
+      `School ID reminders processed: ${reminderCount} notifications created, ${failedReminders} failed`
+    );
+
+    return {
+      success: true,
+      reminderCount,
+      failedReminders,
+      totalProcessed: studentsNeedingReminder.length,
+    };
   } catch (error) {
     console.error("Error sending school ID reminders:", error);
     throw error;
@@ -1175,6 +1201,14 @@ export const processExpiredSchoolIdValidations = async () => {
 
       await student.save();
       processedCount++;
+
+      // Send notification about the automatic category change
+      await triggerAutoCategoryChangeNotification(
+        student._id,
+        previousCategory,
+        "regular",
+        "school_id_expired"
+      );
 
       console.log(
         `Student ${student._id} category changed from student to regular due to expired school ID validation`
@@ -1338,12 +1372,19 @@ export const uploadSchoolId = async (req, res) => {
 
 // Update existing requestCategoryChange function to handle senior category
 export const requestCategoryChange = async (req, res) => {
+  let uploadedFilePath = null;
   try {
     const userId = req.params.id;
     const { requestedCategory } = req.body;
 
+    // Store the file path for cleanup if needed
+    if (req.file) {
+      uploadedFilePath = req.file.path;
+    }
+
     const user = await User.findById(userId);
     if (!user) {
+      cleanupFile(uploadedFilePath);
       return res.status(404).json({ error: "User not found" });
     }
 
@@ -1356,6 +1397,7 @@ export const requestCategoryChange = async (req, res) => {
     if (currentAge >= 60) validCategories.push("senior");
 
     if (!validCategories.includes(requestedCategory)) {
+      cleanupFile(uploadedFilePath);
       return res.status(400).json({
         error: `You are not eligible for ${requestedCategory} category`,
       });
@@ -1365,7 +1407,7 @@ export const requestCategoryChange = async (req, res) => {
     if (req.file) {
       supportingDocumentUrl = `${req.protocol}://${req.get(
         "host"
-      )}/uploads/profiles/${req.file.filename}`;
+      )}/uploads/documents/${req.file.filename}`;
     }
 
     // Check if supporting document is required
@@ -1374,6 +1416,7 @@ export const requestCategoryChange = async (req, res) => {
       requestedCategory === "senior";
 
     if (requiresDocument && !supportingDocumentUrl) {
+      cleanupFile(uploadedFilePath);
       const docType =
         requestedCategory === "senior" ? "Senior Citizen ID" : "School ID";
       return res.status(400).json({
@@ -1381,35 +1424,38 @@ export const requestCategoryChange = async (req, res) => {
       });
     }
 
+    // Check if there's already a pending request
+    if (
+      user.categoryChangeRequest &&
+      user.categoryChangeRequest.status === "pending"
+    ) {
+      cleanupFile(uploadedFilePath);
+      return res.status(400).json({
+        error:
+          "You already have a pending category change request. Please wait for admin approval.",
+      });
+    }
+
     // Create category change request
-    const categoryChangeRequest = {
+    user.categoryChangeRequest = {
       requestedCategory,
       currentCategory: user.passengerCategory,
-      supportingDocument: supportingDocumentUrl
-        ? {
-            imageUrl: supportingDocumentUrl,
-            uploadDate: new Date(),
-          }
-        : null,
+      supportingDocument: supportingDocumentUrl || null,
       requestDate: new Date(),
       status: "pending",
       processed: false,
     };
 
-    // Add to user's category change requests
-    if (!user.categoryChangeRequests) {
-      user.categoryChangeRequests = [];
-    }
-    user.categoryChangeRequests.push(categoryChangeRequest);
-
     await user.save();
 
     res.json({
       message: "Category change request submitted successfully",
-      request: categoryChangeRequest,
+      request: user.categoryChangeRequest,
     });
   } catch (error) {
     console.error("Error processing category change request:", error);
+    // Clean up uploaded file on any error
+    cleanupFile(uploadedFilePath);
     res
       .status(500)
       .json({ error: "Failed to process category change request" });

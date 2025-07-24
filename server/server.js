@@ -90,6 +90,7 @@ import googleApiRoutes from "./routes/googleApiRoutes.js";
 import placesRoutes from "./routes/placesRoutes.js";
 import discountRoutes from "./routes/discountRoutes.js";
 import driverRoutes from "./routes/driverRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 // // Import routes using CommonJS. CommonJS (CJS) – Used in Node.js by default (older standard).
 // const authRoutes = require("./routes/authRoutes");
@@ -107,6 +108,7 @@ app.use("/api/google", googleApiRoutes);
 app.use("/api/places", placesRoutes);
 app.use("/api/discounts", discountRoutes);
 app.use("/api/drivers", driverRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // this will log any unmatched routes so you can confirm if the route path is incorrect
 app.use((req, res, next) => {

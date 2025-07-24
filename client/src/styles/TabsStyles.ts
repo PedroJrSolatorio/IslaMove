@@ -244,31 +244,48 @@ export const TabsStyles = StyleSheet.create({
     elevation: 4,
   },
   recentRideItem: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 8,
+    elevation: 2,
+    backgroundColor: Colors.lightText,
+  },
+  recentRideContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  recentRideIcon: {
-    backgroundColor: '#2ecc71',
+    paddingHorizontal: 16,
   },
   recentRideDetails: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
-    minWidth: 100,
+  },
+  recentRideIcon: {
+    backgroundColor: '#2ecc71',
+    paddingHorizontal: 16,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   recentRideDestination: {
     fontWeight: 'bold',
   },
+  locationTextCustom: {
+    marginLeft: 8,
+    fontSize: 14,
+    color: Colors.text,
+  },
   recentRideDate: {
     fontSize: 12,
     color: '#757575',
+    marginTop: 4,
   },
   recentRidePrice: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
+    color: Colors.primary,
   },
   statusContainer: {
     flexDirection: 'row',

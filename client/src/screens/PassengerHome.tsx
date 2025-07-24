@@ -191,7 +191,7 @@ const PassengerHome = () => {
             )}
           </Card.Content>
           <Card.Actions>
-            <Button onPress={() => navigation.navigate('RideHistory' as never)}>
+            <Button onPress={() => navigation.navigate('History' as never)}>
               View All
             </Button>
           </Card.Actions>

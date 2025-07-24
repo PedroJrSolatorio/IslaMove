@@ -306,7 +306,7 @@ const AdminProfileScreen = () => {
         <Card style={TabsStyles.profileCard}>
           <Card.Content style={TabsStyles.profileContent}>
             <TouchableOpacity
-              style={TabsStyles.avatarContainer}
+              style={TabsStyles.avatarContainerModern}
               onPress={editing ? pickImage : undefined}>
               {profileData.profileImage ? (
                 <Avatar.Image

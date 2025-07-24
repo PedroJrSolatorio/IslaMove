@@ -3,6 +3,7 @@ import AdminTabs from '../navigation/AdminTabs';
 import DriverTabs from './DriverTabs';
 import PassengerTabs from '../navigation/PassengerTabs';
 import BookRide from '../screens/BookRide';
+import RideDetails from '../screens/passengerScreens/RideDetails';
 import RideHistory from '../screens/RideHistory';
 import AccountSecurity from '../screens/AccountSecurity';
 import MapLocationPicker from '../components/MapLocationPicker';
@@ -121,6 +122,7 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="PassengerTabs" component={PassengerTabs} />
             <Stack.Screen name="BookRide" component={BookRide} />
+            <Stack.Screen name="RideDetails" component={RideDetails} />
             <Stack.Screen
               name="MapLocationPicker"
               component={MapLocationPicker}
