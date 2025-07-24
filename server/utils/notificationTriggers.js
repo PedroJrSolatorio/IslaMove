@@ -74,7 +74,7 @@ export const triggerCategoryChangeRequestNotification = async (
   }
 };
 
-// 5. Automatic Category Change Trigger
+// 5. Automatic Category Change Trigger === WORKING
 export const triggerAutoCategoryChangeNotification = async (
   userId,
   previousCategory,

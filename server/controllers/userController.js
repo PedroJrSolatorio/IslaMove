@@ -1,7 +1,10 @@
 import User from "../models/User.js";
 import Ride from "../models/Ride.js";
 import UserAgreement from "../models/UserAgreement.js";
-import NotificationService from "../services/NotificationService.js";
+import {
+  triggerSchoolIdReminderNotification,
+  triggerAutoCategoryChangeNotification,
+} from "../utils/notificationTriggers.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import fs from "fs";
@@ -1125,7 +1128,7 @@ export const sendSchoolIdReminders = async () => {
     for (const student of studentsNeedingReminder) {
       try {
         // Create notification
-        await NotificationService.createSchoolIdReminderNotification(
+        await triggerSchoolIdReminderNotification(
           student._id,
           student.schoolIdValidation.expirationDate
         );

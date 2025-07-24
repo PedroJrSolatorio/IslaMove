@@ -41,7 +41,6 @@ interface Notification {
     | 'school_id_reminder'
     | 'senior_eligibility'
     | 'account_security'
-    | 'ride_update'
     | 'promo'
     | 'system_update';
   title: string;
@@ -255,23 +254,19 @@ const NotificationScreen = () => {
   // Handle navigation based on notification type
   const handleNotificationNavigation = (notification: Notification) => {
     switch (notification.type) {
-      case 'ride_update':
-        if (notification.data?.rideId) {
-          navigation.navigate('RideDetails', {
-            rideId: notification.data.rideId,
-          });
-        }
-        break;
       case 'profile_image_status':
         // Navigate to Profile tab in PassengerTabs
         navigation.navigate('PassengerTabs', {screen: 'Account'});
         break;
       case 'category_change_request':
       case 'category_change_auto':
+        // Navigate to ProfileInfo screen for category related notifications
+        navigation.navigate('ProfileInfo');
+        break;
       case 'senior_id_validation':
       case 'school_id_reminder':
       case 'senior_eligibility':
-        // Navigate to IDDocuments screen for category/ID related notifications
+        // Navigate to IDDocuments screen for ID related notifications
         navigation.navigate('IDDocuments');
         break;
       case 'account_security':
@@ -285,10 +280,6 @@ const NotificationScreen = () => {
       case 'promo':
         // For promotions, navigate to Home tab or stay in current screen
         navigation.navigate('PassengerTabs', {screen: 'Home'});
-        break;
-      case 'ride_update':
-        // Navigate to History tab to see ride updates
-        navigation.navigate('PassengerTabs', {screen: 'History'});
         break;
       default:
         // For admin_news and system_update, just mark as read
@@ -373,8 +364,6 @@ const NotificationScreen = () => {
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
-      case 'ride_update':
-        return {name: 'car', color: Colors.primary};
       case 'promo':
         return {name: 'tag-multiple', color: Colors.accent};
       case 'warning':
