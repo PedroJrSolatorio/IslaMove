@@ -1,9 +1,11 @@
 import User from "../models/User.js";
 import Ride from "../models/Ride.js";
 import UserAgreement from "../models/UserAgreement.js";
+import Notification from "../models/Notification.js";
 import {
   triggerSchoolIdReminderNotification,
   triggerAutoCategoryChangeNotification,
+  triggerSeniorEligibilityNotification,
 } from "../utils/notificationTriggers.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -58,7 +60,7 @@ export const getProfileById = async (req, res) => {
     // 4. Remove the password field from the object before sending
     delete userObject.password;
 
-    // 5. Add the hasPassword flag
+    // 5. hasPassword flag is not a field in User model since it's just telling frontend that user has password
     userObject.hasPassword = hasPassword;
 
     // 6. Send the modified user object in the response
@@ -897,7 +899,7 @@ const cleanupRideReferences = async (userId) => {
   }
 };
 
-// Function to process age transitions and category updates
+// Function to process age transitions and category updates (used in cleanupJob.js)
 export const processAgeTransitions = async () => {
   try {
     console.log("Starting age transitions processing...");
@@ -1044,7 +1046,7 @@ export const processAgeTransitions = async () => {
   }
 };
 
-// Function to handle school ID validation requirements
+// Function to handle school ID validation requirements (used in cleanupJob.js)
 export const processSchoolIdValidations = async () => {
   try {
     const today = new Date();
@@ -1098,7 +1100,7 @@ export const processSchoolIdValidations = async () => {
   }
 };
 
-// Function to send reminders for expired school ID validations
+// Function to send reminders for expired school ID validations (used in cleanupJob.js)
 export const sendSchoolIdReminders = async () => {
   try {
     const today = new Date();
@@ -1124,23 +1126,42 @@ export const sendSchoolIdReminders = async () => {
 
     let reminderCount = 0;
     let failedReminders = 0;
+    let skippedCount = 0;
 
     for (const student of studentsNeedingReminder) {
       try {
-        // Create notification
-        await triggerSchoolIdReminderNotification(
-          student._id,
-          student.schoolIdValidation.expirationDate
-        );
+        // Check if there's already an unexpired school ID reminder notification
+        const existingNotification = await Notification.findOne({
+          userId: student._id,
+          type: "school_id_reminder",
+          $or: [
+            { expiresAt: { $exists: false } }, // No expiration set
+            { expiresAt: { $gt: today } }, // Not yet expired
+          ],
+        });
 
-        // Mark reminder as sent
-        student.schoolIdValidation.reminderSent = true;
-        await student.save();
+        // Only create notification if no unexpired notification exists
+        if (!existingNotification) {
+          // Create notification
+          await triggerSchoolIdReminderNotification(
+            student._id,
+            student.schoolIdValidation.expirationDate
+          );
 
-        console.log(
-          `School ID reminder notification created for student ${student._id}`
-        );
-        reminderCount++;
+          // Mark reminder as sent
+          student.schoolIdValidation.reminderSent = true;
+          await student.save();
+
+          console.log(
+            `School ID reminder notification created for student ${student._id}`
+          );
+          reminderCount++;
+        } else {
+          console.log(
+            `Skipped student ${student._id} - unexpired school ID reminder notification already exists`
+          );
+          skippedCount++;
+        }
       } catch (notificationError) {
         console.error(
           `Failed to create notification for student ${student._id}:`,
@@ -1159,6 +1180,7 @@ export const sendSchoolIdReminders = async () => {
       success: true,
       reminderCount,
       failedReminders,
+      skippedCount,
       totalProcessed: studentsNeedingReminder.length,
     };
   } catch (error) {
@@ -1167,7 +1189,7 @@ export const sendSchoolIdReminders = async () => {
   }
 };
 
-// Function to handle students who haven't uploaded school ID by deadline
+// Function to handle students who haven't uploaded school ID by deadline (used in cleanupJob.js)
 export const processExpiredSchoolIdValidations = async () => {
   try {
     const today = new Date();
@@ -1183,52 +1205,83 @@ export const processExpiredSchoolIdValidations = async () => {
     });
 
     let processedCount = 0;
+    let skippedCount = 0;
 
     for (const student of expiredStudents) {
-      // Change category to regular since they didn't validate as student
-      const previousCategory = student.passengerCategory;
-      student.passengerCategory = "regular";
+      try {
+        // Check if there's already an unexpired auto category change notification
+        const existingNotification = await Notification.findOne({
+          userId: student._id,
+          type: "category_change_auto",
+          $or: [
+            { expiresAt: { $exists: false } }, // No expiration set
+            { expiresAt: { $gt: today } }, // Not yet expired
+          ],
+        });
 
-      // Record the category change due to expired validation
-      student.ageTransitions.push({
-        fromAge: student.age,
-        toAge: student.age,
-        transitionDate: today,
-        categoryChanged: true,
-        previousCategory: previousCategory,
-        newCategory: "regular",
-      });
+        // Only process if no unexpired notification exists
+        if (!existingNotification) {
+          // Change category to regular since they didn't validate as student
+          const previousCategory = student.passengerCategory;
+          student.passengerCategory = "regular";
 
-      // Clear school ID validation requirement
-      student.schoolIdValidation = undefined;
+          // Record the category change due to expired validation
+          student.ageTransitions.push({
+            fromAge: student.age,
+            toAge: student.age,
+            transitionDate: today,
+            categoryChanged: true,
+            previousCategory: previousCategory,
+            newCategory: "regular",
+          });
 
-      await student.save();
-      processedCount++;
+          // Clear school ID validation requirement
+          student.schoolIdValidation = undefined;
 
-      // Send notification about the automatic category change
-      await triggerAutoCategoryChangeNotification(
-        student._id,
-        previousCategory,
-        "regular",
-        "school_id_expired"
-      );
+          await student.save();
+          processedCount++;
 
-      console.log(
-        `Student ${student._id} category changed from student to regular due to expired school ID validation`
-      );
+          // Send notification about the automatic category change
+          await triggerAutoCategoryChangeNotification(
+            student._id,
+            previousCategory,
+            "regular",
+            "school_id_expired"
+          );
+
+          console.log(
+            `Student ${student._id} category changed from student to regular due to expired school ID validation`
+          );
+        } else {
+          console.log(
+            `Skipped student ${student._id} - unexpired auto category change notification already exists`
+          );
+          skippedCount++;
+        }
+      } catch (processError) {
+        console.error(
+          `Failed to process expired validation for student ${student._id}:`,
+          processError
+        );
+      }
     }
 
     console.log(
       `Expired school ID validations processed: ${processedCount} students updated`
     );
-    return { success: true, processedCount };
+    return {
+      success: true,
+      processedCount,
+      skippedCount,
+      totalFound: expiredStudents.length,
+    };
   } catch (error) {
     console.error("Error processing expired school ID validations:", error);
     throw error;
   }
 };
 
-// Function to send senior eligibility notifications
+// Function to send senior eligibility notifications (used in cleanupJob.js)
 export const processSeniorEligibilityNotifications = async () => {
   try {
     const today = new Date();
@@ -1245,8 +1298,19 @@ export const processSeniorEligibilityNotifications = async () => {
     let notificationCount = 0;
 
     for (const passenger of eligiblePassengers) {
-      // Set or update senior eligibility notification
-      if (!passenger.seniorEligibilityNotification) {
+      // Check if there's already an unexpired senior eligibility notification
+      const existingNotification = await Notification.findOne({
+        userId: passenger._id,
+        type: "senior_eligibility",
+        $or: [
+          { expiresAt: { $exists: false } }, // No expiration set
+          { expiresAt: { $gt: today } }, // Not yet expired
+        ],
+      });
+
+      // Only create notification if no unexpired notification exists
+      if (!existingNotification) {
+        // Set or update senior eligibility notification
         passenger.seniorEligibilityNotification = {
           eligible: true,
           notificationDate: today,
@@ -1254,10 +1318,16 @@ export const processSeniorEligibilityNotifications = async () => {
         };
 
         await passenger.save();
+        // Create the actual notification using the trigger function
+        await triggerSeniorEligibilityNotification(passenger._id);
         notificationCount++;
 
         console.log(
           `Set senior eligibility notification for passenger ${passenger._id} (age: ${passenger.age})`
+        );
+      } else {
+        console.log(
+          `Skipped passenger ${passenger._id} - unexpired senior eligibility notification already exists`
         );
       }
     }
@@ -1272,6 +1342,7 @@ export const processSeniorEligibilityNotifications = async () => {
   }
 };
 
+// used in IDDocumentsScreen.tsx - handleDismissSeniorNotification function
 export const acknowledgeSeniorEligibility = async (req, res) => {
   try {
     const userId = req.params.id;

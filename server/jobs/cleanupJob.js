@@ -5,6 +5,7 @@ import {
   processSchoolIdValidations,
   sendSchoolIdReminders,
   processExpiredSchoolIdValidations,
+  processSeniorEligibilityNotifications,
 } from "../controllers/userController.js";
 
 // Run cleanup job daily at 1 AM
@@ -108,8 +109,23 @@ export const setupCleanupJobs = () => {
   //   }
   // });
 
-  // // Job for processing expired school ID validations (runs daily at 5:00 AM during September 10-30)
-  // cron.schedule("0 5 10-30 9 *", async () => {
+  // Job for processing expired school ID validations (runs daily at 5:00 AM during September 10-30)
+  cron.schedule("0 5 10-30 9 *", async () => {
+    console.log(
+      "Running scheduled expired school ID validations processing..."
+    );
+    try {
+      await processExpiredSchoolIdValidations();
+      console.log(
+        "Expired school ID validations processing completed successfully."
+      );
+    } catch (error) {
+      console.error("Expired school ID validations processing failed:", error);
+    }
+  });
+
+  // // Test Job for processing expired school ID validations (runs daily at 5:00 AM during September 10-30)
+  // cron.schedule("* * * * *", async () => {
   //   console.log(
   //     "Running scheduled expired school ID validations processing..."
   //   );
@@ -123,18 +139,39 @@ export const setupCleanupJobs = () => {
   //   }
   // });
 
-  // Test Job for processing expired school ID validations (runs daily at 5:00 AM during September 10-30)
-  cron.schedule("* * * * *", async () => {
+  // Job for processing senior eligibility notifications (runs daily at 6:00 AM)
+  cron.schedule("0 6 * * *", async () => {
     console.log(
-      "Running scheduled expired school ID validations processing..."
+      "Running scheduled senior eligibility notifications processing..."
     );
     try {
-      await processExpiredSchoolIdValidations();
+      await processSeniorEligibilityNotifications();
       console.log(
-        "Expired school ID validations processing completed successfully."
+        "Senior eligibility notifications processing completed successfully."
       );
     } catch (error) {
-      console.error("Expired school ID validations processing failed:", error);
+      console.error(
+        "Senior eligibility notifications processing failed:",
+        error
+      );
     }
   });
+
+  // // Test Job for processing senior eligibility notifications (runs every minute)
+  // cron.schedule("* * * * *", async () => {
+  //   console.log(
+  //     "Running scheduled senior eligibility notifications processing..."
+  //   );
+  //   try {
+  //     await processSeniorEligibilityNotifications();
+  //     console.log(
+  //       "Senior eligibility notifications processing completed successfully."
+  //     );
+  //   } catch (error) {
+  //     console.error(
+  //       "Senior eligibility notifications processing failed:",
+  //       error
+  //     );
+  //   }
+  // });
 };

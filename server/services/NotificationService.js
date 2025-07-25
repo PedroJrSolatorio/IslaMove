@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import mongoose from "mongoose";
 
 class NotificationService {
-  // Profile Image Status Updates (from notificationTriggers.js)
+  // Profile Image Status Updates (from notificationTriggers.js - triggerProfileImageNotification)
   static async createProfileImageNotification(userId, status, data = {}) {
     const titles = {
       approved: "Profile Image Approved ✅",
@@ -20,12 +20,17 @@ class NotificationService {
       }`,
     };
 
+    // Set expiration date
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+
     return await Notification.createNotification({
       userId,
       type: "profile_image_status",
       title: titles[status],
       message: messages[status],
       priority: status === "rejected" ? "high" : "medium",
+      expiresAt,
       data: {
         profileImageUrl: data.profileImageUrl,
         rejectionReason: data.rejectionReason,
@@ -34,14 +39,18 @@ class NotificationService {
     });
   }
 
-  // Warning Notifications (from notificationTriggers.js)
+  // Warning Notifications (from notificationTriggers.js - triggerWarningNotification)
   static async createWarningNotification(userId, warning) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "warning",
       title: "Account Warning ⚠️",
       message: warning.message,
       priority: "high",
+      expiresAt,
       data: {
         warningId: warning._id,
         actionRequired: true,
@@ -49,7 +58,7 @@ class NotificationService {
     });
   }
 
-  // Senior ID Validation Status (from notificationTriggers.js)
+  // Senior ID Validation Status (from notificationTriggers.js - triggerSeniorIdValidationNotification)
   static async createSeniorIdValidationNotification(userId, status, data = {}) {
     const titles = {
       approved: "Senior ID Approved ✅",
@@ -69,12 +78,16 @@ class NotificationService {
         "Please upload your senior citizen ID to continue enjoying senior discounts.",
     };
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "senior_id_validation",
       title: titles[status],
       message: messages[status],
       priority: status === "rejected" ? "high" : "medium",
+      expiresAt,
       data: {
         rejectionReason: data.rejectionReason,
         actionRequired: status !== "approved",
@@ -82,7 +95,7 @@ class NotificationService {
     });
   }
 
-  // Category Change Request Status (from notificationTriggers.js)
+  // Category Change Request Status (from notificationTriggers.js - triggerCategoryChangeRequestNotification)
   static async createCategoryChangeRequestNotification(
     userId,
     status,
@@ -104,12 +117,16 @@ class NotificationService {
       pending: `Your request to change category from ${data.previousCategory} to ${data.newCategory} is being reviewed.`,
     };
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "category_change_request",
       title: titles[status],
       message: messages[status],
       priority: status === "rejected" ? "high" : "medium",
+      expiresAt,
       data: {
         requestId: data.requestId,
         previousCategory: data.previousCategory,
@@ -120,7 +137,7 @@ class NotificationService {
     });
   }
 
-  // Automatic Category Changes (age-based) (from notificationTriggers.js)
+  // Automatic Category Changes (age-based) (from notificationTriggers.js - triggerAutoCategoryChangeNotification)
   static async createAutoCategoryChangeNotification(
     userId,
     previousCategory,
@@ -132,12 +149,16 @@ class NotificationService {
       school_id_expired: "due to expired school ID validation",
     };
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "category_change_auto",
       title: "Category Updated Automatically",
       message: `Your passenger category has been automatically changed from ${previousCategory} to ${newCategory} ${reasonMessages[reason]}.`,
       priority: "medium",
+      expiresAt,
       data: {
         previousCategory,
         newCategory,
@@ -147,11 +168,14 @@ class NotificationService {
     });
   }
 
-  // School ID Reminders (from notificationTriggers.js)
+  // School ID Reminders (from notificationTriggers.js - triggerSchoolIdReminderNotification)
   static async createSchoolIdReminderNotification(userId, expirationDate) {
     const daysUntilExpiration = Math.ceil(
       (expirationDate - new Date()) / (1000 * 60 * 60 * 24)
     );
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     return await Notification.createNotification({
       userId,
@@ -159,6 +183,7 @@ class NotificationService {
       title: "School ID Validation Required 🎓",
       message: `Your student status expires in ${daysUntilExpiration} days. Please upload your current school ID to maintain student discounts.`,
       priority: "high",
+      expiresAt,
       data: {
         expirationDate,
         actionRequired: true,
@@ -166,8 +191,11 @@ class NotificationService {
     });
   }
 
-  // Senior Eligibility Notifications (from notificationTriggers.js)
+  // Senior Eligibility Notifications (from notificationTriggers.js - triggerSeniorEligibilityNotification)
   static async createSeniorEligibilityNotification(userId) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "senior_eligibility",
@@ -175,13 +203,14 @@ class NotificationService {
       message:
         "Congratulations! You are now eligible for senior citizen discounts. Would you like to change your category to senior?",
       priority: "medium",
+      expiresAt,
       data: {
         actionRequired: false,
       },
     });
   }
 
-  // Admin News/Announcements (from notificationRoutes.js)
+  // Admin News/Announcements (from notificationRoutes.js - router.post("/admin/send",...))
   static async createAdminNewsNotification(
     userIds,
     title,
@@ -191,11 +220,15 @@ class NotificationService {
   ) {
     if (userIds.length === 0) return [];
 
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createBulkNotifications(userIds, {
       type: "admin_news",
       title,
       message,
       priority,
+      expiresAt,
       data: {
         adminId,
         actionRequired: false,
@@ -203,61 +236,49 @@ class NotificationService {
     });
   }
 
-  // System notifications (account security, etc.) (from notificationTriggers.js)
+  // System notifications (account security, etc.) (from notificationTriggers.js - triggerSecurityNotification)
   static async createSecurityNotification(
     userId,
     title,
     message,
     priority = "high"
   ) {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
     return await Notification.createNotification({
       userId,
       type: "account_security",
       title,
       message,
       priority,
+      expiresAt,
       data: {
         actionRequired: true,
       },
     });
   }
 
-  // Promotional notifications (from notificationTriggers.js)
-  static async createPromoNotification(
-    userIds,
-    title,
-    message,
-    priority = "low"
-  ) {
-    if (userIds.length === 0) return [];
-
-    return await Notification.createBulkNotifications(userIds, {
-      type: "promo",
-      title,
-      message,
-      priority,
-      data: {
-        actionRequired: false,
-      },
-    });
-  }
-
-  // System update notifications (from notificationTriggers.js)
+  // System update notifications (from notificationTriggers.js - triggerSystemUpdateNotification)
   static async createSystemUpdateNotification(userIds, title, message) {
     if (userIds.length === 0) return [];
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
 
     return await Notification.createBulkNotifications(userIds, {
       type: "system_update",
       title,
       message,
       priority: "medium",
+      expiresAt,
       data: {
         actionRequired: false,
       },
     });
   }
 
-  // Helper method to notify all users (from notificationRoutes.js and notificationTriggers.js)
+  // Helper method to notify all users (from notificationRoutes.js - router.post("/admin/send",...) and notificationTriggers.js - triggerNotificationToAllUsers)
   static async notifyAllUsers(
     title,
     message,
@@ -284,13 +305,6 @@ class NotificationService {
           adminId,
           priority
         );
-      } else if (type === "promo") {
-        return await this.createPromoNotification(
-          userIds,
-          title,
-          message,
-          priority
-        );
       } else if (type === "system_update") {
         return await this.createSystemUpdateNotification(
           userIds,
@@ -306,7 +320,7 @@ class NotificationService {
     }
   }
 
-  // Helper method to notify users by role (from notificationRoutes.js and notificationTriggers.js)
+  // Helper method to notify users by role (from notificationRoutes.js - router.post("/admin/send",...) and notificationTriggers.js - triggerNotificationToUsersByRole)
   static async notifyUsersByRole(
     roles,
     title,
@@ -335,13 +349,6 @@ class NotificationService {
           adminId,
           priority
         );
-      } else if (type === "promo") {
-        return await this.createPromoNotification(
-          userIds,
-          title,
-          message,
-          priority
-        );
       } else if (type === "system_update") {
         return await this.createSystemUpdateNotification(
           userIds,
@@ -357,7 +364,7 @@ class NotificationService {
     }
   }
 
-  // Get notification statistics for a user (from notificationRoutes.js)
+  // Get notification statistics for a user (from notificationRoutes.js - router.get("/stats",...))
   static async getUserNotificationStats(userId) {
     try {
       // Convert string to ObjectId if needed
