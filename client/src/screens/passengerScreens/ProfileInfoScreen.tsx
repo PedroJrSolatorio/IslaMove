@@ -91,7 +91,7 @@ const CategoryChangeModal: React.FC<CategoryChangeModalProps> = ({
       categories.push({value: 'regular', label: 'Regular', requiresDoc: false});
     }
 
-    if (age >= 12) {
+    if (age >= 12 && age < 60) {
       categories.push({
         value: 'student',
         label: 'Student',
