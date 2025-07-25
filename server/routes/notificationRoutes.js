@@ -7,7 +7,7 @@ import mongoose from "mongoose";
 
 const router = express.Router();
 
-// GET /api/notifications - Get user's notifications with pagination and filters (from notificationApi.ts)
+// GET /api/notifications - Get user's notifications with pagination and filters
 router.get("/", auth, async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -38,7 +38,7 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
-// GET /api/notifications/stats - Get notification statistics (from notificationApi.ts)
+// GET /api/notifications/stats - User get notification statistics
 router.get("/stats", auth, async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -57,7 +57,7 @@ router.get("/stats", auth, async (req, res) => {
   }
 });
 
-// PUT /api/notifications/:id/read - Mark a notification as read (from notificationApi.ts)
+// PUT /api/notifications/:id/read - Mark a notification as read (user initiated)
 router.put("/:id/read", auth, async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -98,7 +98,7 @@ router.put("/:id/read", auth, async (req, res) => {
   }
 });
 
-// PUT /api/notifications/mark-all-read - Mark all notifications as read (from notificationApi.ts)
+// PUT /api/notifications/mark-all-read - Mark all notifications as read (user initiated)
 router.put("/mark-all-read", auth, async (req, res) => {
   try {
     const userId = req.user._id;
@@ -120,7 +120,7 @@ router.put("/mark-all-read", auth, async (req, res) => {
   }
 });
 
-// DELETE /api/notifications/:id - Delete a notification (from notificationApi.ts)
+// DELETE /api/notifications/:id - Delete a notification (user initiated)
 router.delete("/:id", auth, async (req, res) => {
   try {
     const userId = req.user._id;

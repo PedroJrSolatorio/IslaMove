@@ -41,7 +41,6 @@ interface Notification {
     | 'school_id_reminder'
     | 'senior_eligibility'
     | 'account_security'
-    | 'promo'
     | 'system_update';
   title: string;
   message: string;
@@ -277,10 +276,6 @@ const NotificationScreen = () => {
         // For warnings, navigate to Account tab as there's no specific warnings screen
         navigation.navigate('PassengerTabs', {screen: 'Account'});
         break;
-      case 'promo':
-        // For promotions, navigate to Home tab or stay in current screen
-        navigation.navigate('PassengerTabs', {screen: 'Home'});
-        break;
       default:
         // For admin_news and system_update, just mark as read
         break;
@@ -364,8 +359,6 @@ const NotificationScreen = () => {
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
-      case 'promo':
-        return {name: 'tag-multiple', color: Colors.accent};
       case 'warning':
       case 'account_security':
         return {name: 'alert-circle', color: Colors.danger};

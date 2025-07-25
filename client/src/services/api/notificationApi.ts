@@ -187,21 +187,21 @@ class NotificationApiService {
     }
   }
 
-  // Create test notification (development only)
-  static async createTestNotification(testData = {}) {
-    try {
-      const response = await fetch(`${BACKEND_URL}/api/notifications/test`, {
-        method: 'POST',
-        headers: await this.getHeaders(),
-        body: JSON.stringify(testData),
-      });
+  // // Create test notification (development only)
+  // static async createTestNotification(testData = {}) {
+  //   try {
+  //     const response = await fetch(`${BACKEND_URL}/api/notifications/test`, {
+  //       method: 'POST',
+  //       headers: await this.getHeaders(),
+  //       body: JSON.stringify(testData),
+  //     });
 
-      return await this.handleResponse(response);
-    } catch (error) {
-      console.error('Error creating test notification:', error);
-      throw error;
-    }
-  }
+  //     return await this.handleResponse(response);
+  //   } catch (error) {
+  //     console.error('Error creating test notification:', error);
+  //     throw error;
+  //   }
+  // }
 }
 
 export default NotificationApiService;

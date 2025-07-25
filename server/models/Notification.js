@@ -20,7 +20,6 @@ const notificationSchema = new mongoose.Schema(
         "school_id_reminder",
         "senior_eligibility",
         "account_security",
-        "promo",
         "system_update",
       ],
       required: true,
@@ -107,6 +106,7 @@ notificationSchema.statics.createNotification = async function (
 
     // Here you could add push notification logic
     // await sendPushNotification(notification);
+    // this is for pop-up banner (outside the app), or a lock screen alert
 
     return notification;
   } catch (error) {
@@ -200,27 +200,6 @@ notificationSchema.statics.getUserNotifications = async function (
     };
   } catch (error) {
     console.error("Error getting user notifications:", error);
-    throw error;
-  }
-};
-
-// Static method to clean up old notifications
-notificationSchema.statics.cleanupOldNotifications = async function (
-  daysOld = 90
-) {
-  try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-
-    const result = await this.deleteMany({
-      createdAt: { $lt: cutoffDate },
-      read: true, // Only delete read notifications
-    });
-
-    console.log(`Cleaned up ${result.deletedCount} old notifications`);
-    return result;
-  } catch (error) {
-    console.error("Error cleaning up old notifications:", error);
     throw error;
   }
 };
